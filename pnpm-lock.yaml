@@ -88,12 +88,12 @@ importers:
         version: 22.19.17
 
   packages/vue:
-    dependencies:
+    devDependencies:
       '@noydb/core':
         specifier: workspace:*
         version: link:../core
       vue:
-        specifier: ^3.0.0
+        specifier: ^3.5.32
         version: 3.5.32(typescript@5.9.3)
 
   test-harnesses/adapter-conformance:

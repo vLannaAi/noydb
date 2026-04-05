@@ -25,6 +25,8 @@ export class SyncEngine {
   private lastPush: string | null = null
   private lastPull: string | null = null
   private loaded = false
+  private autoSyncInterval: ReturnType<typeof setInterval> | null = null
+  private isOnline = true
 
   constructor(opts: {
     local: NoydbAdapter
@@ -230,8 +232,51 @@ export class SyncEngine {
       dirty: this.dirty.length,
       lastPush: this.lastPush,
       lastPull: this.lastPull,
-      online: true, // will be managed by auto-sync in Phase 4
+      online: this.isOnline,
     }
+  }
+
+  // ─── Auto-Sync ───────────────────────────────────────────────────
+
+  /** Start auto-sync: listen for online/offline events, optional periodic sync. */
+  startAutoSync(intervalMs?: number): void {
+    // Online/offline detection
+    if (typeof globalThis.addEventListener === 'function') {
+      globalThis.addEventListener('online', this.handleOnline)
+      globalThis.addEventListener('offline', this.handleOffline)
+    }
+
+    // Periodic sync
+    if (intervalMs && intervalMs > 0) {
+      this.autoSyncInterval = setInterval(() => {
+        if (this.isOnline) {
+          void this.sync()
+        }
+      }, intervalMs)
+    }
+  }
+
+  /** Stop auto-sync. */
+  stopAutoSync(): void {
+    if (typeof globalThis.removeEventListener === 'function') {
+      globalThis.removeEventListener('online', this.handleOnline)
+      globalThis.removeEventListener('offline', this.handleOffline)
+    }
+    if (this.autoSyncInterval) {
+      clearInterval(this.autoSyncInterval)
+      this.autoSyncInterval = null
+    }
+  }
+
+  private handleOnline = (): void => {
+    this.isOnline = true
+    this.emitter.emit('sync:online', undefined as never)
+    void this.sync()
+  }
+
+  private handleOffline = (): void => {
+    this.isOnline = false
+    this.emitter.emit('sync:offline', undefined as never)
   }
 
   /** Resolve a conflict using the configured strategy. */

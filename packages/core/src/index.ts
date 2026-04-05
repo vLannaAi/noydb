@@ -54,3 +54,14 @@ export { Noydb, createNoydb } from './noydb.js'
 export { Compartment } from './compartment.js'
 export { Collection } from './collection.js'
 export { SyncEngine } from './sync.js'
+
+// Biometric (browser only)
+export {
+  isBiometricAvailable,
+  enrollBiometric,
+  unlockBiometric,
+  removeBiometric,
+  saveBiometric,
+  loadBiometric,
+} from './biometric.js'
+export type { BiometricCredential } from './biometric.js'
