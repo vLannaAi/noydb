@@ -24,6 +24,10 @@ export type {
   RevokeOptions,
   UserInfo,
   NoydbOptions,
+  HistoryConfig,
+  HistoryOptions,
+  HistoryEntry,
+  PruneOptions,
 } from './types.js'
 
 export {

@@ -82,6 +82,7 @@ export class Noydb {
       onDirty: syncEngine
         ? (coll, id, action, version) => syncEngine.trackChange(coll, id, action, version)
         : undefined,
+      historyConfig: this.options.history,
     })
     this.compartmentCache.set(name, comp)
     return comp
@@ -101,13 +102,12 @@ export class Noydb {
         keyring,
         encrypted: false,
         emitter: this.emitter,
+        historyConfig: this.options.history,
       })
       this.compartmentCache.set(name, comp)
       return comp
     }
 
-    // For encrypted mode, we need the keyring which requires async.
-    // Check if we have a cached keyring from a prior openCompartment call.
     const keyring = this.keyringCache.get(name)
     if (!keyring) {
       throw new ValidationError(
@@ -120,6 +120,7 @@ export class Noydb {
       name,
       keyring,
       encrypted: true,
+      historyConfig: this.options.history,
       emitter: this.emitter,
     })
     this.compartmentCache.set(name, comp)

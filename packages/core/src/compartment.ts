@@ -1,4 +1,4 @@
-import type { NoydbAdapter, CompartmentBackup, CompartmentSnapshot } from './types.js'
+import type { NoydbAdapter, CompartmentBackup, CompartmentSnapshot, HistoryConfig } from './types.js'
 import { NOYDB_BACKUP_VERSION } from './types.js'
 import { Collection } from './collection.js'
 import type { OnDirtyCallback } from './collection.js'
@@ -15,6 +15,7 @@ export class Compartment {
   private readonly encrypted: boolean
   private readonly emitter: NoydbEventEmitter
   private readonly onDirty: OnDirtyCallback | undefined
+  private readonly historyConfig: HistoryConfig
   private readonly getDEK: (collectionName: string) => Promise<CryptoKey>
   private readonly collectionCache = new Map<string, Collection<unknown>>()
 
@@ -25,6 +26,7 @@ export class Compartment {
     encrypted: boolean
     emitter: NoydbEventEmitter
     onDirty?: OnDirtyCallback | undefined
+    historyConfig?: HistoryConfig | undefined
   }) {
     this.adapter = opts.adapter
     this.name = opts.name
@@ -32,6 +34,7 @@ export class Compartment {
     this.encrypted = opts.encrypted
     this.emitter = opts.emitter
     this.onDirty = opts.onDirty
+    this.historyConfig = opts.historyConfig ?? { enabled: true }
 
     // Create the DEK resolver (lazy — generates DEKs on first use)
     // We need to store the promise to avoid recreating it
@@ -57,6 +60,7 @@ export class Compartment {
         emitter: this.emitter,
         getDEK: this.getDEK,
         onDirty: this.onDirty,
+        historyConfig: this.historyConfig,
       })
       this.collectionCache.set(collectionName, coll)
     }

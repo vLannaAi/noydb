@@ -1,10 +1,17 @@
-import type { NoydbAdapter, EncryptedEnvelope, ChangeEvent } from './types.js'
+import type { NoydbAdapter, EncryptedEnvelope, ChangeEvent, HistoryConfig, HistoryOptions, HistoryEntry, PruneOptions } from './types.js'
 import { NOYDB_FORMAT_VERSION } from './types.js'
 import { encrypt, decrypt } from './crypto.js'
 import { ReadOnlyError, NoAccessError } from './errors.js'
 import type { UnlockedKeyring } from './keyring.js'
 import { hasWritePermission } from './keyring.js'
 import type { NoydbEventEmitter } from './events.js'
+import {
+  saveHistory,
+  getHistory as getHistoryEntries,
+  getVersionEnvelope,
+  pruneHistory as pruneHistoryEntries,
+  clearHistory,
+} from './history.js'
 
 /** Callback for dirty tracking (sync engine integration). */
 export type OnDirtyCallback = (collection: string, id: string, action: 'put' | 'delete', version: number) => Promise<void>
@@ -19,6 +26,7 @@ export class Collection<T> {
   private readonly emitter: NoydbEventEmitter
   private readonly getDEK: (collectionName: string) => Promise<CryptoKey>
   private readonly onDirty: OnDirtyCallback | undefined
+  private readonly historyConfig: HistoryConfig
 
   // In-memory cache of decrypted records
   private readonly cache = new Map<string, { record: T; version: number }>()
@@ -32,6 +40,7 @@ export class Collection<T> {
     encrypted: boolean
     emitter: NoydbEventEmitter
     getDEK: (collectionName: string) => Promise<CryptoKey>
+    historyConfig?: HistoryConfig | undefined
     onDirty?: OnDirtyCallback | undefined
   }) {
     this.adapter = opts.adapter
@@ -42,6 +51,7 @@ export class Collection<T> {
     this.emitter = opts.emitter
     this.getDEK = opts.getDEK
     this.onDirty = opts.onDirty
+    this.historyConfig = opts.historyConfig ?? { enabled: true }
   }
 
   /** Get a single record by ID. Returns null if not found. */
@@ -61,6 +71,26 @@ export class Collection<T> {
 
     const existing = this.cache.get(id)
     const version = existing ? existing.version + 1 : 1
+
+    // Save history snapshot of the PREVIOUS version before overwriting
+    if (existing && this.historyConfig.enabled !== false) {
+      const historyEnvelope = await this.encryptRecord(existing.record, existing.version)
+      await saveHistory(this.adapter, this.compartment, this.name, id, historyEnvelope)
+
+      this.emitter.emit('history:save', {
+        compartment: this.compartment,
+        collection: this.name,
+        id,
+        version: existing.version,
+      })
+
+      // Auto-prune if maxVersions configured
+      if (this.historyConfig.maxVersions) {
+        await pruneHistoryEntries(this.adapter, this.compartment, this.name, id, {
+          keepVersions: this.historyConfig.maxVersions,
+        })
+      }
+    }
 
     const envelope = await this.encryptRecord(record, version)
     await this.adapter.put(this.compartment, this.name, id, envelope)
@@ -84,6 +114,13 @@ export class Collection<T> {
     }
 
     const existing = this.cache.get(id)
+
+    // Save history snapshot before deleting
+    if (existing && this.historyConfig.enabled !== false) {
+      const historyEnvelope = await this.encryptRecord(existing.record, existing.version)
+      await saveHistory(this.adapter, this.compartment, this.name, id, historyEnvelope)
+    }
+
     await this.adapter.delete(this.compartment, this.name, id)
     this.cache.delete(id)
 
@@ -107,6 +144,68 @@ export class Collection<T> {
   query(predicate: (record: T) => boolean): T[] {
     return [...this.cache.values()].map(e => e.record).filter(predicate)
   }
+
+  // ─── History Methods ────────────────────────────────────────────
+
+  /** Get version history for a record, newest first. */
+  async history(id: string, options?: HistoryOptions): Promise<HistoryEntry<T>[]> {
+    const envelopes = await getHistoryEntries(
+      this.adapter, this.compartment, this.name, id, options,
+    )
+
+    const entries: HistoryEntry<T>[] = []
+    for (const env of envelopes) {
+      const record = await this.decryptRecord(env)
+      entries.push({
+        version: env._v,
+        timestamp: env._ts,
+        userId: env._by ?? '',
+        record,
+      })
+    }
+    return entries
+  }
+
+  /** Get a specific past version of a record. */
+  async getVersion(id: string, version: number): Promise<T | null> {
+    const envelope = await getVersionEnvelope(
+      this.adapter, this.compartment, this.name, id, version,
+    )
+    if (!envelope) return null
+    return this.decryptRecord(envelope)
+  }
+
+  /** Revert a record to a past version. Creates a new version with the old content. */
+  async revert(id: string, version: number): Promise<void> {
+    const oldRecord = await this.getVersion(id, version)
+    if (!oldRecord) {
+      throw new Error(`Version ${version} not found for record "${id}"`)
+    }
+    await this.put(id, oldRecord)
+  }
+
+  /** Prune history entries for a record (or all records if id is undefined). */
+  async pruneRecordHistory(id: string | undefined, options: PruneOptions): Promise<number> {
+    const pruned = await pruneHistoryEntries(
+      this.adapter, this.compartment, this.name, id, options,
+    )
+    if (pruned > 0) {
+      this.emitter.emit('history:prune', {
+        compartment: this.compartment,
+        collection: this.name,
+        id: id ?? '*',
+        pruned,
+      })
+    }
+    return pruned
+  }
+
+  /** Clear all history for this collection (or a specific record). */
+  async clearHistory(id?: string): Promise<number> {
+    return clearHistory(this.adapter, this.compartment, this.name, id)
+  }
+
+  // ─── Core Methods ─────────────────────────────────────────────
 
   /** Count records in the collection. */
   async count(): Promise<number> {
@@ -152,6 +251,7 @@ export class Collection<T> {
 
   private async encryptRecord(record: T, version: number): Promise<EncryptedEnvelope> {
     const json = JSON.stringify(record)
+    const by = this.keyring.userId
 
     if (!this.encrypted) {
       return {
@@ -160,6 +260,7 @@ export class Collection<T> {
         _ts: new Date().toISOString(),
         _iv: '',
         _data: json,
+        _by: by,
       }
     }
 
@@ -172,6 +273,7 @@ export class Collection<T> {
       _ts: new Date().toISOString(),
       _iv: iv,
       _data: data,
+      _by: by,
     }
   }
 

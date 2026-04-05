@@ -27,6 +27,8 @@ export interface EncryptedEnvelope {
   readonly _ts: string
   readonly _iv: string
   readonly _data: string
+  /** User who created this version (unencrypted metadata). */
+  readonly _by?: string
 }
 
 // ─── Compartment Snapshot ──────────────────────────────────────────────
@@ -169,6 +171,8 @@ export interface NoydbEventMap {
   'sync:conflict': Conflict
   'sync:online': void
   'sync:offline': void
+  'history:save': { compartment: string; collection: string; id: string; version: number }
+  'history:prune': { compartment: string; collection: string; id: string; pruned: number }
 }
 
 // ─── Grant / Revoke ────────────────────────────────────────────────────
@@ -222,4 +226,42 @@ export interface NoydbOptions {
   readonly sessionTimeout?: number
   /** Validate passphrase strength on creation. Default: true. */
   readonly validatePassphrase?: boolean
+  /** Audit history configuration. */
+  readonly history?: HistoryConfig
+}
+
+// ─── History / Audit Trail ─────────────────────────────────────────────
+
+/** History configuration. */
+export interface HistoryConfig {
+  /** Enable history tracking. Default: true. */
+  readonly enabled?: boolean
+  /** Maximum history entries per record. Oldest pruned on overflow. Default: unlimited. */
+  readonly maxVersions?: number
+}
+
+/** Options for querying history. */
+export interface HistoryOptions {
+  /** Start date (inclusive), ISO 8601. */
+  readonly from?: string
+  /** End date (inclusive), ISO 8601. */
+  readonly to?: string
+  /** Maximum entries to return. */
+  readonly limit?: number
+}
+
+/** Options for pruning history. */
+export interface PruneOptions {
+  /** Keep only the N most recent versions. */
+  readonly keepVersions?: number
+  /** Delete versions older than this date, ISO 8601. */
+  readonly beforeDate?: string
+}
+
+/** A decrypted history entry. */
+export interface HistoryEntry<T> {
+  readonly version: number
+  readonly timestamp: string
+  readonly userId: string
+  readonly record: T
 }
