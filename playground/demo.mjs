@@ -14,9 +14,9 @@
  *   or: node playground/demo.mjs (from repo root)
  */
 
-import { createNoydb, formatDiff } from '@noydb/core'
-import { memory } from '@noydb/memory'
-import { jsonFile } from '@noydb/file'
+import { createNoydb, formatDiff } from '@noy-db/core'
+import { memory } from '@noy-db/memory'
+import { jsonFile } from '@noy-db/file'
 import { createInterface } from 'node:readline'
 import { mkdtemp, rm, readdir, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'

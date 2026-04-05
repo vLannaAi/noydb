@@ -1,5 +1,5 @@
 import { ref, onUnmounted, type Ref } from 'vue'
-import type { Noydb, ChangeEvent } from '@noydb/core'
+import type { Noydb, ChangeEvent } from '@noy-db/core'
 
 export interface UseCollectionReturn<T> {
   /** Reactive list of all records in the collection. */

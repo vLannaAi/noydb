@@ -1,5 +1,5 @@
 {
-  "name": "@noydb/test-simulation-multiuser",
+  "name": "@noy-db/test-simulation-multiuser",
   "version": "0.0.0",
   "private": true,
   "description": "Multi-user grant/revoke/rotate scenarios",
@@ -8,6 +8,6 @@
     "test": "vitest run"
   },
   "devDependencies": {
-    "@noydb/core": "workspace:*"
+    "@noy-db/core": "workspace:*"
   }
 }

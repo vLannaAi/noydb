@@ -1,6 +1,6 @@
-import { createNoydb, formatDiff } from '@noydb/core'
-import { browser } from '@noydb/browser'
-import { memory } from '@noydb/memory'
+import { createNoydb, formatDiff } from '@noy-db/core'
+import { browser } from '@noy-db/browser'
+import { memory } from '@noy-db/memory'
 
 // ─── State ─────────────────────────────────────────────────────────────
 

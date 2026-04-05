@@ -1,6 +1,6 @@
 {
-  "name": "@noydb/playground-browser",
-  "version": "0.0.0",
+  "name": "@noy-db/playground-browser",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -9,9 +9,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@noydb/core": "workspace:*",
-    "@noydb/browser": "workspace:*",
-    "@noydb/memory": "workspace:*"
+    "@noy-db/core": "workspace:*",
+    "@noy-db/browser": "workspace:*",
+    "@noy-db/memory": "workspace:*"
   },
   "devDependencies": {
     "vite": "^6.0.0"

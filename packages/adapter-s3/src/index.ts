@@ -1,5 +1,5 @@
-import type { NoydbAdapter, EncryptedEnvelope, CompartmentSnapshot } from '@noydb/core'
-import { ConflictError } from '@noydb/core'
+import type { NoydbAdapter, EncryptedEnvelope, CompartmentSnapshot } from '@noy-db/core'
+import { ConflictError } from '@noy-db/core'
 import {
   S3Client as AwsS3Client,
   GetObjectCommand,

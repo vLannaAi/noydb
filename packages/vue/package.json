@@ -1,6 +1,6 @@
 {
-  "name": "@noydb/vue",
-  "version": "0.0.1",
+  "name": "@noy-db/vue",
+  "version": "0.1.0",
   "description": "Vue/Nuxt composables for NOYDB (useNoydb, useCollection, useSync)",
   "license": "MIT",
   "type": "module",
@@ -32,11 +32,11 @@
     "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {
-    "@noydb/core": "workspace:*",
+    "@noy-db/core": "workspace:*",
     "vue": "^3.0.0"
   },
   "devDependencies": {
-    "@noydb/core": "workspace:*",
+    "@noy-db/core": "workspace:*",
     "vue": "^3.5.32"
   },
   "repository": {

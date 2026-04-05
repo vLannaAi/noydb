@@ -1,6 +1,6 @@
 {
-  "name": "@noydb/dynamo",
-  "version": "0.0.1",
+  "name": "@noy-db/dynamo",
+  "version": "0.1.0",
   "description": "AWS DynamoDB adapter for NOYDB (single-table design)",
   "license": "MIT",
   "type": "module",
@@ -32,12 +32,12 @@
     "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {
-    "@noydb/core": "workspace:*",
+    "@noy-db/core": "workspace:*",
     "@aws-sdk/client-dynamodb": "^3.0.0",
     "@aws-sdk/lib-dynamodb": "^3.0.0"
   },
   "devDependencies": {
-    "@noydb/core": "workspace:*",
+    "@noy-db/core": "workspace:*",
     "@aws-sdk/client-dynamodb": "^3.0.0",
     "@aws-sdk/lib-dynamodb": "^3.0.0"
   },

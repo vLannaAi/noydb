@@ -3,7 +3,7 @@
   "changelog": "@changesets/cli/changelog",
   "commit": false,
   "fixed": [],
-  "linked": [["@noydb/*"]],
+  "linked": [["@noy-db/*"]],
   "access": "public",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",

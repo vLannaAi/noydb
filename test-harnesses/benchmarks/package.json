@@ -1,5 +1,5 @@
 {
-  "name": "@noydb/test-benchmarks",
+  "name": "@noy-db/test-benchmarks",
   "version": "0.0.0",
   "private": true,
   "description": "Performance benchmarks",
@@ -8,6 +8,6 @@
     "test": "vitest run"
   },
   "devDependencies": {
-    "@noydb/core": "workspace:*"
+    "@noy-db/core": "workspace:*"
   }
 }

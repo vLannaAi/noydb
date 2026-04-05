@@ -35,10 +35,10 @@ importers:
 
   packages/adapter-browser:
     devDependencies:
-      '@noydb/core':
+      '@noy-db/core':
         specifier: workspace:*
         version: link:../core
-      '@noydb/test-adapter-conformance':
+      '@noy-db/test-adapter-conformance':
         specifier: workspace:*
         version: link:../../test-harnesses/adapter-conformance
       happy-dom:
@@ -53,16 +53,16 @@ importers:
       '@aws-sdk/lib-dynamodb':
         specifier: ^3.0.0
         version: 3.1024.0(@aws-sdk/client-dynamodb@3.1024.0)
-      '@noydb/core':
+      '@noy-db/core':
         specifier: workspace:*
         version: link:../core
 
   packages/adapter-file:
     devDependencies:
-      '@noydb/core':
+      '@noy-db/core':
         specifier: workspace:*
         version: link:../core
-      '@noydb/test-adapter-conformance':
+      '@noy-db/test-adapter-conformance':
         specifier: workspace:*
         version: link:../../test-harnesses/adapter-conformance
       '@types/node':
@@ -71,10 +71,10 @@ importers:
 
   packages/adapter-memory:
     devDependencies:
-      '@noydb/core':
+      '@noy-db/core':
         specifier: workspace:*
         version: link:../core
-      '@noydb/test-adapter-conformance':
+      '@noy-db/test-adapter-conformance':
         specifier: workspace:*
         version: link:../../test-harnesses/adapter-conformance
 
@@ -83,7 +83,7 @@ importers:
       '@aws-sdk/client-s3':
         specifier: ^3.0.0
         version: 3.1024.0
-      '@noydb/core':
+      '@noy-db/core':
         specifier: workspace:*
         version: link:../core
 
@@ -95,7 +95,7 @@ importers:
 
   packages/vue:
     devDependencies:
-      '@noydb/core':
+      '@noy-db/core':
         specifier: workspace:*
         version: link:../core
       vue:
@@ -104,25 +104,25 @@ importers:
 
   playground:
     dependencies:
-      '@noydb/core':
+      '@noy-db/core':
         specifier: workspace:*
         version: link:../packages/core
-      '@noydb/file':
+      '@noy-db/file':
         specifier: workspace:*
         version: link:../packages/adapter-file
-      '@noydb/memory':
+      '@noy-db/memory':
         specifier: workspace:*
         version: link:../packages/adapter-memory
 
   playground/browser:
     dependencies:
-      '@noydb/browser':
+      '@noy-db/browser':
         specifier: workspace:*
         version: link:../../packages/adapter-browser
-      '@noydb/core':
+      '@noy-db/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@noydb/memory':
+      '@noy-db/memory':
         specifier: workspace:*
         version: link:../../packages/adapter-memory
     devDependencies:
@@ -132,7 +132,7 @@ importers:
 
   test-harnesses/adapter-conformance:
     devDependencies:
-      '@noydb/core':
+      '@noy-db/core':
         specifier: workspace:*
         version: link:../../packages/core
       vitest:
@@ -141,37 +141,37 @@ importers:
 
   test-harnesses/benchmarks:
     devDependencies:
-      '@noydb/core':
+      '@noy-db/core':
         specifier: workspace:*
         version: link:../../packages/core
 
   test-harnesses/simulation-concurrent:
     devDependencies:
-      '@noydb/core':
+      '@noy-db/core':
         specifier: workspace:*
         version: link:../../packages/core
 
   test-harnesses/simulation-filesystem:
     devDependencies:
-      '@noydb/core':
+      '@noy-db/core':
         specifier: workspace:*
         version: link:../../packages/core
 
   test-harnesses/simulation-multiuser:
     devDependencies:
-      '@noydb/core':
+      '@noy-db/core':
         specifier: workspace:*
         version: link:../../packages/core
 
   test-harnesses/simulation-offline-online:
     devDependencies:
-      '@noydb/core':
+      '@noy-db/core':
         specifier: workspace:*
         version: link:../../packages/core
 
   test-harnesses/simulation-sync:
     devDependencies:
-      '@noydb/core':
+      '@noy-db/core':
         specifier: workspace:*
         version: link:../../packages/core
 

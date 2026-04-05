@@ -1,6 +1,6 @@
 {
-  "name": "@noydb/file",
-  "version": "0.0.1",
+  "name": "@noy-db/file",
+  "version": "0.1.0",
   "description": "JSON file adapter for NOYDB (USB, local disk, network drive)",
   "license": "MIT",
   "type": "module",
@@ -32,11 +32,11 @@
     "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {
-    "@noydb/core": "workspace:*"
+    "@noy-db/core": "workspace:*"
   },
   "devDependencies": {
-    "@noydb/core": "workspace:*",
-    "@noydb/test-adapter-conformance": "workspace:*",
+    "@noy-db/core": "workspace:*",
+    "@noy-db/test-adapter-conformance": "workspace:*",
     "@types/node": "^22.0.0"
   },
   "repository": {

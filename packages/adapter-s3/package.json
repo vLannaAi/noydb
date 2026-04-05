@@ -1,6 +1,6 @@
 {
-  "name": "@noydb/s3",
-  "version": "0.0.1",
+  "name": "@noy-db/s3",
+  "version": "0.1.0",
   "description": "AWS S3 adapter for NOYDB (encrypted object storage)",
   "license": "MIT",
   "type": "module",
@@ -32,11 +32,11 @@
     "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {
-    "@noydb/core": "workspace:*",
+    "@noy-db/core": "workspace:*",
     "@aws-sdk/client-s3": "^3.0.0"
   },
   "devDependencies": {
-    "@noydb/core": "workspace:*",
+    "@noy-db/core": "workspace:*",
     "@aws-sdk/client-s3": "^3.0.0"
   },
   "repository": {

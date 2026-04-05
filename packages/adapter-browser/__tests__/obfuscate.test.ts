@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { runAdapterConformanceTests } from '@noydb/test-adapter-conformance'
+import { runAdapterConformanceTests } from '@noy-db/test-adapter-conformance'
 import { browser } from '../src/index.js'
 
 // ─── Full conformance suite with obfuscation ───────────────────────────

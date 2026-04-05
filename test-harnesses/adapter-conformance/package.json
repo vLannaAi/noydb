@@ -1,5 +1,5 @@
 {
-  "name": "@noydb/test-adapter-conformance",
+  "name": "@noy-db/test-adapter-conformance",
   "version": "0.0.0",
   "private": true,
   "description": "Parameterized adapter contract tests",
@@ -11,7 +11,7 @@
     "test": "vitest run"
   },
   "devDependencies": {
-    "@noydb/core": "workspace:*",
+    "@noy-db/core": "workspace:*",
     "vitest": "^3.0.0"
   }
 }

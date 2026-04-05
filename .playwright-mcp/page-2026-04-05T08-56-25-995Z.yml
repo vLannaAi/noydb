@@ -1,0 +1,43 @@
+- generic [ref=e1]:
+  - banner [ref=e2]:
+    - heading "NOYDB Playground" [level=1] [ref=e3]
+    - generic [ref=e4]: Zero-knowledge encrypted document store — live in your browser
+    - generic [ref=e5]:
+      - generic [ref=e6]: "localStorage: 0 keys"
+      - generic [ref=e7]: 0 records
+  - main [ref=e8]:
+    - generic [ref=e9]:
+      - button "1. Encrypted CRUD" [ref=e10] [cursor=pointer]
+      - button "2. Multi-User" [ref=e11] [cursor=pointer]
+      - button "3. Offline → Sync" [ref=e12] [cursor=pointer]
+      - button "4. Persist & Reload" [ref=e13] [cursor=pointer]
+      - button "5. Backup & Restore" [ref=e14] [cursor=pointer]
+    - generic [ref=e15]:
+      - 'heading "Step 1: Encrypted CRUD with Browser Storage" [level=2] [ref=e16]'
+      - paragraph [ref=e17]: Create invoices encrypted with AES-256-GCM. Data is stored in localStorage — but only as ciphertext. Open DevTools → Application → Local Storage to see the encrypted blobs.
+      - generic [ref=e18]:
+        - button "Initialize Store" [active] [ref=e19] [cursor=pointer]
+        - button "Add Invoice" [ref=e20] [cursor=pointer]
+        - button "List All" [ref=e21] [cursor=pointer]
+        - button "Query Drafts" [ref=e22] [cursor=pointer]
+        - button "Show Raw Storage" [ref=e23] [cursor=pointer]
+    - generic [ref=e24]:
+      - generic [ref=e25]:
+        - heading "Activity Log" [level=3] [ref=e26]
+        - generic [ref=e27]:
+          - generic [ref=e28]: Welcome to the NOYDB Browser Playground!
+          - generic [ref=e29]: Click "Initialize Store" to begin.
+          - generic [ref=e30]: Each step demonstrates a key NOYDB feature.
+          - generic [ref=e31]: Watch the Raw Storage panel → all data is ciphertext.
+          - generic [ref=e32]: Step 4 tests persistence across page reload.
+          - generic [ref=e36]: ▸ Initializing encrypted store with browser adapter
+          - generic [ref=e37]: "✓ Store initialized — owner: owner-niwat"
+          - generic [ref=e38]: "Adapter: localStorage (encrypted with AES-256-GCM)"
+          - generic [ref=e39]: "Key derivation: PBKDF2-SHA256 (600,000 iterations)"
+          - generic [ref=e40]: "✓ Created INV-001: ฿50,000 (draft)"
+          - generic [ref=e41]: "✓ Created INV-002: ฿125,000 (sent)"
+          - generic [ref=e42]: "✓ Created INV-003: ฿8,500 (paid)"
+          - generic [ref=e43]: Open DevTools → Application → Local Storage to see the encrypted data
+      - generic [ref=e33]:
+        - heading "Raw localStorage (what the adapter sees)" [level=3] [ref=e34]
+        - generic [ref=e35]: No NOYDB data in localStorage

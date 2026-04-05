@@ -2,6 +2,6 @@ import { defineConfig } from 'vite'
 
 export default defineConfig({
   optimizeDeps: {
-    include: ['@noydb/core', '@noydb/browser', '@noydb/memory'],
+    include: ['@noy-db/core', '@noy-db/browser', '@noy-db/memory'],
   },
 })

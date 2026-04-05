@@ -1,0 +1,41 @@
+- generic [ref=e1]:
+  - banner [ref=e2]:
+    - heading "NOYDB Playground" [level=1] [ref=e3]
+    - generic [ref=e4]: Zero-knowledge encrypted document store — live in your browser
+    - generic [ref=e5]:
+      - generic [ref=e6]: "localStorage: 6 keys"
+      - generic [ref=e7]: 3 records
+  - main [ref=e8]:
+    - generic [ref=e9]:
+      - button "1. Encrypted CRUD" [ref=e10] [cursor=pointer]
+      - button "2. Multi-User" [ref=e11] [cursor=pointer]
+      - button "3. Offline → Sync" [ref=e12] [cursor=pointer]
+      - button "4. Persist & Reload" [active] [ref=e13] [cursor=pointer]
+      - button "5. Backup & Restore" [ref=e14] [cursor=pointer]
+    - generic [ref=e42]:
+      - 'heading "Step 4: Persist Across Reload" [level=2] [ref=e43]'
+      - paragraph [ref=e44]: The browser adapter persists to localStorage. Reload the page — your data survives. This proves offline-first persistence.
+      - generic [ref=e45]:
+        - button "Check Persisted Data" [ref=e46] [cursor=pointer]
+        - button "Add Record Before Reload" [ref=e47] [cursor=pointer]
+        - button "Reload Page" [ref=e48] [cursor=pointer]
+        - button "Verify After Reload" [ref=e49] [cursor=pointer]
+        - button "Clear All Storage" [ref=e50] [cursor=pointer]
+    - generic [ref=e24]:
+      - generic [ref=e25]:
+        - heading "Activity Log" [level=3] [ref=e26]
+        - generic [ref=e27]:
+          - generic [ref=e28]: Welcome to the NOYDB Browser Playground!
+          - generic [ref=e29]: Click "Initialize Store" to begin.
+          - generic [ref=e30]: Each step demonstrates a key NOYDB feature.
+          - generic [ref=e31]: Watch the Raw Storage panel → all data is ciphertext.
+          - generic [ref=e32]: Step 4 tests persistence across page reload.
+      - generic [ref=e33]:
+        - heading "Raw localStorage (what the adapter sees)" [level=3] [ref=e34]
+        - generic [ref=e35]:
+          - generic [ref=e36]: "d2e076ae:26be1adb:31a9d34a { _v:1, _iv:\"…\", _data:\"FU0mCg1UAAcyBF8XHRAKBQ9V…\" }"
+          - generic [ref=e37]: "d2e076ae:26be1adb:7a0c8bb7 { _v:1, _iv:\"…\", _data:\"FU0mCg1UAAcyBF8XHRAKBQ9V…\" }"
+          - generic [ref=e38]: "d2e076ae:26be1adb:aefb51e1 { _v:1, _iv:\"…\", _data:\"FU0mCg1UAAcyBF8XHRAKBQ9V…\" }"
+          - generic [ref=e39]: "d2e076ae:f4494ed9:7f2f8a9c { _v:1, _iv:\"9ToVfzKcQrtw…\", _data:\"myXv7rz1j9halrmr96d6gl7e…\" }"
+          - generic [ref=e40]: "d2e076ae:f4494ed9:802f8c2f { _v:1, _iv:\"VgBkBh/0POBW…\", _data:\"Gr7PfE4TY7LlajttC7cOwVPs…\" }"
+          - generic [ref=e41]: "d2e076ae:f4494ed9:812f8dc2 { _v:1, _iv:\"yMa2/aOAp83W…\", _data:\"yATqCPp/u7bb1QXJHPouDQ/m…\" }"

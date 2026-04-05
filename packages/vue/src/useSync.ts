@@ -1,5 +1,5 @@
 import { ref, onUnmounted, type Ref } from 'vue'
-import type { Noydb, SyncStatus, PushResult, PullResult } from '@noydb/core'
+import type { Noydb, SyncStatus, PushResult, PullResult } from '@noy-db/core'
 
 export interface UseSyncReturn {
   /** Reactive sync status. */

@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { runAdapterConformanceTests } from '@noydb/test-adapter-conformance'
+import { runAdapterConformanceTests } from '@noy-db/test-adapter-conformance'
 import { jsonFile } from '../src/index.js'
 
 let dirs: string[] = []

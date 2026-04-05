@@ -1,7 +1,7 @@
 import { readFile, writeFile, mkdir, readdir, unlink, stat } from 'node:fs/promises'
 import { join } from 'node:path'
-import type { NoydbAdapter, EncryptedEnvelope, CompartmentSnapshot } from '@noydb/core'
-import { ConflictError } from '@noydb/core'
+import type { NoydbAdapter, EncryptedEnvelope, CompartmentSnapshot } from '@noy-db/core'
+import { ConflictError } from '@noy-db/core'
 
 export interface JsonFileOptions {
   /** Base directory for NOYDB data. */

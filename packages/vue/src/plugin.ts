@@ -1,5 +1,5 @@
 import type { App, InjectionKey } from 'vue'
-import type { Noydb } from '@noydb/core'
+import type { Noydb } from '@noy-db/core'
 
 export const NoydbKey: InjectionKey<Noydb> = Symbol('noydb')
 

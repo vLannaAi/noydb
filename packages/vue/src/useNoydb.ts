@@ -1,5 +1,5 @@
 import { inject } from 'vue'
-import type { Noydb } from '@noydb/core'
+import type { Noydb } from '@noy-db/core'
 import { NoydbKey } from './plugin.js'
 
 /** Composable to access the injected NOYDB instance. */
