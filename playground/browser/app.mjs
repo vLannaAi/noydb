@@ -373,9 +373,19 @@ window.step4_check = async function() {
     logWarn('No NOYDB data found — run Step 1 first')
     return
   }
-  const recordKeys = keys.filter(k => !k.includes(':_keyring:') && !k.includes(':_sync:'))
-  logOk(`Found ${recordKeys.length} encrypted records in localStorage`)
-  logOk(`Found ${keys.length - recordKeys.length} keyring/meta entries`)
+  let records = 0
+  let meta = 0
+  for (const k of keys) {
+    const val = localStorage.getItem(k)
+    if (!val) continue
+    try {
+      const parsed = JSON.parse(val)
+      const env = parsed._e ?? parsed
+      if (env._iv && env._iv.length > 0) { records++ } else { meta++ }
+    } catch { meta++ }
+  }
+  logOk(`Found ${records} encrypted records in localStorage`)
+  logOk(`Found ${meta} keyring/meta entries`)
   logInfo('This data survives page reload — try it!')
   showStorage()
   updateBadges()
