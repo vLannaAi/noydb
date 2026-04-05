@@ -96,7 +96,7 @@ window.step1_init = async function() {
   logStep('Initializing encrypted store with browser adapter')
 
   ownerDb = await createNoydb({
-    adapter: browser({ prefix: PREFIX }),
+    adapter: browser({ prefix: PREFIX, backend: 'localStorage' }),
     user: 'owner-niwat',
     secret: 'demo-passphrase-2026',
   })
@@ -209,12 +209,12 @@ window.step2_grant = async function() {
 
   // Login as each user
   opDb = await createNoydb({
-    adapter: browser({ prefix: PREFIX }),
+    adapter: browser({ prefix: PREFIX, backend: 'localStorage' }),
     user: 'op-somchai',
     secret: 'somchai-pass',
   })
   viewerDb = await createNoydb({
-    adapter: browser({ prefix: PREFIX }),
+    adapter: browser({ prefix: PREFIX, backend: 'localStorage' }),
     user: 'viewer-audit',
     secret: 'audit-pass',
   })
@@ -367,7 +367,7 @@ window.step4_add = async function() {
   if (!ownerDb) {
     // Re-open after potential reload
     ownerDb = await createNoydb({
-      adapter: browser({ prefix: PREFIX }),
+      adapter: browser({ prefix: PREFIX, backend: 'localStorage' }),
       user: 'owner-niwat',
       secret: 'demo-passphrase-2026',
     })
@@ -387,7 +387,7 @@ window.step4_verify = async function() {
   logStep('Verifying data after reload')
   try {
     const db = await createNoydb({
-      adapter: browser({ prefix: PREFIX }),
+      adapter: browser({ prefix: PREFIX, backend: 'localStorage' }),
       user: 'owner-niwat',
       secret: 'demo-passphrase-2026',
     })
@@ -455,7 +455,7 @@ window.step5_clearAndRestore = async function() {
   logWarn(`Cleared ${keys.length} keys`)
 
   ownerDb = await createNoydb({
-    adapter: browser({ prefix: PREFIX }),
+    adapter: browser({ prefix: PREFIX, backend: 'localStorage' }),
     user: 'owner-niwat',
     secret: 'demo-passphrase-2026',
   })
