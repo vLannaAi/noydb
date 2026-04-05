@@ -30,3 +30,9 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Playwright MCP snapshots
+.playwright-mcp/
+
+# Claude worktrees
+.claude/
