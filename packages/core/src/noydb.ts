@@ -1,11 +1,18 @@
-import type { NoydbOptions, NoydbEventMap } from './types.js'
+import type { NoydbOptions, NoydbEventMap, GrantOptions, RevokeOptions, UserInfo } from './types.js'
 import { ValidationError } from './errors.js'
 import { Compartment } from './compartment.js'
 import { NoydbEventEmitter } from './events.js'
-import { loadKeyring, createOwnerKeyring } from './keyring.js'
+import {
+  loadKeyring,
+  createOwnerKeyring,
+  grant as keyringGrant,
+  revoke as keyringRevoke,
+  changeSecret as keyringChangeSecret,
+  listUsers as keyringListUsers,
+} from './keyring.js'
 import type { UnlockedKeyring } from './keyring.js'
 
-/** Dummy keyring for unencrypted mode — provides owner-level access without crypto. */
+/** Dummy keyring for unencrypted mode. */
 function createPlaintextKeyring(userId: string): UnlockedKeyring {
   return {
     userId,
@@ -13,7 +20,7 @@ function createPlaintextKeyring(userId: string): UnlockedKeyring {
     role: 'owner',
     permissions: {},
     deks: new Map(),
-    kek: null as unknown as CryptoKey, // never used in unencrypted mode
+    kek: null as unknown as CryptoKey,
     salt: new Uint8Array(0),
   }
 }
@@ -22,69 +29,144 @@ function createPlaintextKeyring(userId: string): UnlockedKeyring {
 export class Noydb {
   private readonly options: NoydbOptions
   private readonly emitter = new NoydbEventEmitter()
-  private keyring: UnlockedKeyring | null = null
   private readonly compartmentCache = new Map<string, Compartment>()
+  private readonly keyringCache = new Map<string, UnlockedKeyring>()
+  private closed = false
 
-  constructor(options: NoydbOptions, keyring: UnlockedKeyring | null) {
+  constructor(options: NoydbOptions) {
     this.options = options
-    this.keyring = keyring
   }
 
   /** Open a compartment by name. */
-  compartment(name: string): Compartment {
+  async openCompartment(name: string): Promise<Compartment> {
+    if (this.closed) throw new ValidationError('Instance is closed')
+
     let comp = this.compartmentCache.get(name)
-    if (!comp) {
-      if (!this.keyring) {
-        throw new ValidationError('Not authenticated — provide a secret or use biometric auth')
-      }
-      comp = new Compartment({
-        adapter: this.options.adapter,
-        name,
-        keyring: this.keyring,
-        encrypted: this.options.encrypt !== false,
-        emitter: this.emitter,
-      })
-      this.compartmentCache.set(name, comp)
-    }
+    if (comp) return comp
+
+    const keyring = await this.getKeyring(name)
+
+    comp = new Compartment({
+      adapter: this.options.adapter,
+      name,
+      keyring,
+      encrypted: this.options.encrypt !== false,
+      emitter: this.emitter,
+    })
+    this.compartmentCache.set(name, comp)
     return comp
   }
 
-  /** Subscribe to events. */
-  on<K extends keyof NoydbEventMap>(
-    event: K,
-    handler: (data: NoydbEventMap[K]) => void,
-  ): void {
+  /** Synchronous compartment access (must call openCompartment first, or auto-opens). */
+  compartment(name: string): Compartment {
+    const cached = this.compartmentCache.get(name)
+    if (cached) return cached
+
+    // For backwards compat: if not opened yet, create with cached keyring or plaintext
+    if (this.options.encrypt === false) {
+      const keyring = createPlaintextKeyring(this.options.user)
+      const comp = new Compartment({
+        adapter: this.options.adapter,
+        name,
+        keyring,
+        encrypted: false,
+        emitter: this.emitter,
+      })
+      this.compartmentCache.set(name, comp)
+      return comp
+    }
+
+    // For encrypted mode, we need the keyring which requires async.
+    // Check if we have a cached keyring from a prior openCompartment call.
+    const keyring = this.keyringCache.get(name)
+    if (!keyring) {
+      throw new ValidationError(
+        `Compartment "${name}" not opened. Use await db.openCompartment("${name}") first.`,
+      )
+    }
+
+    const comp = new Compartment({
+      adapter: this.options.adapter,
+      name,
+      keyring,
+      encrypted: true,
+      emitter: this.emitter,
+    })
+    this.compartmentCache.set(name, comp)
+    return comp
+  }
+
+  /** Grant access to a user for a compartment. */
+  async grant(compartment: string, options: GrantOptions): Promise<void> {
+    const keyring = await this.getKeyring(compartment)
+    await keyringGrant(this.options.adapter, compartment, keyring, options)
+  }
+
+  /** Revoke a user's access to a compartment. */
+  async revoke(compartment: string, options: RevokeOptions): Promise<void> {
+    const keyring = await this.getKeyring(compartment)
+    await keyringRevoke(this.options.adapter, compartment, keyring, options)
+  }
+
+  /** List all users with access to a compartment. */
+  async listUsers(compartment: string): Promise<UserInfo[]> {
+    return keyringListUsers(this.options.adapter, compartment)
+  }
+
+  /** Change the current user's passphrase for a compartment. */
+  async changeSecret(compartment: string, newPassphrase: string): Promise<void> {
+    const keyring = await this.getKeyring(compartment)
+    const updated = await keyringChangeSecret(
+      this.options.adapter,
+      compartment,
+      keyring,
+      newPassphrase,
+    )
+    this.keyringCache.set(compartment, updated)
+  }
+
+  on<K extends keyof NoydbEventMap>(event: K, handler: (data: NoydbEventMap[K]) => void): void {
     this.emitter.on(event, handler)
   }
 
-  /** Unsubscribe from events. */
-  off<K extends keyof NoydbEventMap>(
-    event: K,
-    handler: (data: NoydbEventMap[K]) => void,
-  ): void {
+  off<K extends keyof NoydbEventMap>(event: K, handler: (data: NoydbEventMap[K]) => void): void {
     this.emitter.off(event, handler)
   }
 
-  /** Close the instance and clear all keys from memory. */
   close(): void {
-    this.keyring = null
+    this.closed = true
+    this.keyringCache.clear()
     this.compartmentCache.clear()
     this.emitter.removeAllListeners()
   }
+
+  /** Get or load the keyring for a compartment. */
+  private async getKeyring(compartment: string): Promise<UnlockedKeyring> {
+    if (this.options.encrypt === false) {
+      return createPlaintextKeyring(this.options.user)
+    }
+
+    const cached = this.keyringCache.get(compartment)
+    if (cached) return cached
+
+    if (!this.options.secret) {
+      throw new ValidationError('A secret (passphrase) is required when encryption is enabled')
+    }
+
+    let keyring: UnlockedKeyring
+    try {
+      keyring = await loadKeyring(this.options.adapter, compartment, this.options.user, this.options.secret)
+    } catch {
+      // No keyring exists — create owner keyring for this compartment
+      keyring = await createOwnerKeyring(this.options.adapter, compartment, this.options.user, this.options.secret)
+    }
+
+    this.keyringCache.set(compartment, keyring)
+    return keyring
+  }
 }
 
-/**
- * Create a new NOYDB instance.
- *
- * @example
- * ```ts
- * const db = await createNoydb({
- *   adapter: jsonFile({ dir: './data' }),
- *   user: 'owner-01',
- *   secret: 'my-passphrase',
- * })
- * ```
- */
+/** Create a new NOYDB instance. */
 export async function createNoydb(options: NoydbOptions): Promise<Noydb> {
   const encrypted = options.encrypt !== false
 
@@ -92,30 +174,5 @@ export async function createNoydb(options: NoydbOptions): Promise<Noydb> {
     throw new ValidationError('A secret (passphrase) is required when encryption is enabled')
   }
 
-  let keyring: UnlockedKeyring | null = null
-
-  if (!encrypted) {
-    // Unencrypted mode — no crypto needed
-    keyring = createPlaintextKeyring(options.user)
-  } else if (options.secret) {
-    // Try to load existing keyring from the adapter
-    try {
-      keyring = await loadKeyring(
-        options.adapter,
-        '_default',
-        options.user,
-        options.secret,
-      )
-    } catch {
-      // No keyring found — create owner keyring
-      keyring = await createOwnerKeyring(
-        options.adapter,
-        '_default',
-        options.user,
-        options.secret,
-      )
-    }
-  }
-
-  return new Noydb(options, keyring)
+  return new Noydb(options)
 }

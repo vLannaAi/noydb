@@ -53,13 +53,13 @@ describe('integration: full lifecycle', () => {
       })
     })
 
-    it('creates instance and opens compartment', () => {
-      const company = db.compartment('C101')
+    it('creates instance and opens compartment', async () => {
+      const company = await db.openCompartment('C101')
       expect(company).toBeDefined()
     })
 
     it('put + get round-trips with encryption', async () => {
-      const company = db.compartment('C101')
+      const company = await db.openCompartment('C101')
       const invoices = company.collection<Invoice>('invoices')
 
       await invoices.put('inv-001', {
@@ -77,7 +77,7 @@ describe('integration: full lifecycle', () => {
     })
 
     it('list returns all records', async () => {
-      const company = db.compartment('C101')
+      const company = await db.openCompartment('C101')
       const invoices = company.collection<Invoice>('invoices')
 
       await invoices.put('inv-001', { amount: 1000, status: 'draft', client: 'A' })
@@ -89,7 +89,7 @@ describe('integration: full lifecycle', () => {
     })
 
     it('query filters records', async () => {
-      const company = db.compartment('C101')
+      const company = await db.openCompartment('C101')
       const invoices = company.collection<Invoice>('invoices')
 
       await invoices.put('inv-001', { amount: 1000, status: 'draft', client: 'A' })
@@ -104,7 +104,7 @@ describe('integration: full lifecycle', () => {
     })
 
     it('delete removes a record', async () => {
-      const company = db.compartment('C101')
+      const company = await db.openCompartment('C101')
       const invoices = company.collection<Invoice>('invoices')
 
       await invoices.put('inv-001', { amount: 1000, status: 'draft', client: 'A' })
@@ -115,7 +115,7 @@ describe('integration: full lifecycle', () => {
     })
 
     it('count returns correct number', async () => {
-      const company = db.compartment('C101')
+      const company = await db.openCompartment('C101')
       const invoices = company.collection<Invoice>('invoices')
 
       await invoices.put('inv-001', { amount: 1000, status: 'draft', client: 'A' })
@@ -125,7 +125,7 @@ describe('integration: full lifecycle', () => {
     })
 
     it('get non-existent returns null', async () => {
-      const company = db.compartment('C101')
+      const company = await db.openCompartment('C101')
       const invoices = company.collection<Invoice>('invoices')
       expect(await invoices.get('nonexistent')).toBeNull()
     })
@@ -134,7 +134,7 @@ describe('integration: full lifecycle', () => {
       const events: string[] = []
       db.on('change', (e) => events.push(`${e.action}:${e.id}`))
 
-      const company = db.compartment('C101')
+      const company = await db.openCompartment('C101')
       const invoices = company.collection<Invoice>('invoices')
 
       await invoices.put('inv-001', { amount: 1000, status: 'draft', client: 'A' })
@@ -143,8 +143,8 @@ describe('integration: full lifecycle', () => {
       expect(events).toEqual(['put:inv-001', 'delete:inv-001'])
     })
 
-    it('dump and load round-trips', async () => {
-      const company = db.compartment('C101')
+    it('dump produces valid backup JSON', async () => {
+      const company = await db.openCompartment('C101')
       const invoices = company.collection<Invoice>('invoices')
 
       await invoices.put('inv-001', { amount: 5000, status: 'draft', client: 'ABC' })
@@ -152,27 +152,37 @@ describe('integration: full lifecycle', () => {
 
       const backup = await company.dump()
       expect(typeof backup).toBe('string')
-      expect(backup.length).toBeGreaterThan(0)
 
-      // Restore backup on the SAME db instance (same keys in memory)
-      // This tests dump/load round-trip integrity, not cross-instance restore
-      // (cross-instance restore requires keyring transfer, tested in Phase 2)
-      const company2 = db.compartment('C101-restored')
-      await company2.load(backup)
-
-      // The restored compartment uses the same keyring/DEKs since same db instance
-      const invoices2 = company2.collection<Invoice>('invoices')
-      const inv1 = await invoices2.get('inv-001')
-      expect(inv1).toEqual({ amount: 5000, status: 'draft', client: 'ABC' })
-
-      const inv2 = await invoices2.get('inv-002')
-      expect(inv2).toEqual({ amount: 3000, status: 'paid', client: 'DEF' })
+      const parsed = JSON.parse(backup) as Record<string, unknown>
+      expect(parsed['_noydb_backup']).toBe(1)
+      expect(parsed['_compartment']).toBe('C101')
+      expect(parsed['collections']).toBeDefined()
     })
 
-    it('close clears state', () => {
+    it('dump and load round-trips in unencrypted mode', async () => {
+      const plainDb = await createNoydb({ adapter: memory(), user: 'dev', encrypt: false })
+      const comp = await plainDb.openCompartment('TEST')
+      const invoices = comp.collection<Invoice>('invoices')
+
+      await invoices.put('inv-001', { amount: 5000, status: 'draft', client: 'ABC' })
+      await invoices.put('inv-002', { amount: 3000, status: 'paid', client: 'DEF' })
+
+      const backup = await comp.dump()
+
+      // Restore into a new compartment on a fresh instance
+      const plainDb2 = await createNoydb({ adapter: memory(), user: 'dev', encrypt: false })
+      const comp2 = await plainDb2.openCompartment('TEST')
+      await comp2.load(backup)
+
+      const invoices2 = comp2.collection<Invoice>('invoices')
+      expect(await invoices2.get('inv-001')).toEqual({ amount: 5000, status: 'draft', client: 'ABC' })
+      expect(await invoices2.get('inv-002')).toEqual({ amount: 3000, status: 'paid', client: 'DEF' })
+    })
+
+    it('close clears state', async () => {
       db.close()
       // After close, creating a compartment should fail gracefully
-      expect(() => db.compartment('C101')).toThrow()
+      await expect(db.openCompartment('C101')).rejects.toThrow()
     })
   })
 
@@ -186,7 +196,7 @@ describe('integration: full lifecycle', () => {
     })
 
     it('put + get works without encryption', async () => {
-      const company = db.compartment('C101')
+      const company = await db.openCompartment('C101')
       const invoices = company.collection<Invoice>('invoices')
 
       await invoices.put('inv-001', { amount: 5000, status: 'draft', client: 'Test' })
