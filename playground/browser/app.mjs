@@ -1,4 +1,4 @@
-import { createNoydb } from '@noydb/core'
+import { createNoydb, formatDiff } from '@noydb/core'
 import { browser } from '@noydb/browser'
 import { memory } from '@noydb/memory'
 
@@ -117,6 +117,7 @@ window.step1_init = async function() {
     adapter: browser({ prefix: PREFIX, backend: 'localStorage', obfuscate: true }),
     user: 'owner-niwat',
     secret: 'demo-passphrase-2026',
+    history: { enabled: true },
   })
 
   const comp = await ownerDb.openCompartment(COMP)
@@ -486,6 +487,7 @@ window.step5_clearAndRestore = async function() {
     adapter: browser({ prefix: PREFIX, backend: 'localStorage', obfuscate: true }),
     user: 'owner-niwat',
     secret: 'demo-passphrase-2026',
+    history: { enabled: true },
   })
 
   const comp = await ownerDb.openCompartment(COMP)
@@ -504,6 +506,143 @@ window.step5_verify = async function() {
     logInfo(`  ฿${inv.amount.toLocaleString()} — ${inv.status} — ${inv.client}`)
   }
   markStepDone(5)
+}
+
+// ─── Step 6: History & Diff ─────────────────────────────────────────────
+
+window.step6_makeChanges = async function() {
+  if (!ownerDb) return logErr('Run Step 1 first')
+  logStep('Making a series of changes to track')
+
+  const comp = await ownerDb.openCompartment(COMP)
+  const invoices = comp.collection('invoices')
+
+  await invoices.put('HIST-001', { amount: 10000, status: 'draft', client: 'History Demo' })
+  logOk('v1: Created HIST-001 — ฿10,000 (draft)')
+
+  await invoices.put('HIST-001', { amount: 15000, status: 'draft', client: 'History Demo' })
+  logOk('v2: Updated amount → ฿15,000')
+
+  await invoices.put('HIST-001', { amount: 15000, status: 'sent', client: 'History Demo' })
+  logOk('v3: Status → sent')
+
+  await invoices.put('HIST-001', { amount: 15000, status: 'paid', client: 'History Demo', paidDate: '2026-04-05' })
+  logOk('v4: Status → paid, added paidDate')
+
+  showStorage()
+  updateBadges()
+}
+
+window.step6_showHistory = async function() {
+  if (!ownerDb) return logErr('Run Step 1 first')
+  logStep('Version history for HIST-001')
+
+  const comp = await ownerDb.openCompartment(COMP)
+  const invoices = comp.collection('invoices')
+  const history = await invoices.history('HIST-001')
+
+  if (history.length === 0) {
+    logWarn('No history — click "Make Changes" first')
+    return
+  }
+
+  for (const entry of history) {
+    logInfo(`  v${entry.version} [${entry.timestamp.slice(11, 19)}] by ${entry.userId}`)
+    logData(`    `, entry.record)
+  }
+  logOk(`${history.length} history entries (current record is latest version)`)
+}
+
+window.step6_diff = async function() {
+  if (!ownerDb) return logErr('Run Step 1 first')
+  logStep('Field-level diffs between versions')
+
+  const comp = await ownerDb.openCompartment(COMP)
+  const invoices = comp.collection('invoices')
+
+  const pairs = [[1, 2], [2, 3], [3, 4]]
+  for (const [a, b] of pairs) {
+    const changes = await invoices.diff('HIST-001', a, b)
+    if (changes.length === 0) {
+      logInfo(`v${a} → v${b}: (no changes)`)
+    } else {
+      logInfo(`v${a} → v${b}:`)
+      for (const c of changes) {
+        if (c.type === 'changed') logData(`  ~`, `${c.path}: ${JSON.stringify(c.from)} → ${JSON.stringify(c.to)}`)
+        if (c.type === 'added') logOk(`  + ${c.path}: ${JSON.stringify(c.to)}`)
+        if (c.type === 'removed') logErr(`  - ${c.path}: ${JSON.stringify(c.from)}`)
+      }
+    }
+  }
+
+  logInfo('')
+  const allChanges = await invoices.diff('HIST-001', 1)
+  logInfo('v1 → current (cumulative):')
+  logInfo(`  ${formatDiff(allChanges).split('\n').join('\n  ')}`)
+}
+
+window.step6_timeTravel = async function() {
+  if (!ownerDb) return logErr('Run Step 1 first')
+  logStep('Time travel — viewing version 1')
+
+  const comp = await ownerDb.openCompartment(COMP)
+  const invoices = comp.collection('invoices')
+  const v1 = await invoices.getVersion('HIST-001', 1)
+
+  if (!v1) {
+    logWarn('Version 1 not found — click "Make Changes" first')
+    return
+  }
+
+  logData('HIST-001 at v1', v1)
+  const current = await invoices.get('HIST-001')
+  logData('HIST-001 current', current)
+  logInfo('Time travel reads from history without modifying the current record')
+}
+
+window.step6_revert = async function() {
+  if (!ownerDb) return logErr('Run Step 1 first')
+  logStep('Reverting HIST-001 to version 1')
+
+  const comp = await ownerDb.openCompartment(COMP)
+  const invoices = comp.collection('invoices')
+
+  try {
+    await invoices.revert('HIST-001', 1)
+    const reverted = await invoices.get('HIST-001')
+    logOk(`Reverted! Amount: ฿${reverted.amount.toLocaleString()} (original v1 content)`)
+    logInfo('Revert creates a NEW version with the old content — history is preserved')
+
+    const history = await invoices.history('HIST-001')
+    logOk(`History now has ${history.length} entries`)
+  } catch (e) {
+    logErr(e.message)
+  }
+  showStorage()
+  updateBadges()
+}
+
+window.step6_prune = async function() {
+  if (!ownerDb) return logErr('Run Step 1 first')
+  logStep('Pruning history — keep only last 2 versions')
+
+  const comp = await ownerDb.openCompartment(COMP)
+  const invoices = comp.collection('invoices')
+
+  const before = await invoices.history('HIST-001')
+  logInfo(`Before: ${before.length} history entries`)
+
+  const pruned = await invoices.pruneRecordHistory('HIST-001', { keepVersions: 2 })
+  logOk(`Pruned ${pruned} old entries`)
+
+  const after = await invoices.history('HIST-001')
+  logOk(`After: ${after.length} entries remaining`)
+  for (const e of after) {
+    logInfo(`  v${e.version} — ฿${e.record.amount.toLocaleString()} — ${e.record.status}`)
+  }
+  markStepDone(6)
+  showStorage()
+  updateBadges()
 }
 
 // ─── Init ──────────────────────────────────────────────────────────────

@@ -14,7 +14,7 @@
  *   or: node playground/demo.mjs (from repo root)
  */
 
-import { createNoydb } from '@noydb/core'
+import { createNoydb, formatDiff } from '@noydb/core'
 import { memory } from '@noydb/memory'
 import { jsonFile } from '@noydb/file'
 import { createInterface } from 'node:readline'
@@ -90,7 +90,7 @@ async function main() {
   \x1b[2mAll data is created in a temp directory and cleaned up after.\x1b[0m
   `)
 
-  const TOTAL_STEPS = 5
+  const TOTAL_STEPS = 6
   const tempDir = await mkdtemp(join(tmpdir(), 'noydb-demo-'))
 
   try {
@@ -107,6 +107,7 @@ async function main() {
       adapter: jsonFile({ dir: tempDir }),
       user: 'owner-niwat',
       secret: 'niwat-secure-passphrase-2026',
+      history: { enabled: true },
     })
     success('NOYDB instance created (owner-niwat, encrypted)')
 
@@ -379,6 +380,77 @@ async function main() {
       info(`  ฿${inv.amount.toLocaleString()} — ${inv.status} — from: ${inv.from}`)
     }
 
+    await pause()
+
+    // ═══════════════════════════════════════════════════════════════
+    // STEP 6: Audit History & Diff
+    // ═══════════════════════════════════════════════════════════════
+
+    step(6, TOTAL_STEPS, 'Audit History & Diff')
+
+    info('Every change is tracked automatically. Let\'s see it in action.')
+
+    section('Making a series of changes to an invoice')
+    const histComp = await ownerDb.openCompartment('C101')
+    const histInvoices = histComp.collection('invoices')
+
+    await histInvoices.put('INV-HIST', { amount: 10000, status: 'draft', client: 'History Demo Co.' })
+    success('v1: Created INV-HIST — ฿10,000 (draft)')
+
+    await histInvoices.put('INV-HIST', { amount: 15000, status: 'draft', client: 'History Demo Co.' })
+    success('v2: Updated amount — ฿15,000')
+
+    await histInvoices.put('INV-HIST', { amount: 15000, status: 'sent', client: 'History Demo Co.' })
+    success('v3: Changed status to sent')
+
+    await histInvoices.put('INV-HIST', { amount: 15000, status: 'paid', client: 'History Demo Co.', paidDate: '2026-04-05' })
+    success('v4: Marked as paid, added paidDate')
+
+    section('Viewing full history')
+    const history = await histInvoices.history('INV-HIST')
+    for (const entry of history) {
+      info(`  v${entry.version} [${entry.timestamp.slice(0, 19)}] by ${entry.userId}`)
+      info(`    amount: ฿${entry.record.amount.toLocaleString()}, status: ${entry.record.status}`)
+    }
+    success(`${history.length} history entries (current is v4)`)
+
+    section('Diff between versions')
+
+    const diff_1_2 = await histInvoices.diff('INV-HIST', 1, 2)
+    info('v1 → v2:')
+    info(`  ${formatDiff(diff_1_2).split('\n').join('\n  ')}`)
+
+    const diff_2_3 = await histInvoices.diff('INV-HIST', 2, 3)
+    info('v2 → v3:')
+    info(`  ${formatDiff(diff_2_3).split('\n').join('\n  ')}`)
+
+    const diff_3_4 = await histInvoices.diff('INV-HIST', 3, 4)
+    info('v3 → v4:')
+    info(`  ${formatDiff(diff_3_4).split('\n').join('\n  ')}`)
+
+    const diff_1_current = await histInvoices.diff('INV-HIST', 1)
+    info('v1 → current (all changes):')
+    info(`  ${formatDiff(diff_1_current).split('\n').join('\n  ')}`)
+
+    section('Time travel — get version 1')
+    const v1 = await histInvoices.getVersion('INV-HIST', 1)
+    data('INV-HIST at v1', v1)
+
+    section('Revert to version 1')
+    await histInvoices.revert('INV-HIST', 1)
+    const reverted = await histInvoices.get('INV-HIST')
+    success(`Reverted! Current amount: ฿${reverted.amount.toLocaleString()} (was ฿15,000)`)
+    info('Revert creates a new version (v5) with v1\'s content — history is preserved')
+
+    const histAfterRevert = await histInvoices.history('INV-HIST')
+    success(`History now has ${histAfterRevert.length} entries (v1-v4, current is v5)`)
+
+    section('Pruning — keep only last 2 versions')
+    const pruned = await histInvoices.pruneRecordHistory('INV-HIST', { keepVersions: 2 })
+    success(`Pruned ${pruned} old history entries`)
+    const remaining = await histInvoices.history('INV-HIST')
+    success(`${remaining.length} entries remaining (v${remaining.map(e => e.version).join(', v')})`)
+
     // ═══════════════════════════════════════════════════════════════
     // SUMMARY
     // ═══════════════════════════════════════════════════════════════
@@ -394,6 +466,10 @@ async function main() {
   \x1b[32m✓\x1b[0m Offline → sync — work offline, push/pull when online
   \x1b[32m✓\x1b[0m Conflict detection — same record edited by two users, resolved by strategy
   \x1b[32m✓\x1b[0m Backup & restore — encrypted JSON dump, portable, restorable
+  \x1b[32m✓\x1b[0m Audit history — full version tracking, per-user attribution
+  \x1b[32m✓\x1b[0m Diff — field-level change comparison between any versions
+  \x1b[32m✓\x1b[0m Time travel — revert to any past version
+  \x1b[32m✓\x1b[0m Pruning — clean up old history entries
 
   \x1b[2mAll data was in: ${tempDir}
   Zero runtime dependencies. Zero knowledge. MIT license.\x1b[0m

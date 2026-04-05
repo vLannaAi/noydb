@@ -235,6 +235,7 @@
       <button class="step-btn" data-step="3">3. Offline → Sync</button>
       <button class="step-btn" data-step="4">4. Persist & Reload</button>
       <button class="step-btn" data-step="5">5. Backup & Restore</button>
+      <button class="step-btn" data-step="6">6. History & Diff</button>
     </div>
 
     <!-- Step 1 -->
@@ -300,6 +301,20 @@
         <button onclick="step5_download()">Download Backup</button>
         <button class="danger" onclick="step5_clearAndRestore()">Clear & Restore</button>
         <button onclick="step5_verify()">Verify Restored Data</button>
+      </div>
+    </div>
+
+    <!-- Step 6 -->
+    <div class="panel" id="panel-6" style="display:none">
+      <h2>Step 6: Audit History & Diff</h2>
+      <p>Every change is tracked automatically. Browse version history, see field-level diffs, and time-travel to any past version.</p>
+      <div class="actions">
+        <button class="primary" onclick="step6_makeChanges()">Make Changes</button>
+        <button onclick="step6_showHistory()">Show History</button>
+        <button onclick="step6_diff()">Diff Versions</button>
+        <button onclick="step6_timeTravel()">Time Travel (v1)</button>
+        <button onclick="step6_revert()">Revert to v1</button>
+        <button onclick="step6_prune()">Prune History</button>
       </div>
     </div>
 
