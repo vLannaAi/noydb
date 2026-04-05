@@ -1,4 +1,4 @@
-import type { NoydbOptions, NoydbEventMap, GrantOptions, RevokeOptions, UserInfo } from './types.js'
+import type { NoydbOptions, NoydbEventMap, GrantOptions, RevokeOptions, UserInfo, PushResult, PullResult, SyncStatus } from './types.js'
 import { ValidationError } from './errors.js'
 import { Compartment } from './compartment.js'
 import { NoydbEventEmitter } from './events.js'
@@ -11,6 +11,7 @@ import {
   listUsers as keyringListUsers,
 } from './keyring.js'
 import type { UnlockedKeyring } from './keyring.js'
+import { SyncEngine } from './sync.js'
 
 /** Dummy keyring for unencrypted mode. */
 function createPlaintextKeyring(userId: string): UnlockedKeyring {
@@ -31,6 +32,7 @@ export class Noydb {
   private readonly emitter = new NoydbEventEmitter()
   private readonly compartmentCache = new Map<string, Compartment>()
   private readonly keyringCache = new Map<string, UnlockedKeyring>()
+  private readonly syncEngines = new Map<string, SyncEngine>()
   private closed = false
 
   constructor(options: NoydbOptions) {
@@ -46,12 +48,28 @@ export class Noydb {
 
     const keyring = await this.getKeyring(name)
 
+    // Set up sync engine if remote adapter is configured
+    let syncEngine: SyncEngine | undefined
+    if (this.options.sync) {
+      syncEngine = new SyncEngine({
+        local: this.options.adapter,
+        remote: this.options.sync,
+        compartment: name,
+        strategy: this.options.conflict ?? 'version',
+        emitter: this.emitter,
+      })
+      this.syncEngines.set(name, syncEngine)
+    }
+
     comp = new Compartment({
       adapter: this.options.adapter,
       name,
       keyring,
       encrypted: this.options.encrypt !== false,
       emitter: this.emitter,
+      onDirty: syncEngine
+        ? (coll, id, action, version) => syncEngine.trackChange(coll, id, action, version)
+        : undefined,
     })
     this.compartmentCache.set(name, comp)
     return comp
@@ -124,6 +142,45 @@ export class Noydb {
     )
     this.keyringCache.set(compartment, updated)
   }
+
+  // ─── Sync ──────────────────────────────────────────────────────
+
+  /** Push local changes to remote for a compartment. */
+  async push(compartment: string): Promise<PushResult> {
+    const engine = this.getSyncEngine(compartment)
+    return engine.push()
+  }
+
+  /** Pull remote changes to local for a compartment. */
+  async pull(compartment: string): Promise<PullResult> {
+    const engine = this.getSyncEngine(compartment)
+    return engine.pull()
+  }
+
+  /** Bidirectional sync: pull then push. */
+  async sync(compartment: string): Promise<{ pull: PullResult; push: PushResult }> {
+    const engine = this.getSyncEngine(compartment)
+    return engine.sync()
+  }
+
+  /** Get sync status for a compartment. */
+  syncStatus(compartment: string): SyncStatus {
+    const engine = this.syncEngines.get(compartment)
+    if (!engine) {
+      return { dirty: 0, lastPush: null, lastPull: null, online: true }
+    }
+    return engine.status()
+  }
+
+  private getSyncEngine(compartment: string): SyncEngine {
+    const engine = this.syncEngines.get(compartment)
+    if (!engine) {
+      throw new ValidationError('No sync adapter configured. Pass a `sync` adapter to createNoydb().')
+    }
+    return engine
+  }
+
+  // ─── Events ────────────────────────────────────────────────────
 
   on<K extends keyof NoydbEventMap>(event: K, handler: (data: NoydbEventMap[K]) => void): void {
     this.emitter.on(event, handler)

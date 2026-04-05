@@ -6,6 +6,9 @@ import type { UnlockedKeyring } from './keyring.js'
 import { hasWritePermission } from './keyring.js'
 import type { NoydbEventEmitter } from './events.js'
 
+/** Callback for dirty tracking (sync engine integration). */
+export type OnDirtyCallback = (collection: string, id: string, action: 'put' | 'delete', version: number) => Promise<void>
+
 /** A typed collection of records within a compartment. */
 export class Collection<T> {
   private readonly adapter: NoydbAdapter
@@ -15,6 +18,7 @@ export class Collection<T> {
   private readonly encrypted: boolean
   private readonly emitter: NoydbEventEmitter
   private readonly getDEK: (collectionName: string) => Promise<CryptoKey>
+  private readonly onDirty: OnDirtyCallback | undefined
 
   // In-memory cache of decrypted records
   private readonly cache = new Map<string, { record: T; version: number }>()
@@ -28,6 +32,7 @@ export class Collection<T> {
     encrypted: boolean
     emitter: NoydbEventEmitter
     getDEK: (collectionName: string) => Promise<CryptoKey>
+    onDirty?: OnDirtyCallback | undefined
   }) {
     this.adapter = opts.adapter
     this.compartment = opts.compartment
@@ -36,6 +41,7 @@ export class Collection<T> {
     this.encrypted = opts.encrypted
     this.emitter = opts.emitter
     this.getDEK = opts.getDEK
+    this.onDirty = opts.onDirty
   }
 
   /** Get a single record by ID. Returns null if not found. */
@@ -61,6 +67,8 @@ export class Collection<T> {
 
     this.cache.set(id, { record, version })
 
+    await this.onDirty?.(this.name, id, 'put', version)
+
     this.emitter.emit('change', {
       compartment: this.compartment,
       collection: this.name,
@@ -75,8 +83,11 @@ export class Collection<T> {
       throw new ReadOnlyError()
     }
 
+    const existing = this.cache.get(id)
     await this.adapter.delete(this.compartment, this.name, id)
     this.cache.delete(id)
+
+    await this.onDirty?.(this.name, id, 'delete', existing?.version ?? 0)
 
     this.emitter.emit('change', {
       compartment: this.compartment,

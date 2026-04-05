@@ -53,3 +53,4 @@ export {
 export { Noydb, createNoydb } from './noydb.js'
 export { Compartment } from './compartment.js'
 export { Collection } from './collection.js'
+export { SyncEngine } from './sync.js'
