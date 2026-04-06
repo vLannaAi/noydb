@@ -1,4 +1,4 @@
-import type { NoydbAdapter, CompartmentBackup, CompartmentSnapshot, HistoryConfig } from './types.js'
+import type { NoydbAdapter, CompartmentBackup, HistoryConfig } from './types.js'
 import { NOYDB_BACKUP_VERSION } from './types.js'
 import { Collection } from './collection.js'
 import type { OnDirtyCallback } from './collection.js'

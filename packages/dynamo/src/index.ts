@@ -187,7 +187,7 @@ export function dynamo(options: DynamoOptions): NoydbAdapter {
         if (!snapshot[collection]) {
           snapshot[collection] = {}
         }
-        snapshot[collection]![id] = itemToEnvelope(item)
+        snapshot[collection][id] = itemToEnvelope(item)
       }
 
       return snapshot

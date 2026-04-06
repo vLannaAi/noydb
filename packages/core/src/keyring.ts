@@ -11,7 +11,7 @@ import {
   bufferToBase64,
   base64ToBuffer,
 } from './crypto.js'
-import { NoAccessError, PermissionDeniedError, InvalidKeyError } from './errors.js'
+import { NoAccessError, PermissionDeniedError } from './errors.js'
 
 // ─── Roles that can grant/revoke ───────────────────────────────────────
 
@@ -266,12 +266,9 @@ export async function rotateKeys(
     if (!userEnvelope) continue
 
     const userKeyringFile = JSON.parse(userEnvelope._data) as KeyringFile
-    const userKek = null // We can't derive other users' KEKs!
-    // Instead, we re-wrap using the keyring file's existing salt
-    // But we need their KEK... which we don't have.
-    // Solution: wrap the new DEK with the user's existing wrapped approach
-    // Actually, we need to use the caller's knowledge: the caller has the raw DEKs
-    // and we need to re-wrap them for each user.
+    // Note: we can't derive other users' KEKs to re-wrap DEKs for them.
+    // Rotation requires users to re-unlock and be re-granted after the caller
+    // re-wraps with the raw DEKs held in memory. See rotation flow below.
     // The trick: import the user's KEK from their salt? No — we need their passphrase.
     //
     // Per the spec: the caller (owner/admin) wraps the new DEKs with each remaining

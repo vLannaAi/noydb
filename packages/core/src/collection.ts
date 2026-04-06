@@ -1,7 +1,7 @@
 import type { NoydbAdapter, EncryptedEnvelope, ChangeEvent, HistoryConfig, HistoryOptions, HistoryEntry, PruneOptions } from './types.js'
 import { NOYDB_FORMAT_VERSION } from './types.js'
 import { encrypt, decrypt } from './crypto.js'
-import { ReadOnlyError, NoAccessError } from './errors.js'
+import { ReadOnlyError } from './errors.js'
 import type { UnlockedKeyring } from './keyring.js'
 import { hasWritePermission } from './keyring.js'
 import type { NoydbEventEmitter } from './events.js'

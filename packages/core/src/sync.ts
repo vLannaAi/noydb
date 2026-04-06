@@ -10,7 +10,7 @@ import type {
   SyncMetadata,
 } from './types.js'
 import { NOYDB_SYNC_VERSION } from './types.js'
-import { ConflictError, NetworkError } from './errors.js'
+import { ConflictError } from './errors.js'
 import type { NoydbEventEmitter } from './events.js'
 
 /** Sync engine: dirty tracking, push, pull, conflict resolution. */

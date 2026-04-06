@@ -25,7 +25,7 @@ export async function deriveKey(
   return subtle.deriveKey(
     {
       name: 'PBKDF2',
-      salt,
+      salt: salt as BufferSource,
       iterations: PBKDF2_ITERATIONS,
       hash: 'SHA-256',
     },
@@ -63,7 +63,7 @@ export async function unwrapKey(
   try {
     return await subtle.unwrapKey(
       'raw',
-      base64ToBuffer(wrappedBase64),
+      base64ToBuffer(wrappedBase64) as BufferSource,
       kek,
       'AES-KW',
       { name: 'AES-GCM', length: KEY_BITS },
@@ -91,7 +91,7 @@ export async function encrypt(
   const encoded = new TextEncoder().encode(plaintext)
 
   const ciphertext = await subtle.encrypt(
-    { name: 'AES-GCM', iv },
+    { name: 'AES-GCM', iv: iv as BufferSource },
     dek,
     encoded,
   )
@@ -113,9 +113,9 @@ export async function decrypt(
 
   try {
     const plaintext = await subtle.decrypt(
-      { name: 'AES-GCM', iv },
+      { name: 'AES-GCM', iv: iv as BufferSource },
       dek,
-      ciphertext,
+      ciphertext as BufferSource,
     )
     return new TextDecoder().decode(plaintext)
   } catch (err) {

@@ -131,7 +131,7 @@ export function s3(options: S3Options): NoydbAdapter {
         const body = await getResult.Body.transformToString()
 
         if (!snapshot[collection]) snapshot[collection] = {}
-        snapshot[collection]![id] = JSON.parse(body) as EncryptedEnvelope
+        snapshot[collection][id] = JSON.parse(body) as EncryptedEnvelope
       }
 
       return snapshot

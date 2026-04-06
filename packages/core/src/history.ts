@@ -14,6 +14,8 @@ function historyId(collection: string, recordId: string, version: number): strin
   return `${collection}:${recordId}:${String(version).padStart(VERSION_PAD, '0')}`
 }
 
+// Unused today, kept for future history-id parsing utilities.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function parseHistoryId(id: string): { collection: string; recordId: string; version: number } | null {
   const lastColon = id.lastIndexOf(':')
   if (lastColon < 0) return null
@@ -61,7 +63,7 @@ export async function getHistory(
     .sort()
     .reverse() // newest first
 
-  let entries: EncryptedEnvelope[] = []
+  const entries: EncryptedEnvelope[] = []
 
   for (const id of matchingIds) {
     const envelope = await adapter.get(compartment, HISTORY_COLLECTION, id)
