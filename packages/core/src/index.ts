@@ -9,6 +9,7 @@ export type {
   EncryptedEnvelope,
   CompartmentSnapshot,
   NoydbAdapter,
+  ListPageResult,
   KeyringFile,
   CompartmentBackup,
   DirtyEntry,
@@ -57,7 +58,12 @@ export {
 export { Noydb, createNoydb } from './noydb.js'
 export { Compartment } from './compartment.js'
 export { Collection } from './collection.js'
+export type { CacheOptions, CacheStats } from './collection.js'
 export { SyncEngine } from './sync.js'
+
+// Cache module — LRU + byte budget parsing
+export { Lru, parseBytes, estimateRecordBytes } from './cache/index.js'
+export type { LruOptions, LruStats } from './cache/index.js'
 
 // Biometric (browser only)
 export {
@@ -76,3 +82,25 @@ export type { DiffEntry, ChangeType } from './diff.js'
 
 // Validation
 export { validatePassphrase, estimateEntropy } from './validation.js'
+
+// Query DSL
+export {
+  Query,
+  executePlan,
+  evaluateClause,
+  evaluateFieldClause,
+  readPath,
+  CollectionIndexes,
+} from './query/index.js'
+export type {
+  QueryPlan,
+  QuerySource,
+  OrderBy,
+  Operator,
+  Clause,
+  FieldClause,
+  FilterClause,
+  GroupClause,
+  IndexDef,
+  HashIndex,
+} from './query/index.js'
