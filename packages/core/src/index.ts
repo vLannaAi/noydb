@@ -53,6 +53,8 @@ export {
   NotFoundError,
   ValidationError,
   SchemaValidationError,
+  BackupLedgerError,
+  BackupCorruptedError,
 } from './errors.js'
 
 // Schema validation — Standard Schema v1 integration (v0.4+)

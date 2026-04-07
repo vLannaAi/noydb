@@ -124,3 +124,46 @@ export class SchemaValidationError extends NoydbError {
     this.direction = direction
   }
 }
+
+// ─── Backup Errors (v0.4 #46) ─────────────────────────────────────────
+
+/**
+ * Thrown when `Compartment.load()` finds that a backup's hash chain
+ * doesn't verify, or that its embedded `ledgerHead.hash` doesn't
+ * match the chain head reconstructed from the loaded entries.
+ *
+ * Distinct from `BackupCorruptedError` so callers can choose to
+ * recover from one but not the other (e.g., a corrupted JSON file is
+ * unrecoverable; a chain mismatch might mean the backup is from an
+ * incompatible noy-db version).
+ */
+export class BackupLedgerError extends NoydbError {
+  /** First-broken-entry index, if known. */
+  readonly divergedAt?: number
+
+  constructor(message: string, divergedAt?: number) {
+    super('BACKUP_LEDGER', message)
+    this.name = 'BackupLedgerError'
+    if (divergedAt !== undefined) this.divergedAt = divergedAt
+  }
+}
+
+/**
+ * Thrown when `Compartment.load()` finds that the backup's data
+ * collection content doesn't match the ledger's recorded
+ * `payloadHash`es. This is the "envelope was tampered with after
+ * dump" detection — the chain itself can be intact, but if any
+ * encrypted record bytes were swapped, this check catches it.
+ */
+export class BackupCorruptedError extends NoydbError {
+  /** The (collection, id) pair whose envelope failed the hash check. */
+  readonly collection: string
+  readonly id: string
+
+  constructor(collection: string, id: string, message: string) {
+    super('BACKUP_CORRUPTED', message)
+    this.name = 'BackupCorruptedError'
+    this.collection = collection
+    this.id = id
+  }
+}
