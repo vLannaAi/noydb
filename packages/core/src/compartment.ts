@@ -9,6 +9,7 @@ import { ensureCollectionDEK } from './keyring.js'
 import type { NoydbEventEmitter } from './events.js'
 import { PermissionDeniedError } from './errors.js'
 import type { StandardSchemaV1 } from './schema.js'
+import { LedgerStore } from './ledger/index.js'
 
 /** A compartment (tenant namespace) containing collections. */
 export class Compartment {
@@ -21,6 +22,20 @@ export class Compartment {
   private readonly historyConfig: HistoryConfig
   private readonly getDEK: (collectionName: string) => Promise<CryptoKey>
   private readonly collectionCache = new Map<string, Collection<unknown>>()
+
+  /**
+   * Per-compartment ledger store. Lazy-initialized on first
+   * `collection()` call (which passes it through to the Collection)
+   * or on first `ledger()` call from user code.
+   *
+   * One LedgerStore is shared across all collections in a compartment
+   * because the hash chain is compartment-scoped: the chain head is a
+   * single "what did this compartment do last" identifier, not a
+   * per-collection one. Two collections appending concurrently is the
+   * single-writer concurrency concern documented in the LedgerStore
+   * docstring.
+   */
+  private ledgerStore: LedgerStore | null = null
 
   constructor(opts: {
     adapter: NoydbAdapter
@@ -87,6 +102,7 @@ export class Compartment {
         getDEK: this.getDEK,
         onDirty: this.onDirty,
         historyConfig: this.historyConfig,
+        ledger: this.ledger(),
       }
       if (options?.indexes !== undefined) collOpts.indexes = options.indexes
       if (options?.prefetch !== undefined) collOpts.prefetch = options.prefetch
@@ -96,6 +112,32 @@ export class Compartment {
       this.collectionCache.set(collectionName, coll)
     }
     return coll as Collection<T>
+  }
+
+  /**
+   * Return this compartment's hash-chained audit log.
+   *
+   * The ledger is lazy-initialized on first access and cached for the
+   * lifetime of the Compartment instance. Every LedgerStore instance
+   * shares the same adapter and DEK resolver, so `compartment.ledger()`
+   * can be called repeatedly without performance cost.
+   *
+   * The LedgerStore itself is the public API: consumers call
+   * `.append()` (via Collection internals), `.head()`, `.verify()`,
+   * and `.entries({ from, to })`. See the LedgerStore docstring for
+   * the full surface and the concurrency caveats.
+   */
+  ledger(): LedgerStore {
+    if (!this.ledgerStore) {
+      this.ledgerStore = new LedgerStore({
+        adapter: this.adapter,
+        compartment: this.name,
+        encrypted: this.encrypted,
+        getDEK: this.getDEK,
+        actor: this.keyring.userId,
+      })
+    }
+    return this.ledgerStore
   }
 
   /** List all collection names in this compartment. */

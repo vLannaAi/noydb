@@ -7,6 +7,8 @@ import { hasWritePermission } from './keyring.js'
 import type { NoydbEventEmitter } from './events.js'
 import type { StandardSchemaV1 } from './schema.js'
 import { validateSchemaInput, validateSchemaOutput } from './schema.js'
+import type { LedgerStore } from './ledger/index.js'
+import { envelopePayloadHash } from './ledger/index.js'
 import {
   saveHistory,
   getHistory as getHistoryEntries,
@@ -134,6 +136,25 @@ export class Collection<T> {
    */
   private readonly schema: StandardSchemaV1<unknown, T> | undefined
 
+  /**
+   * Optional reference to the compartment-level hash-chained audit
+   * log. When present, every successful `put()` and `delete()` appends
+   * an entry to the ledger AFTER the adapter write succeeds (so a
+   * failed adapter write never produces an orphan ledger entry).
+   *
+   * The ledger is always a compartment-wide singleton — all
+   * collections in the same compartment share the same LedgerStore.
+   * Compartment.ledger() does the lazy init; this field just holds
+   * the reference so Collection doesn't need to reach back up to the
+   * compartment on every mutation.
+   *
+   * `undefined` means "no ledger attached" — supported for tests that
+   * construct a Collection directly without a compartment, and for
+   * future backwards-compat scenarios. Production usage always has a
+   * ledger because Compartment.collection() passes one through.
+   */
+  private readonly ledger: LedgerStore | undefined
+
   constructor(opts: {
     adapter: NoydbAdapter
     compartment: string
@@ -164,6 +185,14 @@ export class Collection<T> {
      * `schema` field docstring for the error semantics.
      */
     schema?: StandardSchemaV1<unknown, T> | undefined
+    /**
+     * Optional reference to the compartment's hash-chained ledger.
+     * When present, successful mutations append a ledger entry via
+     * `LedgerStore.append()`. Constructed at the Compartment level and
+     * threaded through — see the Compartment.collection() source for
+     * the wiring.
+     */
+    ledger?: LedgerStore | undefined
   }) {
     this.adapter = opts.adapter
     this.compartment = opts.compartment
@@ -175,6 +204,7 @@ export class Collection<T> {
     this.onDirty = opts.onDirty
     this.historyConfig = opts.historyConfig ?? { enabled: true }
     this.schema = opts.schema
+    this.ledger = opts.ledger
 
     // Default `prefetch: true` keeps v0.2 semantics. Only opt-in to lazy
     // mode when the consumer explicitly sets `prefetch: false`.
@@ -292,6 +322,24 @@ export class Collection<T> {
     const envelope = await this.encryptRecord(record, version)
     await this.adapter.put(this.compartment, this.name, id, envelope)
 
+    // Ledger append — AFTER the adapter write succeeds so a failed
+    // write never produces an orphan ledger entry. Computing the
+    // payloadHash here uses the envelope we just wrote, which is the
+    // exact bytes the adapter now holds. The ledger entry records
+    // only metadata (collection, id, version, hash) — NOT the record
+    // itself — and is then encrypted with the compartment's ledger
+    // DEK, preserving zero-knowledge. See `LedgerStore.append`.
+    if (this.ledger) {
+      await this.ledger.append({
+        op: 'put',
+        collection: this.name,
+        id,
+        version,
+        actor: this.keyring.userId,
+        payloadHash: await envelopePayloadHash(envelope),
+      })
+    }
+
     if (this.lazy && this.lru) {
       this.lru.set(id, { record, version }, estimateRecordBytes(record))
     } else {
@@ -341,7 +389,30 @@ export class Collection<T> {
       await saveHistory(this.adapter, this.compartment, this.name, id, historyEnvelope)
     }
 
+    // Capture the previous envelope's payloadHash BEFORE delete so we
+    // have a stable reference for the ledger entry. The hash is of
+    // whatever was last visible to readers — for a `delete` of a
+    // never-existed record, we use the empty string (which the
+    // ledger entry's `payloadHash` field tolerates).
+    const previousEnvelope = await this.adapter.get(this.compartment, this.name, id)
+    const previousPayloadHash = await envelopePayloadHash(previousEnvelope)
+
     await this.adapter.delete(this.compartment, this.name, id)
+
+    // Ledger append — same after-write timing as put(). The recorded
+    // version is the version that WAS deleted (existing?.version), not
+    // a successor. A delete of a missing record still appends an
+    // entry with version 0 so the chain captures the intent.
+    if (this.ledger) {
+      await this.ledger.append({
+        op: 'delete',
+        collection: this.name,
+        id,
+        version: existing?.version ?? 0,
+        actor: this.keyring.userId,
+        payloadHash: previousPayloadHash,
+      })
+    }
 
     if (this.lazy && this.lru) {
       this.lru.remove(id)
