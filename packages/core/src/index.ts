@@ -64,6 +64,23 @@ export type {
 } from './schema.js'
 export { validateSchemaInput, validateSchemaOutput } from './schema.js'
 
+// Hash-chained ledger (v0.4+)
+export {
+  LedgerStore,
+  LEDGER_COLLECTION,
+  envelopePayloadHash,
+  canonicalJson,
+  sha256Hex,
+  hashEntry,
+  paddedIndex,
+  parseIndex,
+} from './ledger/index.js'
+export type {
+  LedgerEntry,
+  AppendInput,
+  VerifyResult,
+} from './ledger/index.js'
+
 // Core classes
 export { Noydb, createNoydb } from './noydb.js'
 export { Compartment } from './compartment.js'
