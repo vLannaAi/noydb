@@ -27,6 +27,7 @@ import * as p from '@clack/prompts'
 import pc from 'picocolors'
 import { runWizard } from '../wizard/run.js'
 import { parseArgs, type ParsedArgs } from './parse-args.js'
+import { detectLocale, loadMessages } from '../wizard/i18n/index.js'
 
 const HELP = `Usage: npm create @noy-db [project-name] [options]
 
@@ -47,6 +48,8 @@ Options:
       --dry-run           (augment mode) Show the diff without writing
       --force-fresh       Force fresh-project mode even when cwd looks
                           like an existing Nuxt project
+      --lang <code>       UI language: en (default) | th
+                          When omitted, auto-detected from LC_ALL/LANG
   -h, --help              Show this message and exit
 
 Examples:
@@ -79,10 +82,12 @@ async function main(): Promise<void> {
   // Only run the intro/outro decorations in interactive mode. Tests
   // call `runWizard` directly and shouldn't see these.
   if (!parsed.options.yes) {
+    // Resolve the same locale the wizard will pick so the intro
+    // banner matches the rest of the flow. Explicit --lang wins;
+    // otherwise we fall back to env-var detection.
+    const msg = loadMessages(parsed.options.locale ?? detectLocale())
     p.intro(pc.bgCyan(pc.black(' @noy-db/create ')))
-    p.note(
-      'A wizard for noy-db — None Of Your Damn Business.\nGenerates a fresh Nuxt 4 + Pinia + encrypted-store starter.',
-    )
+    p.note(msg.wizardIntro)
   }
 
   try {

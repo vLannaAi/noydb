@@ -20,6 +20,17 @@
 export { runWizard } from './wizard/run.js'
 export type { WizardOptions, WizardResult } from './wizard/types.js'
 
+// v0.5+ i18n (closes #36) — re-exported so test harnesses and
+// downstream tooling can resolve locales without reaching into
+// the wizard's private subpath.
+export {
+  detectLocale,
+  loadMessages,
+  parseLocaleFlag,
+  SUPPORTED_LOCALES,
+} from './wizard/i18n/index.js'
+export type { Locale, WizardMessages } from './wizard/i18n/index.js'
+
 export { addCollection } from './commands/add.js'
 export type { AddCollectionOptions } from './commands/add.js'
 

@@ -31,6 +31,7 @@ import type {
 } from './types.js'
 import { detectNuxtProject } from './detect.js'
 import { augmentNuxtConfig, writeAugmentedConfig } from './augment.js'
+import { detectLocale, loadMessages, type WizardMessages } from './i18n/index.js'
 
 /**
  * Default invoice records the wizard injects when `sampleData: true`.
@@ -62,10 +63,12 @@ const DEFAULT_SEED = [
   },
 ]
 
-const ADAPTER_LABELS: Record<WizardAdapter, string> = {
-  browser: 'browser — localStorage / IndexedDB (recommended for web apps)',
-  file: 'file — JSON files on disk (Electron / Tauri / USB workflows)',
-  memory: 'memory — no persistence (ideal for tests and demos)',
+function adapterLabels(msg: WizardMessages): Record<WizardAdapter, string> {
+  return {
+    browser: msg.adapterBrowserLabel,
+    file: msg.adapterFileLabel,
+    memory: msg.adapterMemoryLabel,
+  }
 }
 
 /**
@@ -116,6 +119,12 @@ export async function runWizard(options: WizardOptions = {}): Promise<WizardResu
   const cwd = options.cwd ?? process.cwd()
   const yes = options.yes ?? false
 
+  // Resolve the message bundle once at the top so every downstream
+  // helper sees a consistent locale. Explicit `options.locale` wins;
+  // otherwise we fall back to POSIX env-var detection (LC_ALL → LANG).
+  // Tests pin the locale to keep snapshots deterministic.
+  const msg = loadMessages(options.locale ?? detectLocale())
+
   // ── Detect existing Nuxt project ───────────────────────────────────
   // Runs BEFORE any prompts so the interactive flow branches cleanly
   // into fresh vs augment without asking the user questions that
@@ -127,10 +136,10 @@ export async function runWizard(options: WizardOptions = {}): Promise<WizardResu
     : await detectNuxtProject(cwd)
 
   if (detection?.existing && detection.configPath) {
-    return runAugmentMode(options, cwd, detection.configPath)
+    return runAugmentMode(options, cwd, detection.configPath, msg)
   }
 
-  return runFreshMode(options, cwd, yes)
+  return runFreshMode(options, cwd, yes, msg)
 }
 
 /**
@@ -143,21 +152,22 @@ async function runFreshMode(
   options: WizardOptions,
   cwd: string,
   yes: boolean,
+  msg: WizardMessages,
 ): Promise<WizardFreshResult> {
   // ── Resolve answers ────────────────────────────────────────────────
   // In non-interactive mode every prompt is short-circuited; in
   // interactive mode we only prompt for fields the caller didn't supply.
   const projectName = yes
     ? options.projectName ?? 'my-noy-db-app'
-    : await promptProjectName(options.projectName)
+    : await promptProjectName(options.projectName, msg)
 
   const adapter: WizardAdapter = yes
     ? options.adapter ?? 'browser'
-    : await promptAdapter(options.adapter)
+    : await promptAdapter(options.adapter, msg)
 
   const sampleData: boolean = yes
     ? options.sampleData ?? true
-    : await promptSampleData(options.sampleData)
+    : await promptSampleData(options.sampleData, msg)
 
   // ── Validate target directory ──────────────────────────────────────
   // We refuse to write into a non-empty directory. Empty + missing are
@@ -192,9 +202,9 @@ async function runFreshMode(
         `${pc.bold('pnpm install')}     ${pc.dim('(or npm/yarn/bun)')}`,
         `${pc.bold('pnpm dev')}`,
       ].join('\n'),
-      'Next steps',
+      msg.freshNextStepsTitle,
     )
-    p.outro(pc.green('✔ Done — happy encrypting!'))
+    p.outro(pc.green(msg.freshOutroDone))
   }
 
   return {
@@ -230,6 +240,7 @@ async function runAugmentMode(
   options: WizardOptions,
   cwd: string,
   configPath: string,
+  msg: WizardMessages,
 ): Promise<WizardAugmentResult> {
   const yes = options.yes ?? false
   const dryRun = options.dryRun ?? false
@@ -237,14 +248,12 @@ async function runAugmentMode(
   if (!yes) {
     p.note(
       [
-        `${pc.dim('Detected existing Nuxt 4 project:')}`,
+        `${pc.dim(msg.augmentDetectedPrefix)}`,
         `  ${pc.cyan(configPath)}`,
         '',
-        'The wizard will add @noy-db/nuxt to your modules array',
-        'and a noydb: config key. You can review the diff before',
-        'anything is written to disk.',
+        msg.augmentDescription,
       ].join('\n'),
-      'Augment mode',
+      msg.augmentModeTitle,
     )
   }
 
@@ -253,7 +262,7 @@ async function runAugmentMode(
   // else is decided by the config we're patching.
   const adapter: WizardAdapter = yes
     ? options.adapter ?? 'browser'
-    : await promptAdapter(options.adapter)
+    : await promptAdapter(options.adapter, msg)
 
   const result = await augmentNuxtConfig({
     configPath,
@@ -264,10 +273,10 @@ async function runAugmentMode(
   if (result.kind === 'already-configured') {
     if (!yes) {
       p.note(
-        `${pc.yellow('Nothing to do:')} ${result.reason}`,
-        'Already configured',
+        `${pc.yellow(msg.augmentNothingToDo)} ${result.reason}`,
+        msg.augmentAlreadyConfiguredTitle,
       )
-      p.outro(pc.green('✔ Your Nuxt config is already wired up.'))
+      p.outro(pc.green(msg.augmentAlreadyOutro))
     }
     return {
       kind: 'augment',
@@ -280,7 +289,7 @@ async function runAugmentMode(
 
   if (result.kind === 'unsupported-shape') {
     if (!yes) {
-      p.cancel(`${pc.red('Cannot safely patch this config:')} ${result.reason}`)
+      p.cancel(`${pc.red(msg.augmentUnsupportedPrefix)} ${result.reason}`)
     }
     return {
       kind: 'augment',
@@ -294,11 +303,11 @@ async function runAugmentMode(
   // result.kind === 'proposed-change' — print the diff and either
   // write (after confirmation) or bail in dry-run mode.
   if (!yes || dryRun) {
-    p.note(renderDiff(result.diff), 'Proposed changes')
+    p.note(renderDiff(result.diff), msg.augmentProposedChangesTitle)
   }
 
   if (dryRun) {
-    if (!yes) p.outro(pc.green('✔ Dry run — no files were modified.'))
+    if (!yes) p.outro(pc.green(msg.augmentDryRunOutro))
     return {
       kind: 'augment',
       configPath,
@@ -312,11 +321,11 @@ async function runAugmentMode(
   let shouldWrite = yes
   if (!yes) {
     const confirmed = await p.confirm({
-      message: 'Apply these changes?',
+      message: msg.augmentApplyConfirm,
       initialValue: true,
     })
     if (p.isCancel(confirmed) || confirmed !== true) {
-      p.cancel('Aborted — your config is unchanged.')
+      p.cancel(msg.augmentAborted)
       return {
         kind: 'augment',
         configPath,
@@ -334,14 +343,14 @@ async function runAugmentMode(
     if (!yes) {
       p.note(
         [
-          pc.dim('Install the @noy-db packages your config now depends on:'),
+          pc.dim(msg.augmentInstallIntro),
           '',
           `${pc.bold('pnpm add')} @noy-db/nuxt @noy-db/pinia @noy-db/core @noy-db/browser @pinia/nuxt pinia`,
-          pc.dim('(or use npm/yarn/bun as appropriate)'),
+          pc.dim(msg.augmentInstallPmHint),
         ].join('\n'),
-        'Next step',
+        msg.augmentNextStepTitle,
       )
-      p.outro(pc.green('✔ Config updated — happy encrypting!'))
+      p.outro(pc.green(msg.augmentDoneOutro))
     }
   }
 
@@ -379,50 +388,51 @@ function renderDiff(diff: string): string {
 
 // ─── Prompt helpers ──────────────────────────────────────────────────────
 
-async function promptProjectName(initial?: string): Promise<string> {
+async function promptProjectName(initial: string | undefined, msg: WizardMessages): Promise<string> {
   if (initial) {
     const err = validateProjectName(initial)
     if (err) throw new Error(err)
     return initial
   }
   const result = await p.text({
-    message: 'Project name',
-    placeholder: 'my-noy-db-app',
+    message: msg.promptProjectName,
+    placeholder: msg.promptProjectNamePlaceholder,
     initialValue: 'my-noy-db-app',
     validate: (v) => validateProjectName(v ?? '') ?? undefined,
   })
   if (p.isCancel(result)) {
-    p.cancel('Cancelled.')
+    p.cancel(msg.cancelled)
     process.exit(1)
   }
   return result
 }
 
-async function promptAdapter(initial?: WizardAdapter): Promise<WizardAdapter> {
+async function promptAdapter(initial: WizardAdapter | undefined, msg: WizardMessages): Promise<WizardAdapter> {
   if (initial) return initial
+  const labels = adapterLabels(msg)
   const result = await p.select<WizardAdapter>({
-    message: 'Storage adapter',
+    message: msg.promptAdapter,
     options: (['browser', 'file', 'memory'] as const).map((value) => ({
       value,
-      label: ADAPTER_LABELS[value],
+      label: labels[value],
     })),
     initialValue: 'browser',
   })
   if (p.isCancel(result)) {
-    p.cancel('Cancelled.')
+    p.cancel(msg.cancelled)
     process.exit(1)
   }
   return result
 }
 
-async function promptSampleData(initial?: boolean): Promise<boolean> {
+async function promptSampleData(initial: boolean | undefined, msg: WizardMessages): Promise<boolean> {
   if (typeof initial === 'boolean') return initial
   const result = await p.confirm({
-    message: 'Include sample invoice records?',
+    message: msg.promptSampleData,
     initialValue: true,
   })
   if (p.isCancel(result)) {
-    p.cancel('Cancelled.')
+    p.cancel(msg.cancelled)
     process.exit(1)
   }
   return result
