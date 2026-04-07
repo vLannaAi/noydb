@@ -56,13 +56,58 @@ pnpm exec noy-db add clients     # scaffolds stores/clients.ts + pages/clients.v
 pnpm exec noy-db verify          # end-to-end crypto integrity check
 ```
 
-See [`packages/create-noy-db/README.md`](../packages/create-noy-db/README.md) for the full CLI reference. (The source directory is still `create-noy-db/` for historical reasons — the published package name is `@noy-db/create`.)
+The `noy-db` CLI also ships operational commands for ongoing maintenance:
+
+```bash
+# Grant a new user access to a compartment
+pnpm exec noy-db add user accountant-ann operator \
+  --dir ./data --compartment demo-co --user owner-alice \
+  --collections invoices:rw,clients:ro
+
+# Rotate DEKs (generate fresh keys + re-encrypt all records)
+pnpm exec noy-db rotate --dir ./data --compartment demo-co --user owner-alice
+
+# Write a verifiable backup
+pnpm exec noy-db backup ./backups/demo.json \
+  --dir ./data --compartment demo-co --user owner-alice
+```
+
+All commands that touch a real compartment prompt for the passphrase interactively (never echoed, never logged). See [`packages/create-noy-db/README.md`](../packages/create-noy-db/README.md) for the full CLI reference.
+
+---
+
+## Augmenting an existing Nuxt 4 project
+
+If you already have a Nuxt 4 app and want to add noy-db **without regenerating** the project, run the wizard from inside the existing project root. It auto-detects the existing `nuxt.config.ts` and patches it in place via magicast — adding `'@noy-db/nuxt'` to your `modules` array and a `noydb:` config key, while preserving every other key, comment, and formatting choice you have in the file.
+
+```bash
+cd ~/my-existing-nuxt-app
+npm create @noy-db                    # preview + confirm
+npm create @noy-db --dry-run          # print the diff, don't write
+npm create @noy-db --yes              # non-interactive
+```
+
+The wizard is **idempotent** (re-running is a no-op once augmented), **preserves any pre-existing `noydb:` key** (your custom options are never clobbered), and **rejects opaque config shapes** cleanly (e.g., `export default someVar` bails with a clear message telling you to edit manually).
+
+After the wizard finishes, install the packages your config now depends on:
+
+```bash
+pnpm add @noy-db/nuxt @noy-db/pinia @noy-db/core @noy-db/browser @pinia/nuxt pinia
+```
+
+Then declare a store (see "Declare a store" below) and you're done.
+
+To force fresh-project mode even when you're inside an existing Nuxt dir (useful inside monorepos), pass `--force-fresh`:
+
+```bash
+npm create @noy-db my-sub-app --force-fresh
+```
 
 ---
 
 ## Path 1 — Manual install in an existing Nuxt 4 project
 
-If you already have a Nuxt 4 app and don't want to regenerate it with the wizard above, `@noy-db/nuxt` is a one-line install. It auto-imports every composable, wires up the Pinia plugin, and keeps the runtime client-only so SSR stays safe.
+If you'd rather wire `@noy-db/nuxt` by hand (or the augment-mode wizard rejected your config shape), it's a one-line install. `@noy-db/nuxt` auto-imports every composable, wires up the Pinia plugin, and keeps the runtime client-only so SSR stays safe.
 
 ### Install
 

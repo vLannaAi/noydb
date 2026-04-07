@@ -200,6 +200,100 @@ const result = await company.verifyBackupIntegrity()
 
 Legacy (pre-v0.4) backups without `ledgerHead` load with a `console.warn` and skip the integrity check.
 
+## CLI Reference
+
+The `@noy-db/create` package ships two bins: `create` (the wizard) and `noy-db` (the ongoing CLI tool). Install with `pnpm add -D @noy-db/create`, then invoke via `pnpm exec noy-db <cmd>` or `npx noy-db <cmd>`.
+
+### `create @noy-db` — wizard (two modes)
+
+```bash
+# Fresh project in a new directory
+npm create @noy-db my-app [--yes] [--adapter browser|file|memory] [--no-sample-data]
+
+# Augment an existing Nuxt 4 project (run from its root)
+cd ~/my-existing-app
+npm create @noy-db                    # preview + confirm
+npm create @noy-db --dry-run          # print diff, don't write
+npm create @noy-db --yes              # non-interactive
+npm create @noy-db --force-fresh      # force fresh mode even inside an existing Nuxt dir
+```
+
+Augment mode auto-detects existing Nuxt 4 projects (both `nuxt.config.{ts,js,mjs}` AND `nuxt` in `package.json` deps must be present). It uses [magicast](https://github.com/unjs/magicast) AST rewriting to add `'@noy-db/nuxt'` to the `modules` array and a `noydb: { adapter, pinia: true, devtools: true }` key. It's **idempotent** (re-runs are no-ops), **preserves pre-existing `noydb:` keys**, and **rejects opaque config shapes** cleanly.
+
+### `noy-db` — operational CLI
+
+```bash
+# Scaffold a new collection store + page
+noy-db add <collection>
+
+# In-memory crypto integrity check
+noy-db verify
+
+# Grant a new user access to a compartment
+noy-db add user <userId> <role> \
+  --dir <data-dir> --compartment <name> --user <your-id> \
+  [--collections name1:rw,name2:ro]   # required for operator/client
+# Prompts: caller passphrase, new user passphrase, confirm
+
+# Rotate DEKs for a compartment (re-encrypts all records)
+noy-db rotate --dir <data-dir> --compartment <name> --user <your-id> \
+  [--collections name1,name2]         # defaults to all if omitted
+# Prompts: your passphrase
+
+# Write a verifiable backup to a local file
+noy-db backup <target> --dir <data-dir> --compartment <name> --user <your-id>
+# Target: plain path or file:// URI. s3:// is rejected (tracked as follow-up).
+# Prompts: your passphrase
+```
+
+**Security invariants for every command that touches real compartments:**
+
+1. Passphrase via `@clack/prompts` `password()` — never echoed, never logged, never persisted
+2. Passphrase never leaves the local closure; cleared from memory via `db.close()` in a `finally` block
+3. Ctrl-C at the prompt aborts BEFORE any I/O happens
+4. Unsupported backup schemes (`s3://`, `https://`) rejected BEFORE the passphrase prompt so typos don't waste an entry
+5. All commands use the `file` adapter — browser/DynamoDB/S3 workflows run inside the app process, not a separate CLI
+
+**Dependency injection pattern for programmatic use:**
+
+```ts
+import { rotate, addUser, backup } from '@noy-db/create'
+
+// Each command accepts optional injected deps for testing:
+await rotate({
+  dir: './data',
+  compartment: 'demo-co',
+  user: 'alice',
+  readPassphrase: async (label) => 'test-passphrase',  // stub for tests
+  createDb,                                              // stub the Noydb factory
+  buildAdapter: (dir) => memory(),                       // stub the adapter
+})
+```
+
+In production code, leave all three injected deps undefined and the commands use the real implementations (clack prompts, `createNoydb`, `jsonFile`).
+
+## Noydb.rotate() core API (v0.5+)
+
+The `rotate()` method on the `Noydb` class rotates DEKs without revoking any users. Distinct from `revoke({ rotateKeys: true })` in that nobody is kicked out — everyone keeps their current permissions, but the key material is replaced.
+
+```ts
+import { createNoydb } from '@noy-db/core'
+
+const db = await createNoydb({ adapter, user: 'alice', secret: '...' })
+
+// Rotate specific collections
+await db.rotate('demo-co', ['invoices', 'clients'])
+
+// Rotate everything in a compartment (by listing collections first)
+const c = await db.openCompartment('demo-co')
+const all = await c.collections()
+await db.rotate('demo-co', all)
+```
+
+After rotation, the compartment's in-memory keyring is refreshed automatically so subsequent `Collection.get`/`put` calls use the new DEKs. No need to close and re-open the compartment.
+
+Use cases: post-breach key rotation, scheduled compliance rotation, pre-backup key refresh. The `noy-db rotate` CLI wraps this method.
+
 ## Key Concepts
 
 ### Hierarchy
