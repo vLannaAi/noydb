@@ -113,6 +113,23 @@ pnpm changeset
 
 Pick the bump level (patch/minor/major) per package, write a one-line user-facing summary. CI will block the PR if a public change lands without a changeset.
 
+### 7. Releasing to npm
+
+Releases are **manual and event-driven**. There is no automated "merge to main → publish" path. The procedure is:
+
+1. **On a release branch** (e.g. `release/v0.X.0`), bump every changed package's `version` in its `package.json` to the target version.
+2. Generate per-package CHANGELOG entries from the `.changeset/*.md` files (or write them by hand — usually richer that way), then **delete the consumed changesets**.
+3. Update `ROADMAP.md` to mark the version as shipped.
+4. Open a PR against `main`, get CI green, and merge.
+5. **Create a GitHub Release** targeting `main` with tag `v0.X.0` and release notes:
+   ```bash
+   gh release create v0.X.0 --target main --title "..." --notes "..."
+   ```
+6. Creating the release fires `.github/workflows/release.yml`, which checks out the tag, runs build + test + privacy guard, and publishes every package whose local version is ahead of npm — with provenance attestations via `NPM_CONFIG_PROVENANCE=true`.
+7. Verify all packages are live: `for pkg in core memory file browser dynamo s3 nuxt pinia vue; do npm view @noy-db/$pkg version; done`. Note that `registry.npmjs.org` may serve a stale CDN cache for first-time package publishes — use `https://registry.npmjs.com/@noy-db/<pkg>` (note `.com`, not `.org`) for the canonical response if you see lingering 404s.
+
+The release workflow used to also have a changesets-action-driven path (push to main → auto version PR → publish on merge). It was removed after v0.3.0 because it raced against the release-event flow and the changesets `linked` config was brittle. **Don't add it back without consensus.**
+
 ## Pull Request quick rules
 
 - One feature or fix per PR — keep them small and reviewable.
