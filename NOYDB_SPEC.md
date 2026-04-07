@@ -88,6 +88,26 @@ All data is loaded into memory on open. Queries are `Array.filter()` and `Array.
 ### 2. Zero-Knowledge Storage
 Backends never see plaintext. Encryption happens in the core before data reaches any adapter. A DynamoDB table admin, an S3 bucket owner, someone who finds the USB stick — they see only ciphertext. The encryption key exists only in the user's memory (passphrase) or device (biometric secure enclave).
 
+#### What zero-knowledge does and does not promise
+
+NOYDB's zero-knowledge guarantee is **scoped specifically to adapters**. The library guarantees that no plaintext record, no plaintext key, no decrypted DEK, and no derived KEK is ever passed to an adapter method. That guarantee is the entire reason a USB stick lost on a train, an S3 bucket leaked publicly, or a DynamoDB table compromised by a database admin reveals nothing about the records they hold.
+
+The zero-knowledge guarantee is **not** a guarantee that plaintext never leaves the library's process. Plaintext exits the library through several deliberate, documented mechanisms, each of which the consumer opts into explicitly:
+
+- **Plaintext export packages.** The `@noy-db/decrypt-*` family (`decrypt-csv`, `decrypt-xml`, `decrypt-xlsx`) and the core `exportJSON()` helper decrypt records and write plaintext bytes to disk on the consumer's behalf. Each function carries an explicit "this writes plaintext to disk" warning block in its README, JSDoc, and npm description.
+- **The `plaintextTranslator` hook (v0.8+).** Consumers can opt individual schema fields into auto-translation by configuring a `plaintextTranslator` function on the `Noydb` instance. The library calls that function with the field's plaintext, sends it wherever the consumer's implementation sends it (DeepL, Argos, a self-hosted LLM, a human review queue), and writes the returned translation back. NOYDB ships **no built-in translator**, ships **no translator SDKs as dependencies**, and will reject any PR that adds either. Opt-in is per-field at schema-construction time and visible in the schema source — there is no runtime path that can opt a field in without an explicit schema declaration.
+- **Schema validators that call out.** Consumer-supplied Standard Schema validators receive plaintext during the validate step. A validator that calls a remote service (uncommon but possible) sends plaintext over the wire on the consumer's behalf. Same opt-in principle: the validator is consumer-written code, and noy-db does not police what it does.
+
+Every plaintext-exit mechanism shares three properties: **(1) it requires explicit consumer action** at schema or `createNoydb()` time, **(2) it never lives inside a default code path** — opting in is always a positive choice the consumer made, and **(3) it is reflected in the audit ledger** by metadata only — never by content.
+
+The audit-ledger entries for these exits record `{ field, collection, mechanism, timestamp }` and **deliberately do not record plaintext content or plaintext content hashes**. Logging a content hash would create a fingerprint that could allow later correlation of identical phrases across the audit trail — a subtle leak that the audit logging is meant to prevent.
+
+#### What this means in practice
+
+> **The library guarantees the encryption boundary at the adapter layer. The library does not, and cannot, guarantee what happens to plaintext after a consumer hands it to a function the consumer themselves provided.**
+
+A consumer who wants the strongest possible plaintext-isolation discipline can achieve it by: (a) not installing any `@noy-db/decrypt-*` package, (b) not configuring a `plaintextTranslator`, and (c) auditing their schema validators to confirm none of them call out. With that discipline, plaintext lives only in the application's own runtime memory while a session is active, and nowhere else. The library's APIs neither force nor prevent that discipline — the choice is the consumer's, by design.
+
 ### 3. Offline-First
 The local adapter is the primary store. Cloud sync is an optional enhancement, not a requirement. The app works fully without internet. When connectivity returns, the sync engine pushes local changes and pulls remote updates.
 
