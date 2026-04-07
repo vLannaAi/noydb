@@ -6,6 +6,8 @@
  * by passing answers up front.
  */
 
+import type { Locale } from './i18n/types.js'
+
 /**
  * Which built-in adapter to wire into the generated `nuxt.config.ts`.
  *
@@ -71,6 +73,17 @@ export interface WizardOptions {
    * directory inside a parent that happens to have a nuxt.config.
    */
   forceFresh?: boolean
+
+  /**
+   * Locale for the wizard's user-facing prompts and notes. When
+   * omitted, the wizard auto-detects from `LC_ALL` / `LANG` env
+   * vars and falls back to `'en'`. Tests pin a value to make
+   * snapshot output deterministic.
+   *
+   * Validation/error messages are NOT translated — they stay in
+   * English so bug reports look the same across locales.
+   */
+  locale?: Locale
 }
 
 /**

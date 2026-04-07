@@ -90,7 +90,24 @@ npm create @noy-db my-sub-app --force-fresh
 | `--no-sample-data` | (fresh mode) Skip the seed invoice records |
 | `--dry-run` | (augment mode) Show the diff without writing |
 | `--force-fresh` | Force fresh-project mode even in an existing Nuxt dir |
+| `--lang <code>` | UI language: `en` (default) / `th`. Auto-detected from `LC_ALL` / `LANG` when omitted |
 | `-h`, `--help` | Show usage and exit |
+
+#### Languages
+
+The wizard's prompts and notes are available in **English** (default) and **Thai** (`th`). Pick a language explicitly with `--lang`:
+
+```bash
+npm create @noy-db my-app --lang th
+```
+
+When `--lang` is omitted, the wizard reads the standard POSIX locale env vars (`LC_ALL`, `LC_MESSAGES`, `LANG`, `LANGUAGE`) and auto-selects Thai when they point to a Thai locale, e.g.:
+
+```bash
+LANG=th_TH.UTF-8 npm create @noy-db my-app
+```
+
+Validation errors and stack traces stay in English regardless of language so bug reports look the same in any locale.
 
 ---
 

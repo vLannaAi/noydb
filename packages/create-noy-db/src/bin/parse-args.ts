@@ -5,6 +5,7 @@
  */
 
 import type { WizardAdapter, WizardOptions } from '../wizard/types.js'
+import { parseLocaleFlag } from '../wizard/i18n/index.js'
 
 export interface ParsedArgs {
   options: WizardOptions
@@ -39,6 +40,16 @@ export function parseArgs(argv: string[]): ParsedArgs {
     }
     if (arg === '--force-fresh') {
       options.forceFresh = true
+      continue
+    }
+    if (arg === '--lang') {
+      const next = argv[++i]
+      if (!next) {
+        throw new Error('--lang requires a value (en or th)')
+      }
+      // parseLocaleFlag throws on unsupported values; let the
+      // bin's top-level catch surface the message to the user.
+      options.locale = parseLocaleFlag(next)
       continue
     }
     if (arg === '--adapter') {
