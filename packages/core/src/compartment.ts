@@ -1,4 +1,4 @@
-import type { NoydbAdapter, CompartmentBackup, HistoryConfig } from './types.js'
+import type { NoydbAdapter, EncryptedEnvelope, CompartmentBackup, CompartmentSnapshot, HistoryConfig } from './types.js'
 import { NOYDB_BACKUP_VERSION } from './types.js'
 import { Collection } from './collection.js'
 import type { CacheOptions } from './collection.js'
@@ -7,9 +7,9 @@ import type { OnDirtyCallback } from './collection.js'
 import type { UnlockedKeyring } from './keyring.js'
 import { ensureCollectionDEK } from './keyring.js'
 import type { NoydbEventEmitter } from './events.js'
-import { PermissionDeniedError } from './errors.js'
+import { PermissionDeniedError, BackupLedgerError, BackupCorruptedError } from './errors.js'
 import type { StandardSchemaV1 } from './schema.js'
-import { LedgerStore } from './ledger/index.js'
+import { LedgerStore, sha256Hex, LEDGER_COLLECTION, LEDGER_DELTAS_COLLECTION } from './ledger/index.js'
 import {
   RefRegistry,
   RefIntegrityError,
@@ -21,12 +21,33 @@ import {
 export class Compartment {
   private readonly adapter: NoydbAdapter
   private readonly name: string
-  private readonly keyring: UnlockedKeyring
+  /**
+   * The active in-memory keyring. NOT readonly because `load()`
+   * needs to refresh it after restoring a different keyring file —
+   * otherwise the in-memory DEKs (from the pre-load session) and
+   * the on-disk wrapped DEKs (from the loaded backup) drift apart
+   * and every subsequent decrypt fails with TamperedError.
+   */
+  private keyring: UnlockedKeyring
   private readonly encrypted: boolean
   private readonly emitter: NoydbEventEmitter
   private readonly onDirty: OnDirtyCallback | undefined
   private readonly historyConfig: HistoryConfig
-  private readonly getDEK: (collectionName: string) => Promise<CryptoKey>
+  private getDEK: (collectionName: string) => Promise<CryptoKey>
+
+  /**
+   * Optional callback that re-derives an UnlockedKeyring from the
+   * adapter using the active user's passphrase. Called by `load()`
+   * after the on-disk keyring file has been replaced — refreshes
+   * `this.keyring` so the next DEK access uses the loaded wrapped
+   * DEKs instead of the stale pre-load ones.
+   *
+   * Provided by Noydb at openCompartment() time. Tests that
+   * construct Compartment directly can pass `undefined`; load()
+   * skips the refresh in that case (which is fine for plaintext
+   * compartments — there's nothing to re-unwrap).
+   */
+  private readonly reloadKeyring: (() => Promise<UnlockedKeyring>) | undefined
   private readonly collectionCache = new Map<string, Collection<unknown>>()
 
   /**
@@ -69,6 +90,7 @@ export class Compartment {
     emitter: NoydbEventEmitter
     onDirty?: OnDirtyCallback | undefined
     historyConfig?: HistoryConfig | undefined
+    reloadKeyring?: (() => Promise<UnlockedKeyring>) | undefined
   }) {
     this.adapter = opts.adapter
     this.name = opts.name
@@ -77,11 +99,29 @@ export class Compartment {
     this.emitter = opts.emitter
     this.onDirty = opts.onDirty
     this.historyConfig = opts.historyConfig ?? { enabled: true }
+    this.reloadKeyring = opts.reloadKeyring
 
-    // Create the DEK resolver (lazy — generates DEKs on first use)
-    // We need to store the promise to avoid recreating it
+    // Build the lazy DEK resolver. Pulled out into a private method
+    // so `load()` can rebuild it after a keyring refresh — the
+    // closure captures `this.keyring` by reference, so changing the
+    // field is enough, but resetting the cached `getDEKFn` ensures
+    // ensureCollectionDEK runs again against the freshly-loaded
+    // wrapped DEKs.
+    this.getDEK = this.makeGetDEK()
+  }
+
+  /**
+   * Construct (or reconstruct) the lazy DEK resolver. Captures the
+   * CURRENT value of `this.keyring` and `this.adapter` in a closure,
+   * memoizing the inner getDEKFn after first use so subsequent
+   * lookups are O(1).
+   *
+   * `load()` calls this after refreshing `this.keyring` to discard
+   * the prior session's cached DEKs.
+   */
+  private makeGetDEK(): (collectionName: string) => Promise<CryptoKey> {
     let getDEKFn: ((collectionName: string) => Promise<CryptoKey>) | null = null
-    this.getDEK = async (collectionName: string): Promise<CryptoKey> => {
+    return async (collectionName: string): Promise<CryptoKey> => {
       if (!getDEKFn) {
         getDEKFn = await ensureCollectionDEK(this.adapter, this.name, this.keyring)
       }
@@ -354,11 +394,22 @@ export class Compartment {
     return Object.keys(snapshot)
   }
 
-  /** Dump compartment as encrypted JSON backup string. */
+  /**
+   * Dump compartment as a verifiable encrypted JSON backup string.
+   *
+   * v0.4 backups embed the current ledger head and the full
+   * `_ledger` + `_ledger_deltas` internal collections so the
+   * receiver can run `verifyBackupIntegrity()` after `load()` and
+   * detect any tampering between dump and restore. Pre-v0.4 callers
+   * who didn't have a ledger get a backup without these fields, and
+   * the corresponding `load()` skips the integrity check with a
+   * warning — both modes round-trip cleanly.
+   */
   async dump(): Promise<string> {
     const snapshot = await this.adapter.loadAll(this.name)
 
-    // Load keyrings
+    // Load keyrings (separate path because loadAll filters them out
+    // along with all other underscore-prefixed internal collections).
     const keyringIds = await this.adapter.list(this.name, '_keyring')
     const keyrings: Record<string, unknown> = {}
     for (const keyringId of keyringIds) {
@@ -368,6 +419,27 @@ export class Compartment {
       }
     }
 
+    // Load the ledger entries + deltas so the receiver can replay
+    // the chain after restore. Without this, `load()` would have an
+    // empty ledger and `verifyBackupIntegrity()` would have nothing
+    // to compare against.
+    const internalSnapshot: CompartmentSnapshot = {}
+    for (const internalName of [LEDGER_COLLECTION, LEDGER_DELTAS_COLLECTION]) {
+      const ids = await this.adapter.list(this.name, internalName)
+      if (ids.length === 0) continue
+      const records: Record<string, EncryptedEnvelope> = {}
+      for (const id of ids) {
+        const envelope = await this.adapter.get(this.name, internalName, id)
+        if (envelope) records[id] = envelope
+      }
+      internalSnapshot[internalName] = records
+    }
+
+    // Embed the ledger head if there's a chain. An empty ledger
+    // (fresh compartment) leaves `ledgerHead` undefined, which
+    // load() treats the same as a legacy backup (no integrity
+    // check, console warning).
+    const head = await this.ledger().head()
     const backup: CompartmentBackup = {
       _noydb_backup: NOYDB_BACKUP_VERSION,
       _compartment: this.name,
@@ -375,17 +447,52 @@ export class Compartment {
       _exported_by: this.keyring.userId,
       keyrings: keyrings as CompartmentBackup['keyrings'],
       collections: snapshot,
+      ...(Object.keys(internalSnapshot).length > 0
+        ? { _internal: internalSnapshot }
+        : {}),
+      ...(head
+        ? {
+            ledgerHead: {
+              hash: head.hash,
+              index: head.entry.index,
+              ts: head.entry.ts,
+            },
+          }
+        : {}),
     }
 
     return JSON.stringify(backup)
   }
 
-  /** Restore compartment from an encrypted JSON backup string. */
+  /**
+   * Restore a compartment from a verifiable backup.
+   *
+   * After loading, runs `verifyBackupIntegrity()` to confirm:
+   *   1. The hash chain is intact (no `prevHash` mismatches)
+   *   2. The chain head matches the embedded `ledgerHead.hash`
+   *      from the backup
+   *   3. Every data envelope's `payloadHash` matches the
+   *      corresponding ledger entry — i.e. nobody swapped
+   *      ciphertext between dump and restore
+   *
+   * On any failure, throws `BackupLedgerError` (chain or head
+   * mismatch) or `BackupCorruptedError` (data envelope mismatch).
+   * The compartment state on the adapter has already been written
+   * by the time we throw, so the caller is responsible for either
+   * accepting the suspect state or wiping it and trying a different
+   * backup.
+   *
+   * Pre-v0.4 backups (no `ledgerHead` field, no `_internal`) load
+   * with a console warning and skip the integrity check entirely
+   * — there's no chain to verify against.
+   */
   async load(backupJson: string): Promise<void> {
     const backup = JSON.parse(backupJson) as CompartmentBackup
+
+    // 1. Restore data collections.
     await this.adapter.saveAll(this.name, backup.collections)
 
-    // Restore keyrings
+    // 2. Restore keyrings (same as v0.3).
     for (const [userId, keyringFile] of Object.entries(backup.keyrings)) {
       const envelope = {
         _noydb: 1 as const,
@@ -397,8 +504,197 @@ export class Compartment {
       await this.adapter.put(this.name, '_keyring', userId, envelope)
     }
 
-    // Clear collection cache so they re-hydrate
+    // 3. Restore internal collections (`_ledger`, `_ledger_deltas`).
+    //    Required so verifyBackupIntegrity has the chain to walk.
+    if (backup._internal) {
+      for (const [internalName, records] of Object.entries(backup._internal)) {
+        for (const [id, envelope] of Object.entries(records)) {
+          await this.adapter.put(this.name, internalName, id, envelope)
+        }
+      }
+    }
+
+    // 4. Refresh the in-memory keyring from the freshly-loaded
+    //    keyring file. Without this, the Compartment's getDEK
+    //    closure still holds the OLD session's DEKs, and every
+    //    decrypt of a loaded ledger entry / data envelope fails
+    //    with TamperedError because the DEK doesn't match the
+    //    ciphertext that was encrypted with the SOURCE user's DEK.
+    //    Skipped for plaintext compartments and for tests that
+    //    construct Compartment without a reloadKeyring callback.
+    if (this.reloadKeyring) {
+      this.keyring = await this.reloadKeyring()
+      // Rebuild the DEK resolver against the refreshed keyring so
+      // the next ensureCollectionDEK call sees the loaded wrapped
+      // DEKs, not the cached pre-load ones.
+      this.getDEK = this.makeGetDEK()
+    }
+
+    // 5. Clear collection cache + reset the ledger store so the
+    //    next ledger() call rebuilds its head cache from the
+    //    freshly-loaded entries.
     this.collectionCache.clear()
+    this.ledgerStore = null
+
+    // 5. Run the verification gate. Pre-v0.4 backups skip this with
+    //    a one-line warning so existing consumers can still read
+    //    them while migrating.
+    if (!backup.ledgerHead) {
+      console.warn(
+        `[noy-db] Loaded a legacy backup with no ledgerHead — ` +
+        `verifiable-backup integrity check skipped. ` +
+        `Re-export with v0.4+ to get tamper detection.`,
+      )
+      return
+    }
+
+    const result = await this.verifyBackupIntegrity()
+    if (!result.ok) {
+      // Surface the most specific error class we can. The result
+      // shape carries enough info for callers to inspect.
+      if (result.kind === 'data') {
+        throw new BackupCorruptedError(
+          result.collection,
+          result.id,
+          result.message,
+        )
+      }
+      throw new BackupLedgerError(result.message, result.divergedAt)
+    }
+
+    // 6. Cross-check: the freshly-verified head must match the
+    //    value embedded at dump time. A mismatch means someone
+    //    truncated or extended the chain after dump.
+    if (result.head !== backup.ledgerHead.hash) {
+      throw new BackupLedgerError(
+        `Backup ledger head mismatch: embedded "${backup.ledgerHead.hash}" ` +
+        `but reconstructed "${result.head}".`,
+      )
+    }
+  }
+
+  /**
+   * End-to-end backup integrity check. Runs both:
+   *
+   *   1. `ledger.verify()` — walks the hash chain and confirms
+   *      every `prevHash` matches the recomputed hash of its
+   *      predecessor.
+   *
+   *   2. **Data envelope cross-check** — for every (collection, id)
+   *      that has a current value, find the most recent ledger
+   *      entry recording a `put` for that pair, recompute the
+   *      sha256 of the stored envelope's `_data`, and compare to
+   *      the entry's `payloadHash`. Any mismatch means an
+   *      out-of-band write modified the data without updating the
+   *      ledger.
+   *
+   * Returns a discriminated union so callers can handle the two
+   * failure modes differently:
+   *   - `{ ok: true, head, length }` — chain verified and all
+   *     data matches; safe to use.
+   *   - `{ ok: false, kind: 'chain', divergedAt, message }` — the
+   *     chain itself is broken at the given index.
+   *   - `{ ok: false, kind: 'data', collection, id, message }` —
+   *     a specific data envelope doesn't match its ledger entry.
+   *
+   * This method is exposed so users can call it any time, not just
+   * during `load()`. A scheduled background check is the simplest
+   * way to detect tampering of an in-place compartment.
+   */
+  async verifyBackupIntegrity(): Promise<
+    | { readonly ok: true; readonly head: string; readonly length: number }
+    | {
+        readonly ok: false
+        readonly kind: 'chain'
+        readonly divergedAt: number
+        readonly message: string
+      }
+    | {
+        readonly ok: false
+        readonly kind: 'data'
+        readonly collection: string
+        readonly id: string
+        readonly message: string
+      }
+  > {
+    // Step 1: chain verification.
+    const chainResult = await this.ledger().verify()
+    if (!chainResult.ok) {
+      return {
+        ok: false,
+        kind: 'chain',
+        divergedAt: chainResult.divergedAt,
+        message:
+          `Ledger chain diverged at index ${chainResult.divergedAt}: ` +
+          `expected prevHash "${chainResult.expected}" but found "${chainResult.actual}".`,
+      }
+    }
+
+    // Step 2: data envelope cross-check. Walk every entry in the
+    // ledger and, for the LATEST `put` per (collection, id), recompute
+    // the data envelope's payloadHash and compare. Earlier puts of the
+    // same id are skipped because the data collection only holds the
+    // current version — historical envelopes live in the deltas
+    // collection (which is itself protected by the chain).
+    const ledger = this.ledger()
+    const allEntries = await ledger.loadAllEntries()
+
+    // Find the latest non-delete entry per (collection, id). Walk
+    // the entries in reverse so we hit the latest first; mark each
+    // (collection, id) as seen and skip subsequent entries.
+    const seen = new Set<string>()
+    const latest = new Map<
+      string,
+      { collection: string; id: string; expectedHash: string }
+    >()
+    for (let i = allEntries.length - 1; i >= 0; i--) {
+      const entry = allEntries[i]
+      if (!entry) continue
+      const key = `${entry.collection}/${entry.id}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      // For deletes the data collection should NOT have the record,
+      // so we skip — there's nothing to cross-check.
+      if (entry.op === 'delete') continue
+      latest.set(key, {
+        collection: entry.collection,
+        id: entry.id,
+        expectedHash: entry.payloadHash,
+      })
+    }
+
+    for (const { collection, id, expectedHash } of latest.values()) {
+      const envelope = await this.adapter.get(this.name, collection, id)
+      if (!envelope) {
+        return {
+          ok: false,
+          kind: 'data',
+          collection,
+          id,
+          message:
+            `Ledger expects data record "${collection}/${id}" to exist, ` +
+            `but the adapter has no envelope for it.`,
+        }
+      }
+      const actualHash = await sha256Hex(envelope._data)
+      if (actualHash !== expectedHash) {
+        return {
+          ok: false,
+          kind: 'data',
+          collection,
+          id,
+          message:
+            `Data envelope "${collection}/${id}" has been tampered with: ` +
+            `expected payloadHash "${expectedHash}", got "${actualHash}".`,
+        }
+      }
+    }
+
+    return {
+      ok: true,
+      head: chainResult.head,
+      length: chainResult.length,
+    }
   }
 
   /** Export compartment as decrypted JSON (owner only). */
