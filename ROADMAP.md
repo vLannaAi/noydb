@@ -31,10 +31,11 @@ v0.4.1 shipped on npm. All 10 `@noy-db/*` packages are now unified on the **0.4.
 | **0.5** | 🚧 **next** | **Core enhancements + scaffolder polish** | Wizard i18n + augment mode + CLI subcommands (shipped), `exportStream`/`exportJSON`, cross-compartment queries, admin-grants-admin delegation |
 | 0.6     | 📋 planned  | Query DSL completion               | Joins (eager + live + multi-FK chaining), aggregations v1 (built-in reducers + groupBy + scan)        |
 | 0.7     | 📋 planned  | Identity & sessions                | Session tokens, OIDC bridge, magic links, hardware-key keyrings           |
-| 0.8     | 📋 planned  | Sync v2                            | CRDT mode, pluggable conflict policies, presence, partial sync            |
-| 0.9     | 📋 planned  | Developer experience               | `noydb` CLI, devtools panel, schema codegen, importers                    |
-| 0.10    | 📋 planned  | Adapter expansion                  | R2, D1, Supabase, IPFS, Git, WebDAV, encrypted SQLite, Turso              |
-| 0.11    | 📋 planned  | Other framework integrations       | React, Svelte, Solid, Qwik, TanStack Query/Table, Zustand                 |
+| 0.8     | 📋 planned  | i18n & localization                | `dictKey` + `i18nText` schema primitives, `plaintextTranslator` hook, per-locale read resolution, dictionary admin operations, export integration |
+| 0.9     | 📋 planned  | Sync v2                            | CRDT mode, pluggable conflict policies, presence, partial sync            |
+| 0.10    | 📋 planned  | Developer experience               | `noydb` CLI, devtools panel, schema codegen, importers                    |
+| 0.11    | 📋 planned  | Adapter expansion                  | R2, D1, Supabase, IPFS, Git, WebDAV, encrypted SQLite, Turso              |
+| 0.12    | 📋 planned  | Other framework integrations       | React, Svelte, Solid, Qwik, TanStack Query/Table, Zustand                 |
 | 1.0     | 📋 planned  | Stability + LTS release            | API freeze, third-party audit, perf benchmarks, migration tooling         |
 | 1.x     | 🔭 vision   | Edge & realtime                    | Edge worker adapter, WebRTC peer sync, encrypted BroadcastChannel         |
 | 2.0     | 🔭 vision   | Federation                         | Multi-instance federation, verifiable credentials, ZK proof exports       |
@@ -54,11 +55,12 @@ gantt
     section Planned
     v0.6 query DSL completion        :         v06, after v05, 30d
     v0.7 identity & sessions         :         v07, after v06, 45d
-    v0.8 sync v2                     :         v08, after v07, 60d
-    v0.9 developer experience        :         v09, after v08, 45d
-    v0.10 adapter expansion          :         v010, after v09, 45d
-    v0.11 other frameworks           :         v011, after v010, 45d
-    v1.0 stability + LTS             :crit,    v10, after v011, 60d
+    v0.8 i18n & localization         :         v08, after v07, 45d
+    v0.9 sync v2                     :         v09, after v08, 60d
+    v0.10 developer experience       :         v010, after v09, 45d
+    v0.11 adapter expansion          :         v011, after v010, 45d
+    v0.12 other frameworks           :         v012, after v011, 45d
+    v1.0 stability + LTS             :crit,    v10, after v012, 60d
 ```
 
 ---
@@ -311,7 +313,122 @@ export const useClients = defineStore('clients', {
 
 ---
 
-## v0.8 — Sync v2
+## v0.8 — Internationalization & dictionaries
+
+**Goal:** Make i18n a first-class schema primitive instead of something every consumer hand-rolls on top of the library. Spawned from discussion #78.
+
+The proposal lands as **two structurally distinct schema primitives** because i18n content in real schemas splits into two cases that don't compose into one API:
+
+### `dictKey('name')` — normalized dictionary keys
+
+Bounded sets of stable values (status enums, category codes, filing types, role names) where the *set* is known and the *labels* differ per locale. Storage holds the stable key. Reads resolve to the caller's locale.
+
+```ts
+await company.dictionary('status').putAll({
+  draft:    { en: 'Draft',    th: 'ฉบับร่าง' },
+  open:     { en: 'Open',     th: 'เปิด' },
+  paid:     { en: 'Paid',     th: 'ชำระแล้ว' },
+})
+
+const Invoice = z.object({
+  id: z.string(),
+  status: dictKey('status', ['draft', 'open', 'paid'] as const),
+})
+
+const inv = await invoices.get('inv-1', { locale: 'th' })
+// → { id: 'inv-1', status: 'paid', statusLabel: 'ชำระแล้ว' }
+```
+
+- **Stored as a reserved encrypted collection** (`_dict_<name>/`) under the same compartment DEK. One collection per dictionary, not one collection with namespaces — composes with v0.4 refs naturally and inherits ACL, ledger, schema, and query primitives without special-casing.
+- **Type-narrowed via `as const` keys passed at schema-construction time.** No codegen — the runtime dictionary and the static literal union can drift, and `noy-db verify` catches the drift in CI.
+- **`groupBy(dictKey)` groups by stable key, not localized label.** Grouping by the localized label would produce different buckets per reader, which is silently catastrophic. Enforced at the type level, not just docs.
+- **Cascade-on-delete is not supported.** A dedicated `dictionary.rename(oldKey, newKey)` operation handles the only legitimate "mass rewrite" case with explicit consent. Default delete behavior is `strict` — refuse delete if any record references the key.
+
+### `i18nText({ languages, required })` — multi-language content fields
+
+Per-record prose (invoice notes, product descriptions, line-item descriptions) where each record has its own value in N languages.
+
+```ts
+const LineItem = z.object({
+  id: z.string(),
+  description: i18nText({
+    languages: ['en', 'th'],
+    required: 'all',                 // 'all' | 'any' | ['en']
+  }),
+})
+
+await lineItems.put('li-1', {
+  id: 'li-1',
+  description: { en: 'Consulting hours', th: 'ค่าที่ปรึกษา' },
+})
+
+// Read with fallback
+const li = await lineItems.get('li-1', { locale: 'th', fallback: 'en' })
+// → { id: 'li-1', description: 'ค่าที่ปรึกษา' }
+
+// Raw mode for bilingual exports
+const raw = await lineItems.get('li-1', { locale: 'raw' })
+// → { id: 'li-1', description: { en: '...', th: '...' } }
+```
+
+- **Strict / warn / relaxed enforcement** at the schema boundary
+- **Declarative locale fallback on read** — `{ locale, fallback }` chain instead of per-consumer logic
+- **Raw mode** for consumers that need every language at once (bilingual PDFs, XML exports with namespaced language elements)
+
+### The `plaintextTranslator` hook
+
+The most philosophically careful piece of the proposal. A common request is "auto-translate missing languages before `put()`," and the obvious implementation — calling an external translation API — sends plaintext over the network the moment it executes. NOYDB ships **the integration point, never the integration**:
+
+```ts
+const db = await createNoydb({
+  adapter: ...,
+  user: 'alice',
+  secret: '...',
+  plaintextTranslator: async ({ text, from, to, field, collection }) => {
+    // Consumer's choice: DeepL, Argos, Claude with their data policy,
+    // self-hosted LLM, human review queue. NOYDB does not know or care.
+    return await myTranslator.translate(text, from, to)
+  },
+})
+
+const LineItem = z.object({
+  description: i18nText({
+    languages: ['en', 'th'],
+    autoTranslate: true,            // ← per-field opt-in, visible in schema source
+  }),
+})
+```
+
+The hook is named **`plaintextTranslator`** (not `translator`) deliberately — the same naming logic as `@noy-db/decrypt-*` packages. The word "plaintext" in the config key forces the consumer to acknowledge the boundary they're crossing every time they read or write the config.
+
+**The full invariant statement** for what zero-knowledge does and does not promise lives in [`NOYDB_SPEC.md` §Design Principles → Zero-Knowledge Storage](./NOYDB_SPEC.md#2-zero-knowledge-storage). Key points:
+
+- NOYDB ships **no built-in translator** and ships **no translator SDKs as dependencies** — the policy is that PRs adding either are rejected
+- Per-field opt-in at schema-construction time, never at runtime
+- Ledger entries record `{field, fromLocale, toLocale, translatorName, timestamp}` — **never** content, **never** content hashes (the hash would be a fingerprint that allows correlation of identical phrases, a subtle leak the audit logging is meant to prevent)
+- Translator cache lives only in process memory, holds plaintext, **must clear on `db.close()`** alongside the KEK and DEKs
+
+### Out of scope for v0.8 i18n
+
+- **Pluralization** (ICU MessageFormat `one`/`other`/`few`/`many`) — that's the consumer's templating layer's job
+- **Date / number / currency formatting** — `Intl.*` in the consumer's UI layer
+- **RTL/LTR rendering** — locales are opaque BCP 47 codes to NOYDB; rendering is the UI layer's job
+- **Per-locale CRDT merging in sync** — bundled-LWW in v0.8, per-locale CRDT is gated on v0.9 sync v2
+- **Codegen for type narrowing** — pragmatic `as const` is what ships; codegen waits for a real consumer ask
+- **Cross-compartment shared dictionaries** — would cross the isolation boundary; explicitly not supported
+
+### Composition with other releases
+
+| Release | Interaction |
+|---|---|
+| v0.4 (shipped) | Dictionaries are collections, schemas validate i18n fields, refs pin dictionary integrity, ledger tracks dictionary writes — **all reused as-is** |
+| v0.5 (#72 `exportStream()`) | `exportStream()` carries a **bundled snapshot of every dictionary** alongside record chunks, so an export captured at time T remains internally consistent forever, even if labels are renamed later. This is a deliverable inside the v0.8 epic, not a separate v0.5 issue. |
+| v0.6 (joins/aggregations) | `.join()` on a `dictKey` field resolves the label in the caller's locale; `.groupBy(dictKey)` groups by stable key and is **type-enforced** to prevent grouping by the resolved label |
+| v0.9 (sync v2) | Per-locale CRDT merging of multi-lang fields is a sync v2 deliverable, not an i18n one. v0.8 ships with whole-field LWW; v0.9 upgrades to per-locale merge. |
+
+---
+
+## v0.9 — Sync v2
 
 **Goal:** Deterministic conflict resolution; collaborative editing where it matters.
 
@@ -324,7 +441,7 @@ export const useClients = defineStore('clients', {
 
 ---
 
-## v0.9 — Developer experience
+## v0.10 — Developer experience
 
 **Goal:** Make NOYDB easy to use, easy to debug, easy to import existing data into.
 
@@ -337,7 +454,7 @@ export const useClients = defineStore('clients', {
 
 ---
 
-## v0.10 — Adapter expansion
+## v0.11 — Adapter expansion
 
 | Adapter                       | Why                                                                  |
 |-------------------------------|----------------------------------------------------------------------|
@@ -354,9 +471,9 @@ export const useClients = defineStore('clients', {
 
 ---
 
-## v0.11 — Other framework integrations
+## v0.12 — Other framework integrations
 
-Pinia/Vue is already covered in v0.3. v0.11 brings the same first-class story to other ecosystems.
+Pinia/Vue is already covered in v0.3. v0.12 brings the same first-class story to other ecosystems.
 
 | Package                     | Provides                                                       |
 |-----------------------------|----------------------------------------------------------------|
@@ -435,7 +552,7 @@ await decryptToCSV(company.exportStream(), './invoices.csv')
 |--------------------------|-----------------------------------------------|--------------------------------------------------------------------------------------------------------------------|---------|
 | `@noy-db/decrypt-csv`    | **Zero.** ~50 LOC of correctly-escaped CSV.   | Plaintext-on-disk only. No supply chain surface.                                                                   | post-v0.5, opportunistic |
 | `@noy-db/decrypt-xml`    | **Zero.** Hand-rolled subset, ~200–300 LOC. Covers elements, attributes, namespaces, CDATA, XSD generation. | Plaintext-on-disk only. No supply chain surface. Schema-aware via XSD; XSLT downstream story is the deciding factor for enterprise / regulated industries. | post-v0.5, opportunistic |
-| `@noy-db/decrypt-xlsx`   | **Peer dep on `xlsx` or `exceljs`.**          | Plaintext-on-disk **plus** an external library with its own CVE history living inside the consumer's node_modules. **Highest-risk package in the family.** Ships last so the warning + review process is well-rehearsed by then. | v0.8+ |
+| `@noy-db/decrypt-xlsx`   | **Peer dep on `xlsx` or `exceljs`.**          | Plaintext-on-disk **plus** an external library with its own CVE history living inside the consumer's node_modules. **Highest-risk package in the family.** Ships last so the warning + review process is well-rehearsed by then. | v0.9+ |
 
 JSON is **not** in this family. The `exportJSON()` helper lives in `@noy-db/core` (v0.5, #72) because it is zero-dep, trivial, and is the universal default every consumer wants. The plaintext-on-disk warning still applies and is documented identically; the package boundary just isn't justified for five lines of code with no external deps.
 
@@ -482,7 +599,8 @@ This position is documented here so consumers stop asking. If you arrived at thi
 | No plaintext export path for downstream tooling      | v0.5 (`exportStream`/`exportJSON`) + post-v0.5 `@noy-db/decrypt-*` family |
 | Joins / aggregations folded in userland              | v0.6                                  |
 | Passphrase unlock awkward for client portals         | v0.7                                  |
-| Sync conflict resolution model unclear               | v0.8                                  |
+| i18n hand-rolled per consumer; labels drift; multi-lang fields lose translations | v0.8 |
+| Sync conflict resolution model unclear               | v0.9                                  |
 
 ---
 
@@ -503,4 +621,4 @@ Open a discussion before opening a PR that touches anything past v0.4 — the fu
 
 ---
 
-*Roadmap v3.2 — 2026-04-07*
+*Roadmap v3.3 — 2026-04-07*
