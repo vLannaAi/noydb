@@ -102,10 +102,24 @@ export interface JoinLeg {
  * sources without `lookupById` force the hash-join fallback. Kept as
  * a thin interface so tests can wire up plain-object sources without
  * pulling in the full Collection class.
+ *
+ * The optional `subscribe` is used by `Query.live()` (#74) to merge
+ * right-side change streams into the live re-run trigger. Sources
+ * that omit `subscribe` still work for live joins — they just
+ * don't drive re-fires when their right side mutates. Collection
+ * implements `subscribe` by hooking into the existing per-
+ * compartment event emitter.
  */
 export interface JoinableSource {
   snapshot(): readonly unknown[]
   lookupById?(id: string): unknown
+  /**
+   * Subscribe to mutations on this source. The callback fires
+   * AFTER the underlying record set has been updated. Returns an
+   * unsubscribe function. Optional — sources without this method
+   * cannot trigger live-join re-fires from their side.
+   */
+  subscribe?(cb: () => void): () => void
 }
 
 /**

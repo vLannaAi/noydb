@@ -151,6 +151,7 @@ export {
   applyJoins,
   DEFAULT_JOIN_MAX_ROWS,
   resetJoinWarnings,
+  buildLiveQuery,
 } from './query/index.js'
 export type {
   QueryPlan,
@@ -167,4 +168,6 @@ export type {
   JoinContext,
   JoinableSource,
   JoinStrategy,
+  LiveQuery,
+  LiveUpstream,
 } from './query/index.js'
