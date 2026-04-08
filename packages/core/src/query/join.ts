@@ -202,6 +202,15 @@ function warnCeilingApproaching(
  * join. Sorting *by* a joined field is out of scope for #73 — users
  * can post-sort the result array in userland or wait for #75
  * (multi-FK chaining) which can be layered on top.
+ *
+ * **Multi-FK chaining (#75):** each leg's `maxRows` is enforced
+ * against the current left-row count independently. Because v0.6
+ * joins are equi-joins on the target's primary key (one-to-one or
+ * one-to-null), the left row count is constant across legs — no
+ * cartesian blowup. The per-leg left-side check is still necessary
+ * so that a later leg with a tighter ceiling correctly fires on a
+ * query like `.join('a', { maxRows: 100_000 }).join('b', { maxRows: 50 })`,
+ * which should throw on the second leg if the left set exceeds 50.
  */
 export function applyJoins(
   rows: readonly unknown[],
@@ -209,30 +218,6 @@ export function applyJoins(
   context: JoinContext,
 ): unknown[] {
   if (joins.length === 0) return [...rows]
-
-  // Check the left-side row ceiling once up front, using the first
-  // leg's `maxRows` override. Later legs can carry their own
-  // `maxRows` which applies only to their own right side — this is
-  // documented as a v1 limitation so consumers who mix ceilings on
-  // chained joins aren't surprised.
-  const firstLeg = joins[0]!
-  const leftCeiling = firstLeg.maxRows ?? DEFAULT_JOIN_MAX_ROWS
-  if (rows.length > leftCeiling) {
-    throw new JoinTooLargeError({
-      leftRows: rows.length,
-      rightRows: -1,
-      maxRows: leftCeiling,
-      side: 'left',
-      message:
-        `.join() left side has ${rows.length} rows, exceeding the ${leftCeiling}-row ` +
-        `ceiling. Filter the left side further with where()/limit() before joining, ` +
-        `or raise the ceiling via { maxRows }. Streaming joins over scan() are ` +
-        `tracked in #76.`,
-    })
-  }
-  if (rows.length > leftCeiling * JOIN_WARN_FRACTION) {
-    warnCeilingApproaching(firstLeg.target, 'left', rows.length, leftCeiling)
-  }
 
   let result: unknown[] = [...rows]
   for (const leg of joins) {
@@ -257,6 +242,29 @@ function applyOneJoin(
   }
 
   const maxRows = leg.maxRows ?? DEFAULT_JOIN_MAX_ROWS
+
+  // Per-leg left-side ceiling check (#75 acceptance #3). In a
+  // multi-FK chain, each leg's `maxRows` is enforced independently
+  // against the current left-row count, so
+  // `.join('a', { maxRows: 100_000 }).join('b', { maxRows: 50 })`
+  // correctly throws on the second leg if the left set exceeds 50.
+  if (leftRows.length > maxRows) {
+    throw new JoinTooLargeError({
+      leftRows: leftRows.length,
+      rightRows: -1,
+      maxRows,
+      side: 'left',
+      message:
+        `.join() left side has ${leftRows.length} rows, exceeding the ${maxRows}-row ` +
+        `ceiling for target "${leg.target}". Filter the left side further with ` +
+        `where()/limit() before joining, or raise the ceiling via { maxRows }. ` +
+        `Streaming joins over scan() are tracked in #76.`,
+    })
+  }
+  if (leftRows.length > maxRows * JOIN_WARN_FRACTION) {
+    warnCeilingApproaching(leg.target, 'left', leftRows.length, maxRows)
+  }
+
   const rightSnapshot = source.snapshot()
   if (rightSnapshot.length > maxRows) {
     throw new JoinTooLargeError({
