@@ -1,5 +1,13 @@
 # @noy-db/memory
 
+## 0.5.0
+
+### Minor Changes
+
+- **`listCompartments()` capability** (#63). Implements the new optional 7th adapter method introduced in `@noy-db/core@0.5.0`. Returns the outer Map's keys — O(compartments) and cheap. Used by `Noydb.listAccessibleCompartments()` to enumerate the compartment universe before filtering down to the ones the calling principal can unwrap.
+
+- **Unified version line refresh.** Bumped to 0.5.0 alongside the rest of the `@noy-db/*` family so that fresh tarballs declare `peerDependencies: "@noy-db/core": "^0.5.0"`. Without this refresh, consumers installing the 0.4.1 tarball alongside `@noy-db/core@0.5.0` would hit `ERESOLVE` — in 0.x semver, caret ranges are locked to the minor (`^0.4.1` = `>=0.4.1 <0.5.0`), so every cross-minor release requires republishing every adapter with the updated peer range. This is the same pattern we established in the v0.4.1 peer-dep fix.
+
 ## 0.4.1
 
 ### Patch Changes

@@ -1,5 +1,12 @@
 # @noy-db/s3
 
+## 0.5.0
+
+### Minor Changes
+
+- **Manifest-only release.** No functional code changes in `@noy-db/s3`. Bumped to 0.5.0 alongside the rest of the `@noy-db/*` family so that fresh tarballs declare `peerDependencies: "@noy-db/core": "^0.5.0"`. See the `@noy-db/browser@0.5.0` notes for the peer-dep refresh rationale.
+- `listCompartments()` cross-compartment enumeration capability (v0.5 #63) is **not implemented** in `@noy-db/s3`. S3 enumeration needs an `s3:ListBucket` permission with the noy-db prefix, which has to be configured by the consumer. Tracked as a follow-up.
+
 ## 0.4.1
 
 ### Patch Changes

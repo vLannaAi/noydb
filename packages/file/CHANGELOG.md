@@ -1,5 +1,13 @@
 # @noy-db/file
 
+## 0.5.0
+
+### Minor Changes
+
+- **`listCompartments()` capability** (#63). Implements the new optional 7th adapter method introduced in `@noy-db/core@0.5.0`. Reads the configured base directory and returns every entry that is itself a directory — top-level files (README, .DS_Store, .git, etc.) are filtered out because they cannot be valid compartments. Missing base directory returns an empty array rather than throwing. Used by `Noydb.listAccessibleCompartments()` to enumerate the compartment universe before filtering down to the ones the calling principal can unwrap.
+
+- **Unified version line refresh.** Bumped to 0.5.0 alongside the rest of the `@noy-db/*` family so that fresh tarballs declare `peerDependencies: "@noy-db/core": "^0.5.0"`. See the `@noy-db/memory@0.5.0` notes for the peer-dep refresh rationale.
+
 ## 0.4.1
 
 ### Patch Changes

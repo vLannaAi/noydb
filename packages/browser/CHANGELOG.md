@@ -1,5 +1,12 @@
 # @noy-db/browser
 
+## 0.5.0
+
+### Minor Changes
+
+- **Manifest-only release.** No functional code changes in `@noy-db/browser`. Bumped to 0.5.0 alongside the rest of the `@noy-db/*` family so that fresh tarballs declare `peerDependencies: "@noy-db/core": "^0.5.0"`. Without this refresh, consumers installing the 0.4.1 tarball alongside `@noy-db/core@0.5.0` would hit `ERESOLVE` — in 0.x semver, caret ranges are locked to the minor (`^0.4.1` = `>=0.4.1 <0.5.0`), so every cross-minor release requires republishing every adapter/integration package with the updated peer range. This is the same pattern established in the v0.4.1 peer-dep unification.
+- `listCompartments()` cross-compartment enumeration capability (v0.5 #63) is **not yet implemented** in `@noy-db/browser`. The browser adapter could scan `localStorage` prefixes to produce the list; this is tracked as a follow-up. Consumers using the browser adapter who need cross-compartment enumeration should maintain the candidate list out of band and pass it directly to `Noydb.queryAcross()`.
+
 ## 0.4.1
 
 ### Patch Changes

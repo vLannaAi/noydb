@@ -1,5 +1,11 @@
 # @noy-db/nuxt
 
+## 0.5.0
+
+### Minor Changes
+
+- **Manifest-only release.** No functional code changes in `@noy-db/nuxt`. Bumped to 0.5.0 alongside the rest of the `@noy-db/*` family so that fresh tarballs declare `peerDependencies: "@noy-db/core": "^0.5.0"`, `"@noy-db/pinia": "^0.5.0"`, `"@noy-db/vue": "^0.5.0"`. See the `@noy-db/browser@0.5.0` notes for the peer-dep refresh rationale.
+
 ## 0.4.1
 
 ### Patch Changes

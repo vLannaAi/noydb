@@ -3,7 +3,7 @@
 > This document is optimized for AI coding assistants (Claude Code, Copilot, Cursor).
 > It provides the fastest path to using NOYDB correctly in any project.
 >
-> **Current version:** `@noy-db/*@0.4.1` — all 10 packages are on a unified version line. **Current release theme:** v0.4 Integrity & trust (schema validation, hash-chained ledger, delta history, FK refs, verifiable backups).
+> **Current version:** `@noy-db/*@0.5.0` — all 10 packages are on a unified version line. **Current release theme:** v0.5 Core enhancements + scaffolder polish (ACL-scoped `exportStream`/`exportJSON`, admin-grants-admin lateral delegation, cross-compartment role-scoped queries, wizard Thai i18n, wizard augment mode, CLI subcommands).
 
 ## What NOYDB Is
 
@@ -29,7 +29,7 @@ npm install @noy-db/core @noy-db/memory     # testing (no persistence)
 npm install @noy-db/core @noy-db/browser @noy-db/pinia @noy-db/nuxt @pinia/nuxt pinia
 ```
 
-All `@noy-db/*` packages are on the same version line (`0.4.1` at time of writing). Installing any combination from the same line is guaranteed to work — peer deps use `workspace:^` so minor upgrades are transparent.
+All `@noy-db/*` packages are on the same version line (`0.5.0` at time of writing). Installing any combination from the same line is guaranteed to work — peer deps use `workspace:^` so minor upgrades are transparent.
 
 ## Minimal Working Example
 

@@ -28,8 +28,8 @@ v0.4.1 shipped on npm. All 10 `@noy-db/*` packages are now unified on the **0.4.
 | 0.3.1   | ✅ shipped  | Scaffolder + CLI                   | `@noy-db/create` wizard, `noy-db add`/`verify`, Nuxt 4 starter template      |
 | 0.4     | ✅ shipped  | Integrity & trust                  | Schema validation, hash-chained ledger, delta history, FK refs, verifiable backups |
 | 0.4.1   | ✅ shipped  | Release hygiene patch              | Peer dep pinning fix (`workspace:^`); unified `@noy-db/*` on one version line  |
-| **0.5** | 🚧 **next** | **Core enhancements + scaffolder polish** | Wizard i18n + augment mode + CLI subcommands (shipped), `exportStream`/`exportJSON`, cross-compartment queries, admin-grants-admin delegation |
-| 0.6     | 📋 planned  | Query DSL completion               | Joins (eager + live + multi-FK chaining), aggregations v1 (built-in reducers + groupBy + scan)        |
+| 0.5     | ✅ shipped  | Core enhancements + scaffolder polish | Wizard i18n + augment mode + CLI subcommands, `exportStream`/`exportJSON` (ACL-scoped), cross-compartment queries, admin-grants-admin delegation |
+| **0.6** | 🚧 **next** | **Query DSL completion**           | Joins (eager + live + multi-FK chaining), aggregations v1 (built-in reducers + groupBy + scan)        |
 | 0.7     | 📋 planned  | Identity & sessions                | Session tokens, OIDC bridge, magic links, hardware-key keyrings           |
 | 0.8     | 📋 planned  | i18n & localization                | `dictKey` + `i18nText` schema primitives, `plaintextTranslator` hook, per-locale read resolution, dictionary admin operations, export integration |
 | 0.9     | 📋 planned  | Sync v2                            | CRDT mode, pluggable conflict policies, presence, partial sync            |
@@ -50,10 +50,10 @@ gantt
     v0.2 sync + browser + Vue        :done,    v02, 2026-02, 60d
     v0.3 Nuxt 4 + Pinia + query/scale :done,   v03, 2026-04, 7d
     v0.4 integrity & trust           :done,    v04, after v03, 7d
+    v0.5 core enhancements           :done,    v05, after v04, 1d
     section Next
-    v0.5 core enhancements           :active,  v05, after v04, 30d
+    v0.6 query DSL completion        :active,  v06, after v05, 30d
     section Planned
-    v0.6 query DSL completion        :         v06, after v05, 30d
     v0.7 identity & sessions         :         v07, after v06, 45d
     v0.8 i18n & localization         :         v08, after v07, 45d
     v0.9 sync v2                     :         v09, after v08, 60d

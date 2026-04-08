@@ -247,7 +247,7 @@ Every command that touches real compartments follows these rules:
 ```
 my-app/
 ├── nuxt.config.ts          ← @noy-db/nuxt wired up with your chosen adapter
-├── package.json            ← @noy-db/* deps at ^0.4.1
+├── package.json            ← @noy-db/* deps at ^0.5.0
 ├── tsconfig.json
 ├── README.md
 ├── .gitignore
