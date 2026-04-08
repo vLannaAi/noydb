@@ -949,6 +949,20 @@ export class Collection<T> {
    */
   scan(opts: { pageSize?: number } = {}): ScanBuilder<T> {
     const pageSize = opts.pageSize ?? 100
+    // Build a JoinContext if the compartment passed a join resolver
+    // — same machinery as `query()` (#73). Without one, `.join()`
+    // on the resulting ScanBuilder will throw with an actionable
+    // error. The resolver is unreachable in production but matters
+    // for unit tests that construct Collection directly.
+    const resolver = this.joinResolver
+    const leftCollection = this.name
+    const joinContext: JoinContext | undefined = resolver
+      ? {
+          leftCollection,
+          resolveRef: (field: string) => resolver.resolveRef(leftCollection, field),
+          resolveSource: (collectionName: string) => resolver.resolveSource(collectionName),
+        }
+      : undefined
     // The page provider closure is bound to this collection's
     // listPage method so the builder is free of any `this`
     // coupling. Rebinding through the arrow keeps the unbound-
@@ -959,6 +973,9 @@ export class Collection<T> {
         listPage: (listOpts) => this.listPage(listOpts),
       },
       pageSize,
+      [],
+      [],
+      joinContext,
     )
   }
 
