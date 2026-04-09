@@ -1,14 +1,14 @@
 {
-  "name": "@noy-db/store-dynamo",
+  "name": "@noy-db/store-aws-dynamo",
   "version": "0.10.0",
   "description": "AWS DynamoDB adapter for noy-db — single-table design, zero-knowledge cloud sync",
   "license": "MIT",
   "author": "vLannaAi <vicio@lanna.ai>",
-  "homepage": "https://github.com/vLannaAi/noy-db/tree/main/packages/dynamo#readme",
+  "homepage": "https://github.com/vLannaAi/noy-db/tree/main/packages/store-aws-dynamo#readme",
   "repository": {
     "type": "git",
     "url": "https://github.com/vLannaAi/noy-db.git",
-    "directory": "packages/dynamo"
+    "directory": "packages/store-aws-dynamo"
   },
   "bugs": {
     "url": "https://github.com/vLannaAi/noy-db/issues"

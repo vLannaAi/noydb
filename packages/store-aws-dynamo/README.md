@@ -1,13 +1,13 @@
-# @noy-db/dynamo
+# @noy-db/store-aws-dynamo
 
 > AWS DynamoDB adapter for [noy-db](https://github.com/vLannaAi/noy-db) — single-table design, zero-knowledge cloud sync.
 
-[![npm](https://img.shields.io/npm/v/@noy-db/dynamo.svg)](https://www.npmjs.com/package/@noy-db/dynamo)
+[![npm](https://img.shields.io/npm/v/@noy-db/store-aws-dynamo.svg)](https://www.npmjs.com/package/@noy-db/store-aws-dynamo)
 
 ## Install
 
 ```bash
-pnpm add @noy-db/core @noy-db/dynamo @aws-sdk/client-dynamodb @aws-sdk/lib-dynamodb
+pnpm add @noy-db/core @noy-db/store-aws-dynamo @aws-sdk/client-dynamodb @aws-sdk/lib-dynamodb
 ```
 
 `@aws-sdk/*` packages are peer dependencies — install them in your app.
@@ -16,7 +16,7 @@ pnpm add @noy-db/core @noy-db/dynamo @aws-sdk/client-dynamodb @aws-sdk/lib-dynam
 
 ```ts
 import { createNoydb } from '@noy-db/core'
-import { dynamo } from '@noy-db/dynamo'
+import { dynamo } from '@noy-db/store-aws-dynamo'
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb'
 import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb'
 

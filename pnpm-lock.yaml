@@ -127,6 +127,27 @@ importers:
         specifier: ^3.5.32
         version: 3.5.32(typescript@5.9.3)
 
+  packages/store-aws-dynamo:
+    devDependencies:
+      '@aws-sdk/client-dynamodb':
+        specifier: ^3.0.0
+        version: 3.1024.0
+      '@aws-sdk/lib-dynamodb':
+        specifier: ^3.0.0
+        version: 3.1024.0(@aws-sdk/client-dynamodb@3.1024.0)
+      '@noy-db/core':
+        specifier: workspace:*
+        version: link:../core
+
+  packages/store-aws-s3:
+    devDependencies:
+      '@aws-sdk/client-s3':
+        specifier: ^3.0.0
+        version: 3.1024.0
+      '@noy-db/core':
+        specifier: workspace:*
+        version: link:../core
+
   packages/store-browser-idb:
     devDependencies:
       '@noy-db/core':
@@ -154,18 +175,6 @@ importers:
         specifier: ^18.0.0
         version: 18.0.1
 
-  packages/store-dynamo:
-    devDependencies:
-      '@aws-sdk/client-dynamodb':
-        specifier: ^3.0.0
-        version: 3.1024.0
-      '@aws-sdk/lib-dynamodb':
-        specifier: ^3.0.0
-        version: 3.1024.0(@aws-sdk/client-dynamodb@3.1024.0)
-      '@noy-db/core':
-        specifier: workspace:*
-        version: link:../core
-
   packages/store-file:
     devDependencies:
       '@noy-db/core':
@@ -186,15 +195,6 @@ importers:
       '@noy-db/test-adapter-conformance':
         specifier: workspace:*
         version: link:../../test-harnesses/adapter-conformance
-
-  packages/store-s3:
-    devDependencies:
-      '@aws-sdk/client-s3':
-        specifier: ^3.0.0
-        version: 3.1024.0
-      '@noy-db/core':
-        specifier: workspace:*
-        version: link:../core
 
   packages/vue:
     devDependencies:

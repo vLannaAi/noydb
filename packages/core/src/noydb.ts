@@ -340,7 +340,7 @@ export class Noydb {
    *
    * Requires the optional `NoydbStore.listVaults()` capability.
    * Throws `StoreCapabilityError` against stores that don't
-   * implement it (today: store-dynamo, store-s3, store-browser-local, store-browser-idb). For those backends the
+   * implement it (today: store-aws-dynamo, store-aws-s3, store-browser-local, store-browser-idb). For those backends the
    * consumer should either pass an explicit candidate list to
    * `queryAcross()` directly, or maintain a vault index out of
    * band.

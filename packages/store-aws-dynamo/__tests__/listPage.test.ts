@@ -25,7 +25,7 @@ function mockClient(handlers: Record<string, (input: unknown) => unknown>): {
   return { client, sent }
 }
 
-describe('@noy-db/dynamo — listPage', () => {
+describe('@noy-db/store-aws-dynamo — listPage', () => {
   it('1. has a name field for diagnostic logging', () => {
     const { client } = mockClient({})
     const adapter = dynamo({ table: 't', client })

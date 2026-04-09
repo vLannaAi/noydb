@@ -17,8 +17,8 @@
 # Adapters
 /packages/store-memory/              @vLannaAi
 /packages/store-file/                @vLannaAi
-/packages/store-dynamo/              @vLannaAi
-/packages/store-s3/                  @vLannaAi
+/packages/store-aws-dynamo/          @vLannaAi
+/packages/store-aws-s3/              @vLannaAi
 /packages/store-browser-local/       @vLannaAi
 /packages/store-browser-idb/        @vLannaAi
 

@@ -1,13 +1,13 @@
-# @noy-db/s3
+# @noy-db/store-aws-s3
 
 > AWS S3 adapter for [noy-db](https://github.com/vLannaAi/noy-db) — encrypted object storage with zero-knowledge cloud sync.
 
-[![npm](https://img.shields.io/npm/v/@noy-db/s3.svg)](https://www.npmjs.com/package/@noy-db/s3)
+[![npm](https://img.shields.io/npm/v/@noy-db/store-aws-s3.svg)](https://www.npmjs.com/package/@noy-db/store-aws-s3)
 
 ## Install
 
 ```bash
-pnpm add @noy-db/core @noy-db/s3 @aws-sdk/client-s3
+pnpm add @noy-db/core @noy-db/store-aws-s3 @aws-sdk/client-s3
 ```
 
 `@aws-sdk/client-s3` is a peer dependency — install it in your app.
@@ -16,7 +16,7 @@ pnpm add @noy-db/core @noy-db/s3 @aws-sdk/client-s3
 
 ```ts
 import { createNoydb } from '@noy-db/core'
-import { s3 } from '@noy-db/s3'
+import { s3 } from '@noy-db/store-aws-s3'
 import { S3Client } from '@aws-sdk/client-s3'
 
 const client = new S3Client({ region: 'ap-southeast-1' })

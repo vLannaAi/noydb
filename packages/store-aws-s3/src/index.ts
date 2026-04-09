@@ -1,7 +1,7 @@
 import type { NoydbStore, EncryptedEnvelope, VaultSnapshot } from '@noy-db/core'
 import { ConflictError } from '@noy-db/core'
 import {
-  S3Client as AwsS3Client,
+  S3Client,
   GetObjectCommand,
   PutObjectCommand,
   DeleteObjectCommand,
@@ -9,30 +9,19 @@ import {
   HeadBucketCommand,
 } from '@aws-sdk/client-s3'
 
-/**
- * Minimal interface for an S3 client. Compatible with @aws-sdk/client-s3's
- * S3Client. Exposed so tests (and advanced consumers) can inject a mock or
- * a pre-configured client without going through the default constructor.
- */
-export interface S3ClientLike {
-  send(command: unknown): Promise<unknown>
-}
-
 export interface S3Options {
   /** S3 bucket name. */
   bucket: string
   /** Key prefix within the bucket. Default: ''. */
   prefix?: string
-  /** AWS region. Default: 'us-east-1'. */
+  /** AWS region. Used only when `client` is not provided. Default: 'us-east-1'. */
   region?: string
-  /** Custom endpoint (e.g., for MinIO or LocalStack). */
-  endpoint?: string
   /**
-   * Pre-built S3 client. If provided, the adapter uses this client
-   * directly and ignores `region` / `endpoint`. Useful for tests and
-   * for apps that want to share a client across adapters.
+   * Pre-built S3Client from `@aws-sdk/client-s3`. If provided, the adapter
+   * uses this client directly and ignores `region`. Useful for apps that want
+   * to share a client across adapters or supply custom middleware.
    */
-  client?: S3ClientLike
+  client?: S3Client
 }
 
 /**
@@ -42,14 +31,9 @@ export interface S3Options {
 export function s3(options: S3Options): NoydbStore {
   const { bucket, prefix = '' } = options
 
-  // Use the injected client if provided (tests, advanced consumers).
-  // The cast through `S3ClientLike` is safe because the AWS S3Client's
-  // `send()` method matches the structural shape — we only call `send`
-  // and inspect the documented response fields.
-  const client = (options.client ?? new AwsS3Client({
+  const client = options.client ?? new S3Client({
     ...(options.region ? { region: options.region } : {}),
-    ...(options.endpoint ? { endpoint: options.endpoint, forcePathStyle: true } : {}),
-  })) as AwsS3Client
+  })
 
   function objectKey(vault: string, collection: string, id: string): string {
     const parts = [vault, collection, `${id}.json`]

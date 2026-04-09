@@ -1,20 +1,21 @@
 import { describe, it, expect } from 'vitest'
-import { s3, type S3ClientLike } from '../src/index.js'
+import type { S3Client } from '@aws-sdk/client-s3'
+import { s3 } from '../src/index.js'
 
 /**
  * Mock S3Client. Captures every command sent and returns canned responses
  * keyed by the command's class name. The s3 adapter accepts an injected
- * client via `options.client`, so we don't need to vi.mock the AWS SDK.
+ * S3Client via `options.client`, so we don't need to vi.mock the AWS SDK.
  *
  * S3 GetObject responses use a `Body` with a `transformToString()` method,
  * so we wrap the canned body string in a small adapter object.
  */
 function mockClient(handlers: Record<string, (input: unknown) => unknown>): {
-  client: S3ClientLike
+  client: S3Client
   sent: Array<{ name: string; input: unknown }>
 } {
   const sent: Array<{ name: string; input: unknown }> = []
-  const client: S3ClientLike = {
+  const client = {
     async send(command: unknown) {
       const name = (command as { constructor?: { name?: string } }).constructor?.name ?? 'Unknown'
       const input = (command as { input?: unknown }).input
@@ -23,7 +24,7 @@ function mockClient(handlers: Record<string, (input: unknown) => unknown>): {
       if (!handler) throw new Error(`Mock client got unexpected command: ${name}`)
       return handler(input)
     },
-  }
+  } as unknown as S3Client
   return { client, sent }
 }
 
@@ -35,7 +36,7 @@ function bodyOf(json: unknown): { transformToString: () => Promise<string> } {
   }
 }
 
-describe('@noy-db/s3 — listPage', () => {
+describe('@noy-db/store-aws-s3 — listPage', () => {
   it('1. has a name field for diagnostic logging', () => {
     const { client } = mockClient({})
     const adapter = s3({ bucket: 'b', client })
