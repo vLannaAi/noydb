@@ -1,6 +1,6 @@
 # Roadmap
 
-> **Current:** v0.6.0 on npm — all 10 `@noy-db/*` packages unified on a single version line. Everything from v0.5 plus the completed query DSL (joins, aggregations, streaming scan) and the `.noydb` container format. **Next:** v0.7 — Identity & sessions.
+> **Current:** v0.7.0 on npm — all 12 `@noy-db/*` packages on the 0.7.0 version line. Everything from v0.6 plus the full identity & sessions layer: session tokens, OIDC bridge, magic-link unlock, hardware-key keyrings, session policies, dev-mode unlock, and the `_sync_credentials` reserved collection. **Next:** v0.8 — i18n & dictionaries.
 >
 > Related docs:
 > - [Architecture](./docs/architecture.md) — data flow, key hierarchy, threat model
@@ -9,14 +9,15 @@
 > - [Adapters](./docs/adapters.md) — built-in and custom adapters
 > - [End-user features](./docs/end-user-features.md) — what consumers get
 > - [Spec](./SPEC.md) — invariants (do not violate)
-> - [v0.6 release notes](./docs/v0.6/release-notes-draft.md) — full v0.6 changelog
+> - [v0.6 release notes](./docs/v0.6/release-notes-draft.md) — v0.6 changelog
 > - [v0.6 release retrospective](./docs/v0.6/retrospective.md) — lessons from the v0.6 release window
+> - [v0.7 merge runbook](./docs/v0.7/merge-runbook.md) — v0.7 release process reference
 
 ---
 
 ## Status
 
-v0.6.0 is on npm. All 10 `@noy-db/*` packages are on the **0.6.0** version line — `core`, `pinia`, `memory`, `file`, `dynamo`, `s3`, `browser`, `vue`, `nuxt`, `create`. **558 tests** passing in `@noy-db/core` (plus the file adapter's own suites). Everything from the v0.5 initial release — zero-knowledge AES-256-GCM encryption with per-collection DEKs wrapped by a per-user KEK, five-role ACL with bounded admin lateral delegation, hash-chained audit ledger with RFC 6902 delta history, foreign-key references via `ref()`, Standard Schema v1 validation end-to-end, verifiable backups, ACL-scoped plaintext export, cross-compartment role-scoped queries, reactive query DSL with secondary indexes and lazy-LRU hydration, sync with optimistic concurrency, Vue/Nuxt/Pinia integration, scaffolder CLI — plus the v0.6 query-DSL completion work: eager and streaming joins with three ref modes and two planner strategies, `Query.live()` as a frame-agnostic reactive primitive with merged join change-streams, aggregation reducers (`count`/`sum`/`avg`/`min`/`max`) with `.aggregate()` and `.live()` terminals, `.groupBy(field)` with 10k/100k cardinality caps, `scan().aggregate()` for O(reducers)-memory streaming aggregation, `scan().join()` for streaming joins that bypass the eager 50k-row ceiling, and the `.noydb` binary container format with opaque ULID handles, brotli/gzip compression, and a minimum-disclosure header ready for cloud-storage drops. Partition-awareness seams (#87) are plumbed through joins, reducers, and streaming paths but dormant until v0.10. **Next:** v0.7 turns to identity & sessions — JWE session tokens, OIDC bridge, magic links, hardware-key keyrings.
+v0.7.0 is on npm (released 2026-04-09). All 12 `@noy-db/*` packages are on the **0.7.0** version line — `core`, `auth-webauthn`, `auth-oidc`, `pinia`, `memory`, `file`, `dynamo`, `s3`, `browser`, `vue`, `nuxt`, `create`. **688 tests** passing across all packages (649 core + 18 auth-webauthn + 21 auth-oidc). Full v0.5 surface (zero-knowledge AES-256-GCM, five-role ACL, hash-chained ledger, `ref()` foreign keys, Standard Schema v1, verifiable backups, sync, Vue/Nuxt/Pinia) plus v0.6 query-DSL completion (joins, aggregations, streaming scan, `.noydb` container) plus v0.7 identity & sessions (session tokens, OIDC bridge, magic-link unlock, hardware-key keyrings via WebAuthn, session policies, dev-mode unlock, `_sync_credentials` reserved collection). **Next:** v0.8 — i18n & dictionaries.
 
 ---
 
@@ -44,10 +45,10 @@ gantt
     section Shipped
     v0.5 initial release             :done,    v05, 2026-04, 1d
     v0.6 query DSL completion        :done,    v06, 2026-04, 1d
+    v0.7 identity & sessions         :done,    v07, 2026-04, 1d
     section Next
-    v0.7 identity & sessions         :active,  v07, after v06, 45d
+    v0.8 i18n & localization         :active,  v08, after v07, 45d
     section Planned
-    v0.8 i18n & localization         :         v08, after v07, 45d
     v0.9 sync v2                     :         v09, after v08, 60d
     v0.10 developer experience       :         v010, after v09, 45d
     v0.11 adapter expansion          :         v011, after v010, 45d
@@ -99,19 +100,21 @@ Every future release respects these:
 
 ---
 
-## v0.7 — Identity & sessions
+## v0.7 — Identity & sessions ✅ shipped
 
-**Goal:** Solve "passphrase unlock is awkward for client portals."
+**Status:** Released 2026-04-09. GitHub release: https://github.com/vLannaAi/noy-db/releases/tag/v0.7.0
 
-- **Session tokens.** Unlock once with passphrase or biometric, get a JWE valid for N minutes. KEK wrapped with a session-scoped non-extractable WebCrypto key. Closing the tab destroys the session.
-- **OAuth/OIDC bridge (`@noy-db/auth-oidc`).** Federated login → server returns a wrapped DEK fragment → combined client-side with a device secret to reconstruct the KEK. Server never sees plaintext or the unwrapped key. Same split-key pattern as Bitwarden's SSO key connector.
-- **Magic-link unlock.** Email a one-time link → derives a *viewer-only* KEK from a server-issued ephemeral secret. Read-only client portals.
-- **Hardware-key keyrings (`@noy-db/auth-webauthn`).** Full WebAuthn unwrap (YubiKey, Touch ID, Face ID, Windows Hello).
-- **Session policies.** `{ idleTimeout: '15m', absoluteTimeout: '8h', requireBiometricForExport: true }`.
+- **Session tokens (#109).** Unlock once with passphrase or biometric, get a `SessionToken` valid for N minutes. DEK map encrypted with a non-extractable, tab-scoped AES-256-GCM session key. Closing the tab destroys the session.
+- **`_sync_credentials` reserved collection (#110).** Encrypted per-adapter OAuth token store. ACL-gated (owner/admin only). Adapters see only ciphertext.
+- **`@noy-db/auth-webauthn` (#111).** Hardware-key keyrings via WebAuthn + PRF extension. Covers YubiKey, Touch ID, Face ID, Windows Hello, passkeys. rawId-HKDF fallback for non-PRF authenticators. `singleDevice` guard rejects cloud-synced credentials.
+- **`@noy-db/auth-oidc` (#112).** OAuth/OIDC bridge with Bitwarden-style split-key connector. Server never sees the full KEK. Built-in `knownProviders` for LINE, Google, Apple.
+- **Magic-link unlock (#113).** Email a one-time link → derives a *viewer-only* KEK via `HKDF-SHA256(serverSecret, SHA256(token), compartmentId)`. Read-only client portals. Single-use at the application layer.
+- **Session policies (#114).** `{ idleTimeoutMs, absoluteTimeoutMs, requireReAuthFor, lockOnBackground }`. `PolicyEnforcer` fires `onRevoke` callback automatically.
+- **Dev-mode persistent unlock (#119).** Stores the unlocked keyring in `sessionStorage`/`localStorage` so hot-reload doesn't kill the session. Unconditional guardrails: throws in production, throws off localhost, requires explicit `acknowledge` string.
 
 ---
 
-## v0.8 — Internationalization & dictionaries
+## v0.8 — Internationalization & dictionaries 🎯 next
 
 **Goal:** Make i18n a first-class schema primitive instead of something every consumer hand-rolls on top of the library. Spawned from discussion #78.
 
@@ -404,8 +407,8 @@ This position is documented here so consumers stop asking. If you arrived at thi
 
 ## Contributing
 
-Open a discussion before opening a PR that touches anything past v0.6 — the further out on the roadmap, the more likely the design will shift. Anything that violates the *Guiding principles* is out of scope, no matter how exciting.
+Open a discussion before opening a PR that touches anything past v0.7 — the further out on the roadmap, the more likely the design will shift. Anything that violates the *Guiding principles* is out of scope, no matter how exciting.
 
 ---
 
-*Roadmap v1.0 — noy-db v0.5.0*
+*Roadmap last updated: noy-db v0.7.0 — 2026-04-09*

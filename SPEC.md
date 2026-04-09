@@ -937,6 +937,91 @@ await db.enrollBiometric()
 await db.removeBiometric()
 ```
 
+### Session tokens (v0.7 #109)
+
+```ts
+import { createSession, resolveSession, revokeSession } from '@noy-db/core'
+
+// After unlocking, create a session (DEK map encrypted under non-extractable session key)
+const { token, expiresAt } = await createSession(keyring, { ttlMs: 15 * 60_000 })
+
+// Restore an in-memory keyring from a serialised session token (e.g. on route change)
+const keyring = await resolveSession(token)    // throws SessionExpiredError if stale
+
+// Explicit revoke (logout)
+revokeSession(token)
+revokeAllSessions()   // log out everywhere in the tab
+```
+
+### Magic-link unlock (v0.7 #113)
+
+```ts
+import { createMagicLinkToken, deriveMagicLinkKEK, isMagicLinkValid } from '@noy-db/core'
+
+// Server: generate a one-time link token
+const linkToken = createMagicLinkToken(compartmentId, { ttlMs: 24 * 60 * 60_000 })
+
+// Server + Client: derive the viewer KEK (deterministic — same key both sides)
+const viewerKEK = await deriveMagicLinkKEK(serverSecret, linkToken.token, compartmentId)
+
+// Validate expiry before granting access
+if (!isMagicLinkValid(linkToken)) throw new Error('Link expired')
+```
+
+### Sync credentials (v0.7 #110)
+
+```ts
+import { putCredential, getCredential, deleteCredential, listCredentials } from '@noy-db/core'
+
+// Store / overwrite an OAuth token for an adapter
+await putCredential(adapter, compartment, keyring, {
+  adapterId: 'google-drive',
+  tokenType: 'Bearer',
+  accessToken: '...',
+  refreshToken: '...',
+  expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+})
+
+// Load token (owner/admin only)
+const cred = await getCredential(adapter, compartment, keyring, 'google-drive')
+
+// Check whether the stored token is still valid
+const { exists, expired } = await credentialStatus(adapter, compartment, keyring, 'google-drive')
+```
+
+### Session policies (v0.7 #114)
+
+```ts
+const db = await createNoydb({
+  adapter: ...,
+  user: 'alice',
+  secret: '...',
+  sessionPolicy: {
+    idleTimeoutMs: 15 * 60_000,          // revoke after 15 min idle
+    absoluteTimeoutMs: 8 * 60 * 60_000, // revoke after 8 h regardless
+    requireReAuthFor: ['export', 'grant', 'revoke', 'rotate', 'changeSecret'],
+    lockOnBackground: true,              // revoke when tab goes to background
+    onRevoke: () => router.push('/login'),
+  },
+})
+```
+
+### Dev-mode persistent unlock (v0.7 #119)
+
+```ts
+import { enableDevUnlock, loadDevUnlock, clearDevUnlock } from '@noy-db/core'
+
+// One-time setup (dev only — throws in production and off localhost)
+await enableDevUnlock(keyring, {
+  acknowledge: 'I-UNDERSTAND-THIS-DISABLES-UNLOCK-SECURITY',
+  persistAcrossTabs: false,  // true → localStorage; false (default) → sessionStorage
+})
+
+// On every page load — returns null in production / off localhost
+const stored = loadDevUnlock()
+if (stored) { /* skip passphrase prompt, use stored keyring */ }
+```
+
 ### Events
 
 ```ts
@@ -1143,19 +1228,26 @@ const result = await loadBundle(`./bundles/${handle}.noydb`)
 ```
 noydb/
 ├── packages/
-│   ├── core/                          # @noydb/core — npm main package
+│   ├── core/                          # @noy-db/core — npm main package
 │   │   ├── src/
-│   │   │   ├── index.ts               # createNoydb() entry point
-│   │   │   ├── noydb.ts               # Noydb class
+│   │   │   ├── index.ts               # barrel — all public exports
+│   │   │   ├── noydb.ts               # Noydb class + PolicyEnforcer wiring
 │   │   │   ├── compartment.ts         # Compartment class
 │   │   │   ├── collection.ts          # Collection<T> class
-│   │   │   ├── crypto.ts              # encrypt, decrypt, deriveKey (Web Crypto)
+│   │   │   ├── crypto.ts              # encrypt, decrypt, deriveKey, bufferToBase64, base64ToBuffer
 │   │   │   ├── keyring.ts             # Keyring management (load, grant, revoke, rotate)
-│   │   │   ├── sync.ts               # SyncEngine (dirty tracking, push, pull)
+│   │   │   ├── session.ts             # Session tokens — createSession, resolveSession (v0.7 #109)
+│   │   │   ├── session-policy.ts      # PolicyEnforcer — idle/abs timeouts, reauth, lockOnBg (v0.7 #114)
+│   │   │   ├── sync-credentials.ts    # _sync_credentials reserved collection (v0.7 #110)
+│   │   │   ├── magic-link.ts          # Magic-link viewer unlock via HKDF (v0.7 #113)
+│   │   │   ├── dev-unlock.ts          # Dev-mode sessionStorage/localStorage unlock (v0.7 #119)
+│   │   │   ├── sync.ts                # SyncEngine (dirty tracking, push, pull)
 │   │   │   ├── events.ts              # Event emitter
-│   │   │   ├── biometric.ts           # WebAuthn enrollment and unlock
+│   │   │   ├── biometric.ts           # Platform biometric enrollment/unlock
 │   │   │   ├── errors.ts              # NoydbError subtypes
 │   │   │   └── types.ts               # All TypeScript interfaces
+│   │   │
+│   │   └── __tests__/                 # 649 tests (Vitest)
 │   │   ├── tests/
 │   │   │   ├── crypto.test.ts
 │   │   │   ├── collection.test.ts
@@ -1194,7 +1286,19 @@ noydb/
 │   │   ├── tests/
 │   │   └── package.json
 │   │
-│   └── vue/                           # @noydb/vue
+│   ├── auth-webauthn/                 # @noy-db/auth-webauthn (v0.7 #111)
+│   │   ├── src/
+│   │   │   └── index.ts              # enrollWebAuthn, unlockWebAuthn (PRF + rawId-HKDF)
+│   │   ├── __tests__/                # 18 tests (happy-dom + navigator.credentials stub)
+│   │   └── package.json              # peerDep: @noy-db/core workspace:*
+│   │
+│   ├── auth-oidc/                     # @noy-db/auth-oidc (v0.7 #112)
+│   │   ├── src/
+│   │   │   └── index.ts              # enrollOidc, unlockOidc, knownProviders
+│   │   ├── __tests__/                # 21 tests (happy-dom + fetch mock)
+│   │   └── package.json              # peerDep: @noy-db/core workspace:*
+│   │
+│   └── vue/                           # @noy-db/vue
 │       ├── src/
 │       │   ├── index.ts
 │       │   ├── plugin.ts             # Nuxt plugin / Vue plugin
@@ -1202,14 +1306,18 @@ noydb/
 │       │   ├── useCollection.ts      # Composable: reactive collection
 │       │   └── useSync.ts            # Composable: sync status and controls
 │       ├── tests/
-│       └── package.json              # peerDep: vue, @noydb/core
+│       └── package.json              # peerDep: vue, @noy-db/core workspace:*
 │
+├── scripts/
+│   └── release.mjs                    # Version normalizer — always use pnpm release:version
 ├── package.json                       # Monorepo root (workspaces)
 ├── turbo.json                         # Build orchestration
 ├── tsconfig.json                      # Shared TypeScript config
-├── vitest.config.ts                   # Test runner
 ├── LICENSE                            # MIT
 ├── README.md
+├── SPEC.md                            # This file — source of truth
+├── ROADMAP.md                         # Version timeline
+├── HANDOVER.md                        # Session-to-session state (read first)
 ├── SECURITY.md                        # Security model documentation
 └── CLAUDE.md                          # Claude Code instructions
 ```
@@ -1371,6 +1479,16 @@ class AdapterCapabilityError extends NoydbError {
 class PrivilegeEscalationError extends NoydbError {
   code = 'PRIVILEGE_ESCALATION'
   offendingCollection: string
+}
+
+// Session errors (v0.7 #109)
+class SessionExpiredError extends NoydbError { code = 'SESSION_EXPIRED' }
+class SessionNotFoundError extends NoydbError { code = 'SESSION_NOT_FOUND' }
+
+// Session policy errors (v0.7 #114)
+class SessionPolicyError extends NoydbError {
+  code = 'SESSION_POLICY'
+  operation: string
 }
 ```
 
