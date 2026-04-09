@@ -12,6 +12,7 @@ import type {
   ListAccessibleCompartmentsOptions,
   QueryAcrossOptions,
   QueryAcrossResult,
+  ReAuthOperation,
 } from './types.js'
 import { ValidationError, NoAccessError, InvalidKeyError, AdapterCapabilityError } from './errors.js'
 import { Compartment } from './compartment.js'
@@ -28,7 +29,8 @@ import {
 import type { UnlockedKeyring } from './keyring.js'
 import { SyncEngine } from './sync.js'
 import { revokeAllSessions } from './session.js'
-import { PolicyEnforcer, createEnforcer, validateSessionPolicy } from './session-policy.js'
+import { createEnforcer, validateSessionPolicy } from './session-policy.js'
+import type { PolicyEnforcer } from './session-policy.js'
 
 /**
  * Privilege rank used by `listAccessibleCompartments({ minRole })` to
@@ -131,7 +133,7 @@ export class Noydb {
    * Check that a policy-guarded operation is permitted.
    * Throws `SessionPolicyError` if re-auth is required.
    */
-  private checkPolicyOperation(compartment: string, op: import('./types.js').ReAuthOperation): void {
+  private checkPolicyOperation(compartment: string, op: ReAuthOperation): void {
     this.policyEnforcers.get(compartment)?.checkOperation(op)
   }
 

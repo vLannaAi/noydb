@@ -54,7 +54,6 @@
  */
 
 import { generateULID } from './bundle/ulid.js'
-import { base64ToBuffer, bufferToBase64 } from './crypto.js'
 import type { Role } from './types.js'
 import type { UnlockedKeyring } from './keyring.js'
 
