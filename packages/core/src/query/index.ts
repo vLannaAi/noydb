@@ -19,6 +19,8 @@ export { CollectionIndexes } from './indexes.js'
 export type { IndexDef, HashIndex } from './indexes.js'
 export { applyJoins, DEFAULT_JOIN_MAX_ROWS, resetJoinWarnings } from './join.js'
 export type { JoinLeg, JoinContext, JoinableSource, JoinStrategy } from './join.js'
+export { buildLiveQuery } from './live.js'
+export type { LiveQuery, LiveUpstream } from './live.js'
 
 // Re-export note: QueryPlan, Clause, FilterClause, GroupClause are intentionally
 // non-parametric — their `T` was removed for variance reasons. The Query<T> type

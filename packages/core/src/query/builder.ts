@@ -10,6 +10,8 @@ import { evaluateClause } from './predicate.js'
 import type { CollectionIndexes } from './indexes.js'
 import type { JoinContext, JoinLeg, JoinStrategy } from './join.js'
 import { applyJoins } from './join.js'
+import type { LiveQuery, LiveUpstream } from './live.js'
+import { buildLiveQuery } from './live.js'
 
 export interface OrderBy {
   readonly field: string
@@ -345,11 +347,10 @@ export class Query<T> {
    * Returns an unsubscribe function. The callback receives the latest result.
    * Throws if the source does not support subscriptions.
    *
-   * **v0.6 caveat:** when the plan has joins, subscribe() re-runs on
-   * LEFT-side changes only. Right-side mutations do not trigger a
-   * re-fire — that's #74 (`.join().live()` merged change stream).
-   * For now, joined data can be stale if the right side changes
-   * between emissions.
+   * **For joined queries, prefer `.live()`** (#74) — `subscribe()`
+   * only re-fires on LEFT-side changes, so joined data can be
+   * stale if the right side mutates between emissions. `.live()`
+   * merges change streams from every join target.
    */
   subscribe(cb: (result: T[]) => void): () => void {
     if (!this.source.subscribe) {
@@ -357,6 +358,92 @@ export class Query<T> {
     }
     cb(this.toArray())
     return this.source.subscribe(() => cb(this.toArray()))
+  }
+
+  /**
+   * Reactive terminal — returns a `LiveQuery<T>` that re-runs the
+   * query and updates its `value` whenever any source feeding it
+   * mutates. v0.6 #74.
+   *
+   * For non-joined queries, `.live()` is a convenience over the
+   * existing `.subscribe()` callback shape: a hand-rolled reactive
+   * primitive with `value` / `error` fields and a `subscribe(cb)`
+   * notification channel. Frame-agnostic — Vue / React / Solid
+   * adapters wrap it in their own primitive.
+   *
+   * For joined queries, `.live()` additionally subscribes to every
+   * join target's change stream. Mutations on a right-side
+   * collection (insert / update / delete of a client referenced by
+   * an invoice) re-fire the live query and re-evaluate every
+   * dependent left row. Right-side targets are deduped by
+   * collection name, so a chain that joins the same target twice
+   * (e.g. billing client + shipping client → both 'clients') only
+   * subscribes once.
+   *
+   * **Ref-mode behavior on right-side disappearance** — matches the
+   * eager `.toArray()` contract from #73:
+   *   - `strict`  → re-run throws `DanglingReferenceError`. The
+   *     LiveQuery catches the throw, stores it in `live.error`, and
+   *     notifies listeners (the throw does NOT propagate out of
+   *     the source's change handler — that would tear down the
+   *     emitter). Consumers check `live.error` after each
+   *     notification and render an error state in the UI.
+   *   - `warn`    → joined value flips to `null`; the existing
+   *     warn-channel deduplication keeps repeated re-runs from
+   *     spamming the console.
+   *   - `cascade` → no special handling needed; the v0.4 cascade-
+   *     delete mechanism propagates the right-side delete into the
+   *     left collection on the next tick, and the live query
+   *     naturally re-fires with the orphaned left rows gone.
+   *
+   * Always call `live.stop()` when finished — it tears down every
+   * upstream subscription. The Vue layer's `onUnmounted` hook
+   * should call `stop()` automatically; raw consumers must do it
+   * themselves.
+   *
+   * **v0.6 limitations** (tracked separately):
+   *   - No granular delta updates — the whole query re-runs on
+   *     every change. v2 optimization.
+   *   - No microtask batching — bursty changes produce one re-run
+   *     per change. v2 optimization.
+   *   - No re-planning under live mutations — the planner picks
+   *     once at subscription time and reuses the same plan.
+   *   - Streaming live joins → tracked under #76.
+   */
+  live(): LiveQuery<T> {
+    const upstreams: LiveUpstream[] = []
+
+    // Left-side change stream — every live query subscribes to
+    // its source if the source supports subscriptions.
+    if (this.source.subscribe) {
+      const leftSubscribe = this.source.subscribe.bind(this.source)
+      upstreams.push({
+        subscribe: (cb: () => void) => leftSubscribe(cb),
+      })
+    }
+
+    // Right-side change streams — only for joined queries. Dedup
+    // by target name so a chain joining the same target twice
+    // doesn't double-subscribe and double-fire on every right-side
+    // mutation.
+    if (this.plan.joins.length > 0 && this.joinContext) {
+      const subscribed = new Set<string>()
+      for (const leg of this.plan.joins) {
+        if (subscribed.has(leg.target)) continue
+        subscribed.add(leg.target)
+        const rightSource = this.joinContext.resolveSource(leg.target)
+        if (rightSource?.subscribe) {
+          const rightSubscribe = rightSource.subscribe.bind(rightSource)
+          upstreams.push({
+            subscribe: (cb: () => void) => rightSubscribe(cb),
+          })
+        }
+      }
+    }
+
+    // The recompute is just toArray bound to this query — same
+    // pipeline as eager execution, including join application.
+    return buildLiveQuery<T>(() => this.toArray(), upstreams)
   }
 
   /**

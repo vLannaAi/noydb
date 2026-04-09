@@ -688,12 +688,23 @@ export class Collection<T> {
           `over lazy collections are tracked in #76.`,
       )
     }
-    // Structural source — the join executor only calls snapshot() and
-    // lookupById(). We capture `this.cache` by closure so later
-    // mutations are visible.
+    // Structural source — the join executor calls snapshot() and
+    // lookupById(); the live-join executor (#74) additionally calls
+    // subscribe() so right-side mutations propagate. We capture
+    // `this.cache` and `this.emitter` by closure so later mutations
+    // are visible to the snapshot view AND drive live re-fires.
     return {
       snapshot: () => [...this.cache.values()].map(e => e.record),
       lookupById: (id: string) => this.cache.get(id)?.record,
+      subscribe: (cb: () => void) => {
+        const handler = (event: ChangeEvent): void => {
+          if (event.compartment === this.compartment && event.collection === this.name) {
+            cb()
+          }
+        }
+        this.emitter.on('change', handler)
+        return () => this.emitter.off('change', handler)
+      },
     }
   }
 
