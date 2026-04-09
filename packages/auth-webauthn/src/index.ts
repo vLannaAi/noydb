@@ -56,7 +56,7 @@
 
 import { bufferToBase64, base64ToBuffer } from '@noy-db/core'
 import { ValidationError } from '@noy-db/core'
-import type { UnlockedKeyring } from '@noy-db/core'
+import type { UnlockedKeyring, Role } from '@noy-db/core'
 
 // Re-export from core for convenience
 export { ValidationError } from '@noy-db/core'
@@ -320,7 +320,7 @@ async function unwrapKeyringSummary(
   const parsed = JSON.parse(new TextDecoder().decode(plaintext)) as {
     userId: string
     displayName: string
-    role: import('@noy-db/core').Role
+    role: Role
     permissions: Record<string, 'rw' | 'ro'>
     deks: Record<string, string>
     salt: string
@@ -435,8 +435,8 @@ export async function enrollWebAuthn(
   const prfOutput = extensions.prf?.results?.first
   const prfUsed = !!prfOutput
 
-  const wrappingKey = prfUsed
-    ? await deriveKeyFromPRF(prfOutput!)
+  const wrappingKey = prfOutput
+    ? await deriveKeyFromPRF(prfOutput)
     : await deriveKeyFromRawId(credential.rawId)
 
   const { wrappedPayload, wrapIv } = await wrapKeyringSummary(keyring, wrappingKey)
