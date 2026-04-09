@@ -3,7 +3,7 @@
 
 # Top-level governance and metadata
 /ROADMAP.md                    @vLannaAi
-/NOYDB_SPEC.md                 @vLannaAi
+/SPEC.md                       @vLannaAi
 /CLAUDE.md                     @vLannaAi
 /SECURITY.md                   @vLannaAi
 /.github/                      @vLannaAi

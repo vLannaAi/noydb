@@ -1,6 +1,6 @@
 # Roadmap
 
-> **Current:** v0.5.0 on npm — all 10 `@noy-db/*` packages unified on a single version line. Zero-knowledge encryption, multi-user ACL, hash-chained audit ledger, verifiable backups, reactive query DSL, sync, Vue/Nuxt/Pinia integration, scaffolder + CLI. **Next:** v0.6 — Query DSL completion.
+> **Current:** v0.6.0 on npm — all 10 `@noy-db/*` packages unified on a single version line. Everything from v0.5 plus the completed query DSL (joins, aggregations, streaming scan) and the `.noydb` container format. **Next:** v0.7 — Identity & sessions.
 >
 > Related docs:
 > - [Architecture](./docs/architecture.md) — data flow, key hierarchy, threat model
@@ -8,13 +8,15 @@
 > - [Getting started](./docs/getting-started.md) — install and first app
 > - [Adapters](./docs/adapters.md) — built-in and custom adapters
 > - [End-user features](./docs/end-user-features.md) — what consumers get
-> - [Spec](./NOYDB_SPEC.md) — invariants (do not violate)
+> - [Spec](./SPEC.md) — invariants (do not violate)
+> - [v0.6 release notes](./docs/v0.6/release-notes-draft.md) — full v0.6 changelog
+> - [v0.6 release retrospective](./docs/v0.6/retrospective.md) — lessons from the v0.6 release window
 
 ---
 
 ## Status
 
-v0.5.0 is on npm. All 10 `@noy-db/*` packages are on the **0.5.0** version line — `core`, `pinia`, `memory`, `file`, `dynamo`, `s3`, `browser`, `vue`, `nuxt`, `create`. **720 tests** passing across the monorepo (403 in `@noy-db/core` alone). The initial release ships the full zero-knowledge stack: AES-256-GCM encryption with per-collection DEKs wrapped by a per-user KEK, five-role ACL with bounded admin lateral delegation, a hash-chained audit ledger with RFC 6902 delta history, foreign-key references via `ref()`, Standard Schema v1 validation end-to-end, verifiable backups, ACL-scoped plaintext export via `exportStream()`/`exportJSON()`, cross-compartment role-scoped queries, a reactive query DSL with secondary indexes and lazy-LRU hydration, sync with optimistic concurrency and pluggable conflict strategies, Vue 3 composables, Pinia integration via `defineNoydbStore()`, a Nuxt 4 module with DevTools bridge, and a scaffolder CLI (`@noy-db/create`) that speaks English and Thai and can both create fresh Nuxt 4 projects and patch existing ones in place. **Next:** v0.6 turns to query DSL completion — joins (eager, live, multi-FK chaining) and aggregations v1.
+v0.6.0 is on npm. All 10 `@noy-db/*` packages are on the **0.6.0** version line — `core`, `pinia`, `memory`, `file`, `dynamo`, `s3`, `browser`, `vue`, `nuxt`, `create`. **558 tests** passing in `@noy-db/core` (plus the file adapter's own suites). Everything from the v0.5 initial release — zero-knowledge AES-256-GCM encryption with per-collection DEKs wrapped by a per-user KEK, five-role ACL with bounded admin lateral delegation, hash-chained audit ledger with RFC 6902 delta history, foreign-key references via `ref()`, Standard Schema v1 validation end-to-end, verifiable backups, ACL-scoped plaintext export, cross-compartment role-scoped queries, reactive query DSL with secondary indexes and lazy-LRU hydration, sync with optimistic concurrency, Vue/Nuxt/Pinia integration, scaffolder CLI — plus the v0.6 query-DSL completion work: eager and streaming joins with three ref modes and two planner strategies, `Query.live()` as a frame-agnostic reactive primitive with merged join change-streams, aggregation reducers (`count`/`sum`/`avg`/`min`/`max`) with `.aggregate()` and `.live()` terminals, `.groupBy(field)` with 10k/100k cardinality caps, `scan().aggregate()` for O(reducers)-memory streaming aggregation, `scan().join()` for streaming joins that bypass the eager 50k-row ceiling, and the `.noydb` binary container format with opaque ULID handles, brotli/gzip compression, and a minimum-disclosure header ready for cloud-storage drops. Partition-awareness seams (#87) are plumbed through joins, reducers, and streaming paths but dormant until v0.10. **Next:** v0.7 turns to identity & sessions — JWE session tokens, OIDC bridge, magic links, hardware-key keyrings.
 
 ---
 
@@ -23,8 +25,8 @@ v0.5.0 is on npm. All 10 `@noy-db/*` packages are on the **0.5.0** version line 
 | Version | Status      | Theme                              | Highlights                                                                |
 |--------:|-------------|------------------------------------|---------------------------------------------------------------------------|
 | 0.5     | ✅ shipped  | Initial release                    | Zero-knowledge encryption, multi-user ACL, ledger, verifiable backups, query DSL, sync, Vue/Nuxt/Pinia, scaffolder + CLI |
-| **0.6** | 🚧 **next** | **Query DSL completion + `.noydb` container** | Joins (eager + live + multi-FK chaining + streaming), aggregations v1 (built-in reducers + groupBy + scan), `.noydb` container format |
-| 0.7     | 📋 planned  | Identity & sessions                | Session tokens, OIDC bridge, magic links, hardware-key keyrings           |
+| 0.6     | ✅ shipped  | Query DSL completion + `.noydb` container | Joins (eager + multi-FK chain + live + streaming), aggregations v1 (reducers + `.aggregate()` + `.groupBy()` + `scan().aggregate()`), `.noydb` container format |
+| **0.7** | 🚧 **next** | **Identity & sessions**            | Session tokens, OIDC bridge, magic links, hardware-key keyrings           |
 | 0.8     | 📋 planned  | i18n & localization                | `dictKey` + `i18nText` schema primitives, `plaintextTranslator` hook, per-locale read resolution, dictionary admin operations, export integration |
 | 0.9     | 📋 planned  | Sync v2                            | CRDT mode, pluggable conflict policies, presence, partial sync            |
 | 0.10    | 📋 planned  | Developer experience               | `noydb` CLI, devtools panel, schema codegen, importers                    |
@@ -41,10 +43,10 @@ gantt
     axisFormat %Y-%m
     section Shipped
     v0.5 initial release             :done,    v05, 2026-04, 1d
+    v0.6 query DSL completion        :done,    v06, 2026-04, 1d
     section Next
-    v0.6 query DSL completion        :active,  v06, after v05, 30d
+    v0.7 identity & sessions         :active,  v07, after v06, 45d
     section Planned
-    v0.7 identity & sessions         :         v07, after v06, 45d
     v0.8 i18n & localization         :         v08, after v07, 45d
     v0.9 sync v2                     :         v09, after v08, 60d
     v0.10 developer experience       :         v010, after v09, 45d
@@ -68,9 +70,11 @@ Every future release respects these:
 
 ---
 
-## v0.6 — Query DSL completion + `.noydb` container
+## v0.6 — Query DSL completion + `.noydb` container ✅ shipped
 
-**Goal:** Finish the query DSL story so consumers can express joins and aggregations directly in `.query()` instead of folding in userland. Both features extend the same `.query()` builder; they should land in the same release so the docs cover them together. The release also picks up the `.noydb` container format (spawned from discussion #92) — it's standalone from the query work, small enough to fit the milestone, and it unblocks the v0.10 reader (#102) and the v0.11 bundle adapters (#103, #104).
+**Status:** Released 2026-04-09. See [release notes draft](./docs/v0.6/release-notes-draft.md) for the full changelog and [retrospective](./docs/v0.6/retrospective.md) for lessons learned during the release window.
+
+**Goal (achieved):** Finish the query DSL story so consumers can express joins and aggregations directly in `.query()` / `.scan()` instead of folding in userland. Both features extend the same builder chain; they landed in the same release so the docs cover them together. The release also picked up the `.noydb` container format (spawned from discussion #92) — standalone from the query work, small enough to fit the milestone, and it unblocks the v0.10 reader (#102) and the v0.11 bundle adapters (#103, #104).
 
 ### Joins (spawned from discussion #64)
 
@@ -195,7 +199,7 @@ const LineItem = z.object({
 
 The hook is named **`plaintextTranslator`** (not `translator`) deliberately — the same naming logic as `@noy-db/decrypt-*` packages. The word "plaintext" in the config key forces the consumer to acknowledge the boundary they're crossing every time they read or write the config.
 
-**The full invariant statement** for what zero-knowledge does and does not promise lives in [`NOYDB_SPEC.md` §Design Principles → Zero-Knowledge Storage](./NOYDB_SPEC.md#2-zero-knowledge-storage). Key points:
+**The full invariant statement** for what zero-knowledge does and does not promise lives in [`SPEC.md` §Design Principles → Zero-Knowledge Storage](./SPEC.md#2-zero-knowledge-storage). Key points:
 
 - NOYDB ships **no built-in translator** and ships **no translator SDKs as dependencies** — the policy is that PRs adding either are rejected
 - Per-field opt-in at schema-construction time, never at runtime

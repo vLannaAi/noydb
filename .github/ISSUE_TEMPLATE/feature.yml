@@ -43,7 +43,7 @@ body:
     id: invariants
     attributes:
       label: Invariant compliance
-      description: Confirm this proposal does not violate NOYDB's core invariants (see [NOYDB_SPEC.md](https://github.com/vLannaAi/noy-db/blob/main/NOYDB_SPEC.md)).
+      description: Confirm this proposal does not violate NOYDB's core invariants (see [SPEC.md](https://github.com/vLannaAi/noy-db/blob/main/SPEC.md)).
       options:
         - label: Adapters never see plaintext (zero-knowledge preserved)
           required: true

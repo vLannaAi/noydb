@@ -2,7 +2,7 @@
 
 How NOYDB stores, encrypts, and protects your data.
 
-> Related: [Roadmap](../ROADMAP.md) · [Deployment profiles](./deployment-profiles.md) · [Spec](../NOYDB_SPEC.md)
+> Related: [Roadmap](../ROADMAP.md) · [Deployment profiles](./deployment-profiles.md) · [Spec](../SPEC.md)
 
 ---
 

@@ -147,7 +147,7 @@ CSV, XML, xlsx, etc. live in dedicated `@noy-db/decrypt-*` packages (v0.6+). Eac
 ## Documentation
 
 - Full docs: https://github.com/vLannaAi/noy-db#readme
-- Spec: https://github.com/vLannaAi/noy-db/blob/main/NOYDB_SPEC.md
+- Spec: https://github.com/vLannaAi/noy-db/blob/main/SPEC.md
 - AI reference: https://github.com/vLannaAi/noy-db/blob/main/docs/noydb-for-ai.md
 
 ## License

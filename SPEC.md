@@ -766,6 +766,92 @@ const large = invoices.query(i => i.amount > 10000)
 const count: number = await invoices.count()
 ```
 
+### Query DSL — builder chain (v0.3+)
+
+The reactive, chainable builder is the preferred surface for anything
+beyond a trivial `query(fn)`. Terminal methods are `.toArray()`,
+`.first()`, `.count()`, `.subscribe(cb)`, `.live()`, `.aggregate(spec)`,
+and `.groupBy(field)`.
+
+```ts
+// Filter + order + limit
+const opens = invoices.query()
+  .where('status', '==', 'open')
+  .orderBy('amount', 'desc')
+  .limit(10)
+  .toArray()
+
+// v0.6 #73 — eager single-FK join via ref() declaration
+const withClients = invoices.query()
+  .join<'client', Client>('clientId', { as: 'client' })
+  .toArray()
+// Two planner strategies (auto-selected):
+//   - nested-loop via source.lookupById() — O(1) per left row
+//   - hash join from source.snapshot() — O(N) once, O(1) per row
+// Hard row ceiling 50,000 per side (JoinTooLargeError), override
+// via { maxRows }. Warn at 80% on the existing warn channel.
+
+// v0.6 #75 — multi-FK chaining; each leg picks its own strategy + ref mode
+invoices.query()
+  .join<'client', Client>('clientId', { as: 'client' })
+  .join<'category', Category>('categoryId', { as: 'category' })
+  .toArray()
+
+// v0.6 #74 — reactive primitive with merged change streams
+const live = invoices.query()
+  .where('status', '==', 'open')
+  .join<'client', Client>('clientId', { as: 'client' })
+  .live()
+live.subscribe(() => render(live.value))
+// Later:
+live.stop()
+// LiveQuery<T>: { value, error, subscribe(cb), stop() }
+// Re-run errors stored in live.error (previous value preserved).
+
+// v0.6 #97 — aggregation reducers
+import { count, sum, avg, min, max } from '@noy-db/core'
+const { total, n, mean } = invoices.query()
+  .where('status', '==', 'open')
+  .aggregate({ total: sum('amount'), n: count(), mean: avg('amount') })
+  .run()
+// .aggregate() returns an Aggregation<R> wrapper with .run() / .live()
+
+// v0.6 #98 — groupBy with cardinality caps
+const byClient = invoices.query()
+  .groupBy('clientId')
+  .aggregate({ total: sum('amount'), n: count() })
+  .run()
+// → [{ clientId: 'c1', total: 5250, n: 3 }, ...]
+// Warns at 10,000 groups; throws GroupCardinalityError at 100,000.
+
+// v0.6 #99 — streaming aggregation over scan()
+// Memory: O(reducers), not O(records)
+const { total } = await invoices.scan({ pageSize: 1000 })
+  .where('year', '==', 2025)
+  .aggregate({ total: sum('amount'), n: count() })
+
+// v0.6 #76 — streaming joins over scan()
+for await (const inv of invoices.scan()
+  .join<'client', Client>('clientId', { as: 'client' })
+) {
+  await processInvoice(inv) // inv.client is attached
+}
+```
+
+**Ref-mode semantics on dangling refs** (same for `.query().join()` and `.scan().join()`):
+
+| Mode | Behavior |
+|---|---|
+| `strict` | Throws `DanglingReferenceError` with field/target/refId context |
+| `warn` | Attaches `null` + one-shot warning per unique dangling pair, deduped across the iteration |
+| `cascade` | Attaches `null` silently; cascade is a delete-time mode so dangling refs at read time are mid-flight or pre-existing orphans |
+
+Left records with `null`/`undefined` FK values always attach `null` regardless of mode — matches the write-time `enforceRefsOnPut` policy.
+
+**Reducer protocol:** `{ init(seed?), step(state, record), remove?(state, record), finalize(state) }` with separate internal state `S` and result type `R`. The `seed` parameter is plumbed through every factory (load-bearing for #87 partition-awareness seam, unused by the v0.6 executor). The optional `remove()` hook is the seam for future O(1) incremental live-aggregation maintenance.
+
+**`Collection.scan()` return type** narrowed from `AsyncIterableIterator<T>` to `ScanBuilder<T>` in v0.6. Backward-compatible for every `for await (const rec of collection.scan())` call because `ScanBuilder` implements `[Symbol.asyncIterator]`. Direct `.next()` / `.return()` / `.throw()` calls on the iterator are no longer supported — not idiomatic, zero call sites in the repo or any first-party consumer.
+
 ### Sync Operations
 
 ```ts
@@ -966,6 +1052,90 @@ The backup is encrypted — each record's `_data` is ciphertext. Only users whos
 }
 ```
 
+### `.noydb` Container Format (v0.6 #100)
+
+Binary container wrapping `compartment.dump()` with a minimum-disclosure
+header for safe drops into cloud storage (Drive, Dropbox, iCloud). The
+dump's plaintext JSON still contains `_compartment`, `_exported_by`,
+`_exported_at` — so the wrap's purpose is to hide that metadata from the
+cloud provider's indexing API, not from someone who has already
+downloaded the bytes.
+
+**Byte layout** (offsets from start of file):
+
+```
++--------+--------+--------+--------+
+|  N=78  |  D=68  |  B=66  |  1=49  |  Magic 'NDB1' (4 bytes)
++--------+--------+--------+--------+
+| flags  | compr  |  header_length (uint32 BE)            |
++--------+--------+--------+--------+--------+--------+--------+
+| header_length bytes of UTF-8 JSON header                       ...
++--------+--------+
+| compressed body bytes                                            ...
+```
+
+- **Magic bytes (offset 0-3):** ASCII `NDB1` — `0x4e 0x44 0x42 0x31`. File-type check.
+- **Flags (offset 4):** bit 0 = body is compressed, bit 1 = header carries integrity hash, bits 2-7 reserved (must be 0 in v0.6)
+- **Compression algorithm (offset 5):** `0` none, `1` gzip, `2` brotli
+- **Header length (offset 6-9):** uint32 big-endian length of the JSON header that follows
+- **Header (offset 10 to 10+headerLength):** UTF-8 encoded JSON, validated against a closed allowlist
+- **Body (remainder):** compressed dump bytes
+
+**Header JSON (minimum-disclosure schema):**
+
+```json
+{
+  "formatVersion": 1,
+  "handle": "01HYABCDEFGHJKMNPQRSTVWXYZ",
+  "bodyBytes": 41234567,
+  "bodySha256": "abc123..."
+}
+```
+
+**Only these four keys are allowed.** The validator rejects every other key by name, including (explicitly forbidden): `compartment`, `_compartment`, `exporter`, `_exported_by`, `timestamp`, `_exported_at`, `kdfParams`, salt fields, and anything starting with underscore. Forward-compat extension keys require a format version bump and a new validator.
+
+| Field | Type | Description |
+|---|---|---|
+| `formatVersion` | number | Bundle format version; must be `1` in v0.6 |
+| `handle` | string | 26-character Crockford base32 ULID, stable across re-exports of the same compartment |
+| `bodyBytes` | number | Compressed body length. Lets readers verify completeness without decompressing |
+| `bodySha256` | string | Lowercase 64-char hex SHA-256 of the **compressed** body bytes |
+
+**Handle persistence:** `compartment.getBundleHandle()` reads from a reserved `_meta/handle` envelope (same bypass path as `_keyring` — `_data` is plain JSON, `_iv` is empty). Different compartments on the same adapter get different handles; the same compartment always returns the same handle across `getBundleHandle()` calls, across `writeNoydbBundle()` calls, and across fresh `createNoydb()` instances over the same adapter.
+
+**Compression:**
+- Brotli when `new CompressionStream('br')` is supported (Node 22+, Chrome 124+, Firefox 122+) — typically 30-50% smaller than gzip on JSON payloads
+- Gzip fallback (universally available in Node 18+)
+- The writer feature-detects brotli at runtime and falls back silently when `{ compression: 'auto' }` (the default) is passed
+- Explicit `{ compression: 'brotli' }` throws on unsupported runtimes
+- `{ compression: 'none' }` exists for round-trip testing only
+
+**Integrity verification:** `bodyBytes` and `bodySha256` describe the **compressed** body (not the decompressed dump), so `readNoydbBundleHeader()` can verify integrity without decompressing — useful for fast cloud-side validation. A length mismatch fires before the SHA check (cheaper, more actionable error). Both surface as `BundleIntegrityError`, distinct from format errors (missing magic, malformed header) so consumers can pattern-match the corruption case.
+
+**Primitives:**
+
+```ts
+// Core
+import {
+  writeNoydbBundle,
+  readNoydbBundle,
+  readNoydbBundleHeader,
+} from '@noy-db/core'
+
+const bytes = await writeNoydbBundle(compartment, { compression: 'auto' })
+const header = readNoydbBundleHeader(bytes) // no decompression
+const { header, dumpJson } = await readNoydbBundle(bytes) // full read + verify
+
+// File adapter helpers
+import { saveBundle, loadBundle } from '@noy-db/file'
+
+const handle = await compartment.getBundleHandle()
+await saveBundle(`./bundles/${handle}.noydb`, compartment)
+const result = await loadBundle(`./bundles/${handle}.noydb`)
+```
+
+**Why split read from load:** `readNoydbBundle()` returns the unwrapped dump JSON string, NOT a restored Compartment. Restoring requires a separate `compartment.load(dumpJson, passphrase)` call. The split keeps the bundle module purely a format layer with zero crypto concerns, and lets the same code feed format inspectors that never decrypt anything.
+
 ---
 
 ## Package Structure
@@ -1157,6 +1327,51 @@ class NetworkError extends NoydbError { code = 'NETWORK_ERROR' }
 // Data errors
 class NotFoundError extends NoydbError { code = 'NOT_FOUND' }
 class ValidationError extends NoydbError { code = 'VALIDATION_ERROR' }
+class SchemaValidationError extends NoydbError { code = 'SCHEMA_VALIDATION_FAILED'; issues: readonly unknown[]; direction: 'input' | 'output' }
+
+// Backup errors (v0.4)
+class BackupLedgerError extends NoydbError { code = 'BACKUP_LEDGER'; divergedAt?: number }
+class BackupCorruptedError extends NoydbError { code = 'BACKUP_CORRUPTED'; collection: string; id: string }
+
+// Query DSL errors (v0.6 #73, #76)
+class JoinTooLargeError extends NoydbError {
+  code = 'JOIN_TOO_LARGE'
+  leftRows: number
+  rightRows: number
+  maxRows: number
+  side: 'left' | 'right'
+}
+class DanglingReferenceError extends NoydbError {
+  code = 'DANGLING_REFERENCE'
+  field: string
+  target: string
+  refId: string
+}
+
+// Aggregation errors (v0.6 #98)
+class GroupCardinalityError extends NoydbError {
+  code = 'GROUP_CARDINALITY'
+  field: string
+  cardinality: number
+  maxGroups: number
+}
+
+// Bundle format errors (v0.6 #100)
+class BundleIntegrityError extends NoydbError {
+  code = 'BUNDLE_INTEGRITY'
+}
+
+// Adapter capability errors (v0.5 #63)
+class AdapterCapabilityError extends NoydbError {
+  code = 'ADAPTER_CAPABILITY'
+  capability: string
+}
+
+// Access-control escalation guard (v0.5 #62)
+class PrivilegeEscalationError extends NoydbError {
+  code = 'PRIVILEGE_ESCALATION'
+  offendingCollection: string
+}
 ```
 
 ---

@@ -6,9 +6,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 NOYDB ("None Of Your Damn Business") is a zero-knowledge, offline-first, encrypted document store with pluggable backends and multi-user access control. It is a TypeScript monorepo targeting Node.js 18+ and modern browsers.
 
-The primary spec is `NOYDB_SPEC.md` — read it before any non-trivial work. It is the source of truth for all design decisions.
+The primary spec is `SPEC.md` — read it before any non-trivial work. It is the source of truth for all design decisions. Complementary docs:
+- `ROADMAP.md` — version timeline, current milestone, deferred work
+- `HANDOVER.md` — session-to-session handover notes (recent state, what's in flight)
+- `docs/architecture.md` — reader-facing data flow and threat model
+- `docs/v0.6/` — v0.6 release notes draft, merge runbook, retrospective
 
-**Status:** v0.5.0 on npm. Core, all adapters (memory, file, dynamo, s3, browser), sync engine, Vue composables, biometric auth, session management, scaffolder + CLI.
+**Status:** v0.6.0 on npm (2026-04-09). All 10 `@noy-db/*` packages on the 0.6.0 version line. Full v0.5 surface (core, all adapters, sync, Vue/Nuxt/Pinia, scaffolder + CLI) **plus** the v0.6 query DSL completion (joins, aggregations, streaming scan) and the `.noydb` container format. 558/558 core tests passing.
 
 ## Architecture
 
@@ -84,6 +88,45 @@ All adapters implement exactly 6 async methods:
 | operator | Explicit collections: rw | No | ACL-scoped |
 | viewer | `*: ro` | No | Yes |
 | client | Explicit collections: ro | No | ACL-scoped |
+
+## Query DSL (v0.3 core + v0.6 completion)
+
+The chainable builder is the preferred surface — terminals are `.toArray()`, `.first()`, `.count()`, `.subscribe(cb)`, `.live()`, `.aggregate(spec)`, `.groupBy(field)`.
+
+```ts
+// Eager join (#73) — indexed nested-loop or hash strategy
+invoices.query().join<'client', Client>('clientId', { as: 'client' }).toArray()
+
+// Multi-FK chaining (#75)
+.join('clientId', { as: 'client' }).join('categoryId', { as: 'category' })
+
+// Reactive (#74) — merged change-streams across every join target
+const live = invoices.query().join(...).live()
+live.subscribe(() => render(live.value)); live.stop()
+
+// Aggregations (#97, #98)
+import { count, sum, avg, min, max } from '@noy-db/core'
+invoices.query().where(...).aggregate({ total: sum('amount'), n: count() }).run()
+invoices.query().groupBy('clientId').aggregate({ total: sum('amount') }).run()
+
+// Streaming (#76, #99) — Collection.scan() returns ScanBuilder<T>
+for await (const r of invoices.scan()) { ... }  // backward-compat
+await invoices.scan().join('clientId', { as: 'client' }).aggregate({ n: count() })
+```
+
+**Row ceilings:** joins throw `JoinTooLargeError` at 50k per side (override via `{ maxRows }`); groupBy warns at 10k groups and throws `GroupCardinalityError` at 100k. `scan().aggregate()` has O(reducers) memory, no ceiling.
+
+**Ref-mode dispatch** on dangling refs (`strict` throws, `warn` attaches null + one-shot warn, `cascade` attaches null silently) is identical for eager and streaming joins.
+
+**#87 partition-awareness seams** are plumbed but dormant: every `JoinLeg` carries `partitionScope: 'all'` and every reducer factory accepts a `{ seed }` parameter. Do not remove either — they're load-bearing for v0.10 partition-aware execution and will silently break the future work if dropped. Tests in `query-aggregate.test.ts` and `query-join.test.ts` pin the no-op behavior.
+
+## `.noydb` Container Format (v0.6 #100)
+
+Binary wrapper around `compartment.dump()` for safe cloud storage drops. `writeNoydbBundle(compartment)` / `readNoydbBundle(bytes)` / `readNoydbBundleHeader(bytes)` primitives in core; `saveBundle(path, compartment)` / `loadBundle(path)` helpers in `@noy-db/file`. 10-byte fixed prefix (`NDB1` magic + flags + compression + header length uint32 BE) then JSON header (minimum disclosure: `formatVersion`, `handle`, `bodyBytes`, `bodySha256` — every other key rejected at parse time), then compressed body (brotli with gzip fallback via `CompressionStream` feature detection). ULID handles via `compartment.getBundleHandle()` persist in a reserved `_meta/handle` envelope that bypasses AES-GCM the same way `_keyring` does.
+
+## Peer-dep convention (v0.6+)
+
+All adapter packages use `"@noy-db/core": "workspace:*"` in `peerDependencies` (NOT `"workspace:^"`). This prevents the changeset-cli pre-1.0 dep-propagation heuristic from computing major bumps on dependent packages when `@noy-db/core` bumps minor. The looser constraint is safe because the monorepo ships all packages in lockstep — consumers always install matching versions. Do not revert to `workspace:^` or the next minor release will trip the same changeset bug. See `docs/v0.6/retrospective.md` for the full diagnosis.
 
 ## Testing Strategy
 

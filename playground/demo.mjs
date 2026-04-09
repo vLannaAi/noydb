@@ -477,7 +477,7 @@ async function main() {
   Learn more:
     docs/getting-started.md   — Quick start guide
     docs/adapters.md          — Adapter guide (file, DynamoDB, S3, browser)
-    NOYDB_SPEC.md             — Full specification
+    SPEC.md                   — Full specification
     SECURITY.md               — Threat model and crypto details
 
   GitHub: https://github.com/vLannaAi/noy-db
