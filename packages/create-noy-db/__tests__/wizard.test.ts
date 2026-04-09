@@ -140,7 +140,7 @@ describe('renderTemplate', () => {
     // package.json has no ADAPTER token — it should ship all adapter deps
     // so users can swap freely. Confirm the renderer didn't accidentally
     // corrupt JSON when there were no substitutions on a field.
-    expect(pkg.dependencies['@noy-db/store-browser']).toBeDefined()
+    expect(pkg.dependencies['@noy-db/store-browser-idb']).toBeDefined()
     expect(pkg.dependencies['@noy-db/store-file']).toBeDefined()
   })
 

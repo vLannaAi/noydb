@@ -1,14 +1,14 @@
 {
-  "name": "@noy-db/store-browser",
+  "name": "@noy-db/store-browser-local",
   "version": "0.10.0",
-  "description": "Browser storage adapter for noy-db — localStorage and IndexedDB with optional key obfuscation",
+  "description": "localStorage adapter for noy-db with optional key obfuscation",
   "license": "MIT",
   "author": "vLannaAi <vicio@lanna.ai>",
-  "homepage": "https://github.com/vLannaAi/noy-db/tree/main/packages/browser#readme",
+  "homepage": "https://github.com/vLannaAi/noy-db/tree/main/packages/store-browser-local#readme",
   "repository": {
     "type": "git",
     "url": "https://github.com/vLannaAi/noy-db.git",
-    "directory": "packages/browser"
+    "directory": "packages/store-browser-local"
   },
   "bugs": {
     "url": "https://github.com/vLannaAi/noy-db/issues"
@@ -57,7 +57,6 @@
     "adapter",
     "browser",
     "localstorage",
-    "indexeddb",
     "web",
     "offline-first",
     "encryption",

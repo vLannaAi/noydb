@@ -115,7 +115,8 @@ jobs:
             --filter='@noy-db/core' \
             --filter='@noy-db/store-memory' \
             --filter='@noy-db/store-file' \
-            --filter='@noy-db/store-browser' \
+            --filter='@noy-db/store-browser-local' \
+            --filter='@noy-db/store-browser-idb' \
             --filter='@noy-db/pinia'
 
       # Each pnpm pack leaves a .tgz in the package directory. We
@@ -125,12 +126,13 @@ jobs:
         id: pack
         run: |
           set -eux
-          for pkg in core store-memory store-file store-browser pinia create-noy-db; do
+          for pkg in core store-memory store-file store-browser-local store-browser-idb pinia create-noy-db; do
             (cd "packages/$pkg" && pnpm pack)
           done
           ls -la packages/core/*.tgz packages/store-memory/*.tgz \
                  packages/store-file/*.tgz \
-                 packages/store-browser/*.tgz packages/pinia/*.tgz \
+                 packages/store-browser-local/*.tgz \
+                 packages/store-browser-idb/*.tgz packages/pinia/*.tgz \
                  packages/create-noy-db/*.tgz
 
       # Create a consumer project in a scratch directory OUTSIDE the
@@ -171,14 +173,16 @@ jobs:
           CORE_TGZ=$(resolve "$GITHUB_WORKSPACE/packages/core/noy-db-core-*.tgz")
           MEMORY_TGZ=$(resolve "$GITHUB_WORKSPACE/packages/store-memory/noy-db-store-memory-*.tgz")
           FILE_TGZ=$(resolve "$GITHUB_WORKSPACE/packages/store-file/noy-db-store-file-*.tgz")
-          BROWSER_TGZ=$(resolve "$GITHUB_WORKSPACE/packages/store-browser/noy-db-store-browser-*.tgz")
+          BROWSER_LOCAL_TGZ=$(resolve "$GITHUB_WORKSPACE/packages/store-browser-local/noy-db-store-browser-local-*.tgz")
+          BROWSER_IDB_TGZ=$(resolve "$GITHUB_WORKSPACE/packages/store-browser-idb/noy-db-store-browser-idb-*.tgz")
           PINIA_TGZ=$(resolve "$GITHUB_WORKSPACE/packages/pinia/noy-db-pinia-*.tgz")
           CREATE_TGZ=$(resolve "$GITHUB_WORKSPACE/packages/create-noy-db/create-noy-db-*.tgz")
           {
             echo "core=$CORE_TGZ"
             echo "memory=$MEMORY_TGZ"
             echo "file=$FILE_TGZ"
-            echo "browser=$BROWSER_TGZ"
+            echo "browser_local=$BROWSER_LOCAL_TGZ"
+            echo "browser_idb=$BROWSER_IDB_TGZ"
             echo "pinia=$PINIA_TGZ"
             echo "create=$CREATE_TGZ"
           } >> "$GITHUB_OUTPUT"
@@ -227,41 +231,46 @@ jobs:
           CORE="file:${{ steps.tarballs.outputs.core }}"
           MEMORY="file:${{ steps.tarballs.outputs.memory }}"
           FILE="file:${{ steps.tarballs.outputs.file }}"
-          BROWSER="file:${{ steps.tarballs.outputs.browser }}"
+          BROWSER_LOCAL="file:${{ steps.tarballs.outputs.browser_local }}"
+          BROWSER_IDB="file:${{ steps.tarballs.outputs.browser_idb }}"
           PINIA="file:${{ steps.tarballs.outputs.pinia }}"
           CREATE="file:${{ steps.tarballs.outputs.create }}"
 
-          jq --arg core    "$CORE" \
-             --arg memory  "$MEMORY" \
-             --arg file    "$FILE" \
-             --arg browser "$BROWSER" \
-             --arg pinia   "$PINIA" \
-             --arg create  "$CREATE" \
+          jq --arg core         "$CORE" \
+             --arg memory       "$MEMORY" \
+             --arg file         "$FILE" \
+             --arg browser_local "$BROWSER_LOCAL" \
+             --arg browser_idb  "$BROWSER_IDB" \
+             --arg pinia        "$PINIA" \
+             --arg create       "$CREATE" \
              '.dependencies = {
-                "@noy-db/core":    $core,
-                "@noy-db/store-memory":  $memory,
-                "@noy-db/store-file":    $file,
-                "@noy-db/store-browser": $browser,
-                "@noy-db/pinia":   $pinia,
-                "create-noy-db":  $create,
+                "@noy-db/core":                $core,
+                "@noy-db/store-memory":        $memory,
+                "@noy-db/store-file":          $file,
+                "@noy-db/store-browser-local": $browser_local,
+                "@noy-db/store-browser-idb":   $browser_idb,
+                "@noy-db/pinia":               $pinia,
+                "create-noy-db":               $create,
                 "pinia": "^3.0.0",
                 "vue":   "^3.5.0"
               }
               | .overrides = {
-                  "@noy-db/core":    $core,
-                  "@noy-db/store-memory":  $memory,
-                  "@noy-db/store-file":    $file,
-                  "@noy-db/store-browser": $browser,
-                  "@noy-db/pinia":   $pinia,
-                  "create-noy-db":  $create
+                  "@noy-db/core":                $core,
+                  "@noy-db/store-memory":        $memory,
+                  "@noy-db/store-file":          $file,
+                  "@noy-db/store-browser-local": $browser_local,
+                  "@noy-db/store-browser-idb":   $browser_idb,
+                  "@noy-db/pinia":               $pinia,
+                  "create-noy-db":               $create
                 }
               | .pnpm.overrides = {
-                  "@noy-db/core":    $core,
-                  "@noy-db/store-memory":  $memory,
-                  "@noy-db/store-file":    $file,
-                  "@noy-db/store-browser": $browser,
-                  "@noy-db/pinia":   $pinia,
-                  "create-noy-db":  $create
+                  "@noy-db/core":                $core,
+                  "@noy-db/store-memory":        $memory,
+                  "@noy-db/store-file":          $file,
+                  "@noy-db/store-browser-local": $browser_local,
+                  "@noy-db/store-browser-idb":   $browser_idb,
+                  "@noy-db/pinia":               $pinia,
+                  "create-noy-db":               $create
                 }' package.json > package.json.new
           mv package.json.new package.json
 
@@ -274,7 +283,8 @@ jobs:
             "@noy-db/core": "$CORE"
             "@noy-db/store-memory": "$MEMORY"
             "@noy-db/store-file": "$FILE"
-            "@noy-db/store-browser": "$BROWSER"
+            "@noy-db/store-browser-local": "$BROWSER_LOCAL"
+            "@noy-db/store-browser-idb": "$BROWSER_IDB"
             "@noy-db/pinia": "$PINIA"
             "create-noy-db": "$CREATE"
           YAML

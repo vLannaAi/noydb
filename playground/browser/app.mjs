@@ -1,5 +1,5 @@
 import { createNoydb, formatDiff } from '@noy-db/core'
-import { browser } from '@noy-db/store-browser'
+import { browserLocalStore } from '@noy-db/store-browser-local'
 import { memory } from '@noy-db/store-memory'
 
 // ─── State ─────────────────────────────────────────────────────────────
@@ -114,7 +114,7 @@ window.step1_init = async function() {
   logStep('Initializing encrypted store with browser adapter')
 
   ownerDb = await createNoydb({
-    store: browser({ prefix: PREFIX, backend: 'localStorage', obfuscate: true }),
+    store: browserLocalStore({ prefix: PREFIX, obfuscate: true }),
     user: 'owner-firm',
     secret: 'demo-passphrase-2026',
     history: { enabled: true },
@@ -228,12 +228,12 @@ window.step2_grant = async function() {
 
   // Login as each user
   opDb = await createNoydb({
-    store: browser({ prefix: PREFIX, backend: 'localStorage', obfuscate: true }),
+    store: browserLocalStore({ prefix: PREFIX, obfuscate: true }),
     user: 'op-somchai',
     secret: 'somchai-pass',
   })
   viewerDb = await createNoydb({
-    store: browser({ prefix: PREFIX, backend: 'localStorage', obfuscate: true }),
+    store: browserLocalStore({ prefix: PREFIX, obfuscate: true }),
     user: 'viewer-audit',
     secret: 'audit-pass',
   })
@@ -396,7 +396,7 @@ window.step4_add = async function() {
   if (!ownerDb) {
     // Re-open after potential reload
     ownerDb = await createNoydb({
-      store: browser({ prefix: PREFIX, backend: 'localStorage', obfuscate: true }),
+      store: browserLocalStore({ prefix: PREFIX, obfuscate: true }),
       user: 'owner-firm',
       secret: 'demo-passphrase-2026',
     })
@@ -416,7 +416,7 @@ window.step4_verify = async function() {
   logStep('Verifying data after reload')
   try {
     const db = await createNoydb({
-      store: browser({ prefix: PREFIX, backend: 'localStorage', obfuscate: true }),
+      store: browserLocalStore({ prefix: PREFIX, obfuscate: true }),
       user: 'owner-firm',
       secret: 'demo-passphrase-2026',
     })
@@ -489,7 +489,7 @@ window.step5_clearAndRestore = async function() {
   // Write backup data directly to adapter BEFORE creating the Noydb instance.
   // This way, createNoydb will find and load the restored keyring
   // instead of creating a new one with different DEKs.
-  const adapter = browser({ prefix: PREFIX, backend: 'localStorage', obfuscate: true })
+  const adapter = browserLocalStore({ prefix: PREFIX, obfuscate: true })
   const backup = JSON.parse(backupJson)
 
   // Restore keyrings first
@@ -511,7 +511,7 @@ window.step5_verify = async function() {
   try {
     // Create fresh instance — it will load the restored keyring from localStorage
     ownerDb = await createNoydb({
-      store: browser({ prefix: PREFIX, backend: 'localStorage', obfuscate: true }),
+      store: browserLocalStore({ prefix: PREFIX, obfuscate: true }),
       user: 'owner-firm',
       secret: 'demo-passphrase-2026',
       history: { enabled: true },

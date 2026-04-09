@@ -127,7 +127,22 @@ importers:
         specifier: ^3.5.32
         version: 3.5.32(typescript@5.9.3)
 
-  packages/store-browser:
+  packages/store-browser-idb:
+    devDependencies:
+      '@noy-db/core':
+        specifier: workspace:*
+        version: link:../core
+      '@noy-db/test-adapter-conformance':
+        specifier: workspace:*
+        version: link:../../test-harnesses/adapter-conformance
+      fake-indexeddb:
+        specifier: ^6.2.5
+        version: 6.2.5
+      happy-dom:
+        specifier: ^18.0.0
+        version: 18.0.1
+
+  packages/store-browser-local:
     devDependencies:
       '@noy-db/core':
         specifier: workspace:*
@@ -216,9 +231,9 @@ importers:
       '@noy-db/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@noy-db/store-browser':
+      '@noy-db/store-browser-local':
         specifier: workspace:*
-        version: link:../../packages/store-browser
+        version: link:../../packages/store-browser-local
       '@noy-db/store-memory':
         specifier: workspace:*
         version: link:../../packages/store-memory
@@ -238,9 +253,9 @@ importers:
       '@noy-db/pinia':
         specifier: workspace:*
         version: link:../../packages/pinia
-      '@noy-db/store-browser':
+      '@noy-db/store-browser-idb':
         specifier: workspace:*
-        version: link:../../packages/store-browser
+        version: link:../../packages/store-browser-idb
       '@noy-db/vue':
         specifier: workspace:*
         version: link:../../packages/vue
@@ -268,9 +283,9 @@ importers:
       '@noy-db/pinia':
         specifier: workspace:*
         version: link:../../packages/pinia
-      '@noy-db/store-browser':
+      '@noy-db/store-browser-idb':
         specifier: workspace:*
-        version: link:../../packages/store-browser
+        version: link:../../packages/store-browser-idb
       pinia:
         specifier: ^3.0.1
         version: 3.0.4(typescript@5.9.3)(vue@3.5.32(typescript@5.9.3))
@@ -3178,6 +3193,10 @@ packages:
 
   extendable-error@0.1.7:
     resolution: {integrity: sha512-UOiS2in6/Q0FK0R0q6UY9vYpQ21mr/Qn1KOnte7vsACuNJf514WvCCUHSRCPcgjPT2bAhNIJdlE6bVap1GKmeg==}
+
+  fake-indexeddb@6.2.5:
+    resolution: {integrity: sha512-CGnyrvbhPlWYMngksqrSSUT1BAVP49dZocrHuK0SvtR0D5TMs5wP0o3j7jexDJW01KSadjBp1M/71o/KR3nD1w==}
+    engines: {node: '>=18'}
 
   fast-deep-equal@3.1.3:
     resolution: {integrity: sha512-f3qQ9oQy9j2AhBe/H9VC91wLmKBCCU/gDOnKNAYG5hswO7BLKj09Hc5HYNz9cGI++xlpDCIgDaitVs03ATR84Q==}
@@ -8714,6 +8733,8 @@ snapshots:
   exsolve@1.0.8: {}
 
   extendable-error@0.1.7: {}
+
+  fake-indexeddb@6.2.5: {}
 
   fast-deep-equal@3.1.3: {}
 

@@ -1,13 +1,13 @@
 import { runStoreConformanceTests } from '@noy-db/test-adapter-conformance'
-import { browser } from '../src/index.js'
+import { browserLocalStore } from '../src/index.js'
 
 // Run conformance suite against localStorage backend
 runStoreConformanceTests(
-  'browser (localStorage)',
+  'store-browser-local',
   async () => {
     // Clear localStorage before each test factory call
     localStorage.clear()
-    return browser({ prefix: `test-${Date.now()}`, backend: 'localStorage' })
+    return browserLocalStore({ prefix: `test-${Date.now()}` })
   },
   async () => {
     localStorage.clear()

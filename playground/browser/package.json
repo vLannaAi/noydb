@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@noy-db/core": "workspace:*",
-    "@noy-db/store-browser": "workspace:*",
+    "@noy-db/store-browser-local": "workspace:*",
     "@noy-db/store-memory": "workspace:*"
   },
   "devDependencies": {

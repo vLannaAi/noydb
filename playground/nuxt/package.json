@@ -10,7 +10,7 @@
     "preview": "nuxt preview"
   },
   "dependencies": {
-    "@noy-db/store-browser": "workspace:*",
+    "@noy-db/store-browser-idb": "workspace:*",
     "@noy-db/core": "workspace:*",
     "@noy-db/nuxt": "workspace:*",
     "@noy-db/pinia": "workspace:*",

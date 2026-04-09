@@ -19,7 +19,8 @@
 /packages/store-file/                @vLannaAi
 /packages/store-dynamo/              @vLannaAi
 /packages/store-s3/                  @vLannaAi
-/packages/store-browser/             @vLannaAi
+/packages/store-browser-local/       @vLannaAi
+/packages/store-browser-idb/        @vLannaAi
 
 # Vue / Pinia / Nuxt — v0.3 surface
 /packages/vue/                 @vLannaAi
