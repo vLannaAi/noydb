@@ -27,7 +27,7 @@ import {
   createNoydb as realCreateNoydb,
   type NoydbStore,
   type EncryptedEnvelope,
-  type CompartmentSnapshot,
+  type VaultSnapshot,
   ConflictError,
   InvalidKeyError,
 } from '@noy-db/core'
@@ -59,7 +59,7 @@ function memory(): NoydbStore {
     async delete(c, col, id) { store.get(c)?.get(col)?.delete(id) },
     async list(c, col) { const coll = store.get(c)?.get(col); return coll ? [...coll.keys()] : [] },
     async loadAll(c) {
-      const comp = store.get(c); const s: CompartmentSnapshot = {}
+      const comp = store.get(c); const s: VaultSnapshot = {}
       if (comp) for (const [n, coll] of comp) {
         if (!n.startsWith('_')) {
           const r: Record<string, EncryptedEnvelope> = {}
@@ -122,7 +122,7 @@ function sharedAdapter() {
   }
 }
 
-// ─── Test setup — pre-populate a compartment with data ─────────────
+// ─── Test setup — pre-populate a vault with data ─────────────
 
 interface Fixture {
   store: NoydbStore
@@ -131,7 +131,7 @@ interface Fixture {
 
 async function makeFixture(): Promise<Fixture> {
   const { adapter, build } = sharedAdapter()
-  // Create the compartment with an owner, a couple of collections,
+  // Create the vault with an owner, a couple of collections,
   // and a few records per collection. Every test starts from this
   // baseline.
   const db = await realCreateNoydb({
@@ -139,7 +139,7 @@ async function makeFixture(): Promise<Fixture> {
     user: 'owner-alice',
     secret: 'alice-pass-1234',
   })
-  const co = await db.openCompartment('demo-co')
+  const co = await db.openVault('demo-co')
   const invoices = co.collection<{ id: string; amount: number }>('invoices')
   await invoices.put('inv-1', { id: 'inv-1', amount: 100 })
   await invoices.put('inv-2', { id: 'inv-2', amount: 200 })
@@ -158,13 +158,13 @@ describe('noy-db rotate — #38', () => {
   it('rotates every collection when no list is supplied', async () => {
     const result = await rotate({
       dir: 'unused',
-      compartment: 'demo-co',
+      vault: 'demo-co',
       user: 'owner-alice',
       readPassphrase: scripted('alice-pass-1234'),
       buildAdapter: fx.buildAdapter,
     })
     // Data collections are rotated; internal collections (`_ledger`,
-    // `_ledger_deltas`) are filtered out of compartment.collections()
+    // `_ledger_deltas`) are filtered out of vault.collections()
     // by loadAll's prefix filter, so they don't appear here.
     expect(result.rotated.sort()).toEqual(['clients', 'invoices'])
   })
@@ -172,7 +172,7 @@ describe('noy-db rotate — #38', () => {
   it('rotates only the requested collections when an explicit list is given', async () => {
     const result = await rotate({
       dir: 'unused',
-      compartment: 'demo-co',
+      vault: 'demo-co',
       user: 'owner-alice',
       collections: ['invoices'],
       readPassphrase: scripted('alice-pass-1234'),
@@ -186,7 +186,7 @@ describe('noy-db rotate — #38', () => {
     // keyring has the NEW DEKs, so a subsequent get() must still work.
     await rotate({
       dir: 'unused',
-      compartment: 'demo-co',
+      vault: 'demo-co',
       user: 'owner-alice',
       readPassphrase: scripted('alice-pass-1234'),
       buildAdapter: fx.buildAdapter,
@@ -197,7 +197,7 @@ describe('noy-db rotate — #38', () => {
       user: 'owner-alice',
       secret: 'alice-pass-1234',
     })
-    const co = await db.openCompartment('demo-co')
+    const co = await db.openVault('demo-co')
     const invoices = co.collection<{ id: string; amount: number }>('invoices')
     expect(await invoices.get('inv-1')).toEqual({ id: 'inv-1', amount: 100 })
     expect(await invoices.get('inv-2')).toEqual({ id: 'inv-2', amount: 200 })
@@ -208,7 +208,7 @@ describe('noy-db rotate — #38', () => {
     await expect(
       rotate({
         dir: 'unused',
-        compartment: 'demo-co',
+        vault: 'demo-co',
         user: 'owner-alice',
         readPassphrase: scripted('wrong-pass'),
         buildAdapter: fx.buildAdapter,
@@ -226,7 +226,7 @@ describe('noy-db add user — #38', () => {
   it('grants operator access with explicit permissions', async () => {
     const result = await addUser({
       dir: 'unused',
-      compartment: 'demo-co',
+      vault: 'demo-co',
       callerUser: 'owner-alice',
       newUserId: 'accountant-ann',
       role: 'operator',
@@ -245,7 +245,7 @@ describe('noy-db add user — #38', () => {
   it('lets the newly granted operator unlock the compartment', async () => {
     await addUser({
       dir: 'unused',
-      compartment: 'demo-co',
+      vault: 'demo-co',
       callerUser: 'owner-alice',
       newUserId: 'ann',
       role: 'operator',
@@ -253,14 +253,14 @@ describe('noy-db add user — #38', () => {
       readPassphrase: scripted('alice-pass-1234', 'ann-pass', 'ann-pass'),
       buildAdapter: fx.buildAdapter,
     })
-    // Try to open the compartment as Ann. If the grant succeeded,
+    // Try to open the vault as Ann. If the grant succeeded,
     // this works with the new passphrase and NOT the old one.
     const annDb = await realCreateNoydb({
       store: fx.adapter,
       user: 'ann',
       secret: 'ann-pass',
     })
-    const co = await annDb.openCompartment('demo-co')
+    const co = await annDb.openVault('demo-co')
     const invoices = co.collection<{ id: string; amount: number }>('invoices')
     expect(await invoices.get('inv-1')).toEqual({ id: 'inv-1', amount: 100 })
     annDb.close()
@@ -270,7 +270,7 @@ describe('noy-db add user — #38', () => {
     await expect(
       addUser({
         dir: 'unused',
-        compartment: 'demo-co',
+        vault: 'demo-co',
         callerUser: 'owner-alice',
         newUserId: 'ann',
         role: 'operator',
@@ -284,7 +284,7 @@ describe('noy-db add user — #38', () => {
     await expect(
       addUser({
         dir: 'unused',
-        compartment: 'demo-co',
+        vault: 'demo-co',
         callerUser: 'owner-alice',
         newUserId: 'bob',
         role: 'admin',
@@ -302,7 +302,7 @@ describe('noy-db add user — #38', () => {
     await expect(
       addUser({
         dir: 'unused',
-        compartment: 'demo-co',
+        vault: 'demo-co',
         callerUser: 'owner-alice',
         newUserId: 'bob',
         role: 'admin',
@@ -336,7 +336,7 @@ describe('noy-db backup — #38', () => {
     const target = path.join(tmp, 'demo.json')
     const result = await backup({
       dir: 'unused',
-      compartment: 'demo-co',
+      vault: 'demo-co',
       user: 'owner-alice',
       target,
       readPassphrase: scripted('alice-pass-1234'),
@@ -359,7 +359,7 @@ describe('noy-db backup — #38', () => {
     const target = path.join(tmp, 'nested', '2026', '04', 'demo.json')
     await backup({
       dir: 'unused',
-      compartment: 'demo-co',
+      vault: 'demo-co',
       user: 'owner-alice',
       target,
       readPassphrase: scripted('alice-pass-1234'),
@@ -373,7 +373,7 @@ describe('noy-db backup — #38', () => {
     const target = path.join(tmp, 'from-uri.json')
     await backup({
       dir: 'unused',
-      compartment: 'demo-co',
+      vault: 'demo-co',
       user: 'owner-alice',
       target: `file://${target}`,
       readPassphrase: scripted('alice-pass-1234'),
@@ -399,7 +399,7 @@ describe('noy-db backup — #38', () => {
     await expect(
       backup({
         dir: 'unused',
-        compartment: 'demo-co',
+        vault: 'demo-co',
         user: 'owner-alice',
         target,
         readPassphrase: scripted('WRONG'),

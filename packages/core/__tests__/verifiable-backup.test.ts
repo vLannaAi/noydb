@@ -14,13 +14,13 @@
  *     the integrity check
  *   - verifyBackupIntegrity() can be called any time, not just on load
  *   - verifyBackupIntegrity() detects in-place data tampering on a
- *     live compartment
+ *     live vault
  */
 
 import { describe, it, expect, beforeEach } from 'vitest'
 import { createNoydb } from '../src/noydb.js'
 import type { Noydb } from '../src/noydb.js'
-import type { NoydbStore, EncryptedEnvelope, CompartmentSnapshot } from '../src/types.js'
+import type { NoydbStore, EncryptedEnvelope, VaultSnapshot } from '../src/types.js'
 import { ConflictError, BackupLedgerError, BackupCorruptedError } from '../src/errors.js'
 
 function memory(): NoydbStore {
@@ -44,7 +44,7 @@ function memory(): NoydbStore {
     async delete(c, col, id) { store.get(c)?.get(col)?.delete(id) },
     async list(c, col) { const coll = store.get(c)?.get(col); return coll ? [...coll.keys()] : [] },
     async loadAll(c) {
-      const comp = store.get(c); const s: CompartmentSnapshot = {}
+      const comp = store.get(c); const s: VaultSnapshot = {}
       if (comp) for (const [n, coll] of comp) {
         if (!n.startsWith('_')) {
           const r: Record<string, EncryptedEnvelope> = {}
@@ -90,7 +90,7 @@ describe('verifiable backups — #46', () => {
   })
 
   it('dump() embeds ledgerHead and _internal sections', async () => {
-    const company = await db.openCompartment('demo-co')
+    const company = await db.openVault('demo-co')
     const invoices = company.collection<Invoice>('invoices')
     await invoices.put('inv-1', { id: 'inv-1', client: 'Acme', amount: 100 })
     await invoices.put('inv-2', { id: 'inv-2', client: 'Globex', amount: 200 })
@@ -116,7 +116,7 @@ describe('verifiable backups — #46', () => {
       user: 'alice',
       secret: 'test-passphrase-1234',
     })
-    const sourceCompany = await sourceDb.openCompartment('demo-co')
+    const sourceCompany = await sourceDb.openVault('demo-co')
     const sourceInvoices = sourceCompany.collection<Invoice>('invoices')
 
     await sourceInvoices.put('inv-1', { id: 'inv-1', client: 'Acme', amount: 100 })
@@ -134,7 +134,7 @@ describe('verifiable backups — #46', () => {
       user: 'alice',
       secret: 'test-passphrase-1234',
     })
-    const targetCompany = await targetDb.openCompartment('demo-co')
+    const targetCompany = await targetDb.openVault('demo-co')
     await targetCompany.load(backup)
 
     // Data should be visible.
@@ -152,7 +152,7 @@ describe('verifiable backups — #46', () => {
   })
 
   it('rejects a backup whose embedded ledgerHead.hash was modified', async () => {
-    const company = await db.openCompartment('demo-co')
+    const company = await db.openVault('demo-co')
     const invoices = company.collection<Invoice>('invoices')
     await invoices.put('inv-1', { id: 'inv-1', client: 'Acme', amount: 100 })
 
@@ -174,13 +174,13 @@ describe('verifiable backups — #46', () => {
       user: 'alice',
       secret: 'test-passphrase-1234',
     })
-    const targetCompany = await targetDb.openCompartment('demo-co')
+    const targetCompany = await targetDb.openVault('demo-co')
 
     await expect(targetCompany.load(tamperedJson)).rejects.toThrow(BackupLedgerError)
   })
 
   it('rejects a backup whose data envelope was modified between dump and restore', async () => {
-    const company = await db.openCompartment('demo-co')
+    const company = await db.openVault('demo-co')
     const invoices = company.collection<Invoice>('invoices')
     await invoices.put('inv-1', { id: 'inv-1', client: 'Acme', amount: 100 })
 
@@ -197,13 +197,13 @@ describe('verifiable backups — #46', () => {
       user: 'alice',
       secret: 'test-passphrase-1234',
     })
-    const targetCompany = await targetDb.openCompartment('demo-co')
+    const targetCompany = await targetDb.openVault('demo-co')
 
     await expect(targetCompany.load(tamperedJson)).rejects.toThrow(BackupCorruptedError)
   })
 
   it('rejects a backup whose ledger entry was modified', async () => {
-    const company = await db.openCompartment('demo-co')
+    const company = await db.openVault('demo-co')
     const invoices = company.collection<Invoice>('invoices')
     await invoices.put('inv-1', { id: 'inv-1', client: 'Acme', amount: 100 })
     await invoices.put('inv-2', { id: 'inv-2', client: 'Globex', amount: 200 })
@@ -224,7 +224,7 @@ describe('verifiable backups — #46', () => {
       user: 'alice',
       secret: 'test-passphrase-1234',
     })
-    const targetCompany = await targetDb.openCompartment('demo-co')
+    const targetCompany = await targetDb.openVault('demo-co')
 
     // The decrypt of the tampered ledger entry will throw a
     // TamperedError from the AES-GCM auth tag, propagating out of
@@ -235,7 +235,7 @@ describe('verifiable backups — #46', () => {
   it('legacy (pre-v0.4) backup loads with a warning and no integrity check', async () => {
     // Forge a "legacy" backup: round-trip a real one, then strip
     // the v0.4 fields. The data and keyrings still load fine.
-    const company = await db.openCompartment('demo-co')
+    const company = await db.openVault('demo-co')
     const invoices = company.collection<Invoice>('invoices')
     await invoices.put('inv-1', { id: 'inv-1', client: 'Acme', amount: 100 })
 
@@ -251,7 +251,7 @@ describe('verifiable backups — #46', () => {
       user: 'alice',
       secret: 'test-passphrase-1234',
     })
-    const targetCompany = await targetDb.openCompartment('demo-co')
+    const targetCompany = await targetDb.openVault('demo-co')
 
     // Replace console.warn directly with a captured wrapper. vi.spyOn
     // wasn't capturing the call in this environment for reasons I
@@ -284,7 +284,7 @@ describe('verifiable backups — #46', () => {
   it('verifyBackupIntegrity() can be called on a live compartment', async () => {
     // Not a backup at all — just an in-place check that the chain
     // and data agree. Useful for periodic background audits.
-    const company = await db.openCompartment('demo-co')
+    const company = await db.openVault('demo-co')
     const invoices = company.collection<Invoice>('invoices')
     await invoices.put('inv-1', { id: 'inv-1', client: 'Acme', amount: 100 })
     await invoices.put('inv-2', { id: 'inv-2', client: 'Globex', amount: 200 })
@@ -307,7 +307,7 @@ describe('verifiable backups — #46', () => {
       user: 'alice',
       secret: 'test-passphrase-1234',
     })
-    const company = await localDb.openCompartment('demo-co')
+    const company = await localDb.openVault('demo-co')
     const invoices = company.collection<Invoice>('invoices')
     await invoices.put('inv-1', { id: 'inv-1', client: 'Acme', amount: 100 })
 
@@ -333,7 +333,7 @@ describe('verifiable backups — #46', () => {
   })
 
   it('verifyBackupIntegrity() returns ok on an empty compartment', async () => {
-    const company = await db.openCompartment('demo-co')
+    const company = await db.openVault('demo-co')
     // No collections opened yet — empty ledger, empty data.
     const result = await company.verifyBackupIntegrity()
     expect(result.ok).toBe(true)

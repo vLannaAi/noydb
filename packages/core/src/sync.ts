@@ -22,7 +22,7 @@ export class SyncEngine {
   private readonly remote: NoydbStore
   private readonly strategy: ConflictStrategy
   private readonly emitter: NoydbEventEmitter
-  private readonly compartment: string
+  private readonly vault: string
 
   private dirty: DirtyEntry[] = []
   private lastPush: string | null = null
@@ -37,13 +37,13 @@ export class SyncEngine {
   constructor(opts: {
     local: NoydbStore
     remote: NoydbStore
-    compartment: string
+    vault: string
     strategy: ConflictStrategy
     emitter: NoydbEventEmitter
   }) {
     this.local = opts.local
     this.remote = opts.remote
-    this.compartment = opts.compartment
+    this.vault = opts.vault
     this.strategy = opts.strategy
     this.emitter = opts.emitter
   }
@@ -63,7 +63,7 @@ export class SyncEngine {
     // Deduplicate: if same collection+id already in dirty, update it
     const idx = this.dirty.findIndex(d => d.collection === collection && d.id === id)
     const entry: DirtyEntry = {
-      compartment: this.compartment,
+      vault: this.vault,
       collection,
       id,
       action,
@@ -99,11 +99,11 @@ export class SyncEngine {
 
       try {
         if (entry.action === 'delete') {
-          await this.remote.delete(this.compartment, entry.collection, entry.id)
+          await this.remote.delete(this.vault, entry.collection, entry.id)
           completed.push(i)
           pushed++
         } else {
-          const envelope = await this.local.get(this.compartment, entry.collection, entry.id)
+          const envelope = await this.local.get(this.vault, entry.collection, entry.id)
           if (!envelope) {
             // Record was deleted locally after being marked dirty
             completed.push(i)
@@ -112,7 +112,7 @@ export class SyncEngine {
 
           try {
             await this.remote.put(
-              this.compartment,
+              this.vault,
               entry.collection,
               entry.id,
               envelope,
@@ -122,7 +122,7 @@ export class SyncEngine {
             pushed++
           } catch (err) {
             if (err instanceof ConflictError) {
-              const remoteEnvelope = await this.remote.get(this.compartment, entry.collection, entry.id)
+              const remoteEnvelope = await this.remote.get(this.vault, entry.collection, entry.id)
               if (remoteEnvelope) {
                 const { handled, conflict } = await this.handleConflict(
                   entry.collection,
@@ -133,17 +133,17 @@ export class SyncEngine {
                 )
                 conflicts.push(conflict)
                 if (handled === 'local') {
-                  await this.remote.put(this.compartment, entry.collection, entry.id, conflict.local)
+                  await this.remote.put(this.vault, entry.collection, entry.id, conflict.local)
                   completed.push(i)
                   pushed++
                 } else if (handled === 'remote') {
-                  await this.local.put(this.compartment, entry.collection, entry.id, conflict.remote)
+                  await this.local.put(this.vault, entry.collection, entry.id, conflict.remote)
                   completed.push(i)
                 } else if (handled === 'merged' && conflict.local !== envelope) {
                   // Merged envelope is stored in conflict.local (the winner)
                   const merged = conflict.local
-                  await this.remote.put(this.compartment, entry.collection, entry.id, merged)
-                  await this.local.put(this.compartment, entry.collection, entry.id, merged)
+                  await this.remote.put(this.vault, entry.collection, entry.id, merged)
+                  await this.local.put(this.vault, entry.collection, entry.id, merged)
                   completed.push(i)
                   pushed++
                 }
@@ -181,7 +181,7 @@ export class SyncEngine {
     const errors: Error[] = []
 
     try {
-      const remoteSnapshot = await this.remote.loadAll(this.compartment)
+      const remoteSnapshot = await this.remote.loadAll(this.vault)
 
       for (const [collName, records] of Object.entries(remoteSnapshot)) {
         // Partial sync: skip collections not in the filter (#133)
@@ -196,11 +196,11 @@ export class SyncEngine {
           }
 
           try {
-            const localEnvelope = await this.local.get(this.compartment, collName, id)
+            const localEnvelope = await this.local.get(this.vault, collName, id)
 
             if (!localEnvelope) {
               // New record from remote
-              await this.local.put(this.compartment, collName, id, remoteEnvelope)
+              await this.local.put(this.vault, collName, id, remoteEnvelope)
               pulled++
             } else if (remoteEnvelope._v > localEnvelope._v) {
               // Remote is newer — check if we have a dirty entry for this
@@ -216,19 +216,19 @@ export class SyncEngine {
                 )
                 conflicts.push(conflict)
                 if (handled === 'remote') {
-                  await this.local.put(this.compartment, collName, id, conflict.remote)
+                  await this.local.put(this.vault, collName, id, conflict.remote)
                   this.dirty = this.dirty.filter(d => !(d.collection === collName && d.id === id))
                   pulled++
                 } else if (handled === 'merged' && conflict.local !== localEnvelope) {
                   const merged = conflict.local
-                  await this.local.put(this.compartment, collName, id, merged)
+                  await this.local.put(this.vault, collName, id, merged)
                   this.dirty = this.dirty.filter(d => !(d.collection === collName && d.id === id))
                   pulled++
                 }
                 // 'local' or 'deferred': push handles it
               } else {
                 // Remote is newer, no local changes — update
-                await this.local.put(this.compartment, collName, id, remoteEnvelope)
+                await this.local.put(this.vault, collName, id, remoteEnvelope)
                 pulled++
               }
             }
@@ -276,11 +276,11 @@ export class SyncEngine {
 
       try {
         if (entry.action === 'delete') {
-          await this.remote.delete(this.compartment, entry.collection, entry.id)
+          await this.remote.delete(this.vault, entry.collection, entry.id)
           completed.push(i)
           pushed++
         } else {
-          const envelope = await this.local.get(this.compartment, entry.collection, entry.id)
+          const envelope = await this.local.get(this.vault, entry.collection, entry.id)
           if (!envelope) {
             completed.push(i)
             continue
@@ -288,7 +288,7 @@ export class SyncEngine {
 
           try {
             await this.remote.put(
-              this.compartment,
+              this.vault,
               entry.collection,
               entry.id,
               envelope,
@@ -298,7 +298,7 @@ export class SyncEngine {
             pushed++
           } catch (err) {
             if (err instanceof ConflictError) {
-              const remoteEnvelope = await this.remote.get(this.compartment, entry.collection, entry.id)
+              const remoteEnvelope = await this.remote.get(this.vault, entry.collection, entry.id)
               if (remoteEnvelope) {
                 const { handled, conflict } = await this.handleConflict(
                   entry.collection,
@@ -309,16 +309,16 @@ export class SyncEngine {
                 )
                 conflicts.push(conflict)
                 if (handled === 'local') {
-                  await this.remote.put(this.compartment, entry.collection, entry.id, conflict.local)
+                  await this.remote.put(this.vault, entry.collection, entry.id, conflict.local)
                   completed.push(i)
                   pushed++
                 } else if (handled === 'remote') {
-                  await this.local.put(this.compartment, entry.collection, entry.id, conflict.remote)
+                  await this.local.put(this.vault, entry.collection, entry.id, conflict.remote)
                   completed.push(i)
                 } else if (handled === 'merged' && conflict.local !== envelope) {
                   const merged = conflict.local
-                  await this.remote.put(this.compartment, entry.collection, entry.id, merged)
-                  await this.local.put(this.compartment, entry.collection, entry.id, merged)
+                  await this.remote.put(this.vault, entry.collection, entry.id, merged)
+                  await this.local.put(this.vault, entry.collection, entry.id, merged)
                   completed.push(i)
                   pushed++
                 }
@@ -423,7 +423,7 @@ export class SyncEngine {
       // (manual policy emits with a resolve callback; LWW/FWW/custom are silent).
       const winner = await resolver(id, local, remote)
       const base: Conflict = {
-        compartment: this.compartment,
+        vault: this.vault,
         collection,
         id,
         local,
@@ -443,7 +443,7 @@ export class SyncEngine {
 
     // Fall back to db-level strategy — emit once
     const baseConflict: Conflict = {
-      compartment: this.compartment,
+      vault: this.vault,
       collection,
       id,
       local,
@@ -475,7 +475,7 @@ export class SyncEngine {
   private async ensureLoaded(): Promise<void> {
     if (this.loaded) return
 
-    const envelope = await this.local.get(this.compartment, '_sync', 'meta')
+    const envelope = await this.local.get(this.vault, '_sync', 'meta')
     if (envelope) {
       const meta = JSON.parse(envelope._data) as SyncMetadata
       this.dirty = [...meta.dirty]
@@ -502,6 +502,6 @@ export class SyncEngine {
       _data: JSON.stringify(meta),
     }
 
-    await this.local.put(this.compartment, '_sync', 'meta', envelope)
+    await this.local.put(this.vault, '_sync', 'meta', envelope)
   }
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import type { NoydbStore, EncryptedEnvelope, CompartmentSnapshot } from '../src/types.js'
+import type { NoydbStore, EncryptedEnvelope, VaultSnapshot } from '../src/types.js'
 import { ConflictError, ReadOnlyError, PermissionDeniedError, NoAccessError } from '../src/errors.js'
 import { createNoydb } from '../src/noydb.js'
 import type { Noydb } from '../src/noydb.js'
@@ -21,7 +21,7 @@ function inlineMemory(): NoydbStore {
     async delete(c, col, id) { store.get(c)?.get(col)?.delete(id) },
     async list(c, col) { const coll = store.get(c)?.get(col); return coll ? [...coll.keys()] : [] },
     async loadAll(c) {
-      const comp = store.get(c); const s: CompartmentSnapshot = {}
+      const comp = store.get(c); const s: VaultSnapshot = {}
       if (comp) for (const [n, coll] of comp) { if (!n.startsWith('_')) { const r: Record<string, EncryptedEnvelope> = {}; for (const [id, e] of coll) r[id] = e; s[n] = r } }
       return s
     },
@@ -43,7 +43,7 @@ describe('access control: permission matrix', () => {
     ownerDb = await createNoydb({ store: adapter, user: 'owner-01', secret: 'owner-pass' })
 
     // Seed data: owner writes to invoices and payments
-    const comp = await ownerDb.openCompartment(COMP)
+    const comp = await ownerDb.openVault(COMP)
     const invoices = comp.collection<Invoice>('invoices')
     const payments = comp.collection<Invoice>('payments')
     await invoices.put('inv-001', { amount: 5000, status: 'draft' })
@@ -52,7 +52,7 @@ describe('access control: permission matrix', () => {
 
   describe('owner', () => {
     it('can read all collections', async () => {
-      const comp = await ownerDb.openCompartment(COMP)
+      const comp = await ownerDb.openVault(COMP)
       const inv = await comp.collection<Invoice>('invoices').get('inv-001')
       expect(inv?.amount).toBe(5000)
       const pay = await comp.collection<Invoice>('payments').get('pay-001')
@@ -60,7 +60,7 @@ describe('access control: permission matrix', () => {
     })
 
     it('can write all collections', async () => {
-      const comp = await ownerDb.openCompartment(COMP)
+      const comp = await ownerDb.openVault(COMP)
       await expect(
         comp.collection<Invoice>('invoices').put('inv-002', { amount: 1000, status: 'new' }),
       ).resolves.not.toThrow()
@@ -89,7 +89,7 @@ describe('access control: permission matrix', () => {
     })
 
     it('can export every collection', async () => {
-      const comp = await ownerDb.openCompartment(COMP)
+      const comp = await ownerDb.openVault(COMP)
       const json = await comp.exportJSON()
       const parsed = JSON.parse(json) as { collections: Record<string, unknown> }
       expect(parsed.collections).toHaveProperty('invoices')
@@ -105,13 +105,13 @@ describe('access control: permission matrix', () => {
     })
 
     it('can read all collections', async () => {
-      const comp = await adminDb.openCompartment(COMP)
+      const comp = await adminDb.openVault(COMP)
       const inv = await comp.collection<Invoice>('invoices').get('inv-001')
       expect(inv?.amount).toBe(5000)
     })
 
     it('can write all collections', async () => {
-      const comp = await adminDb.openCompartment(COMP)
+      const comp = await adminDb.openVault(COMP)
       await expect(
         comp.collection<Invoice>('invoices').put('inv-new', { amount: 100, status: 'x' }),
       ).resolves.not.toThrow()
@@ -164,13 +164,13 @@ describe('access control: permission matrix', () => {
     })
 
     it('can read permitted collections', async () => {
-      const comp = await opDb.openCompartment(COMP)
+      const comp = await opDb.openVault(COMP)
       const inv = await comp.collection<Invoice>('invoices').get('inv-001')
       expect(inv?.amount).toBe(5000)
     })
 
     it('can write permitted collections', async () => {
-      const comp = await opDb.openCompartment(COMP)
+      const comp = await opDb.openVault(COMP)
       await expect(
         comp.collection<Invoice>('invoices').put('inv-new', { amount: 100, status: 'x' }),
       ).resolves.not.toThrow()
@@ -194,7 +194,7 @@ describe('access control: permission matrix', () => {
       // v0.5 #72: exportStream/exportJSON are no longer owner-only.
       // They silently scope to collections the caller can read, matching
       // the same hasAccess() rule as Collection.list().
-      const comp = await opDb.openCompartment(COMP)
+      const comp = await opDb.openVault(COMP)
       const json = await comp.exportJSON()
       const parsed = JSON.parse(json) as { collections: Record<string, unknown> }
       // Operator was granted invoices: 'rw' only — that's the only
@@ -215,20 +215,20 @@ describe('access control: permission matrix', () => {
     })
 
     it('can read all collections', async () => {
-      const comp = await viewerDb.openCompartment(COMP)
+      const comp = await viewerDb.openVault(COMP)
       const inv = await comp.collection<Invoice>('invoices').get('inv-001')
       expect(inv?.amount).toBe(5000)
     })
 
     it('cannot write any collection', async () => {
-      const comp = await viewerDb.openCompartment(COMP)
+      const comp = await viewerDb.openVault(COMP)
       await expect(
         comp.collection<Invoice>('invoices').put('inv-bad', { amount: 0, status: 'x' }),
       ).rejects.toThrow(ReadOnlyError)
     })
 
     it('cannot delete', async () => {
-      const comp = await viewerDb.openCompartment(COMP)
+      const comp = await viewerDb.openVault(COMP)
       await expect(
         comp.collection<Invoice>('invoices').delete('inv-001'),
       ).rejects.toThrow(ReadOnlyError)
@@ -254,13 +254,13 @@ describe('access control: permission matrix', () => {
     })
 
     it('can read permitted collections', async () => {
-      const comp = await clientDb.openCompartment(COMP)
+      const comp = await clientDb.openVault(COMP)
       const inv = await comp.collection<Invoice>('invoices').get('inv-001')
       expect(inv?.amount).toBe(5000)
     })
 
     it('cannot write permitted collections (read-only)', async () => {
-      const comp = await clientDb.openCompartment(COMP)
+      const comp = await clientDb.openVault(COMP)
       await expect(
         comp.collection<Invoice>('invoices').put('inv-bad', { amount: 0, status: 'x' }),
       ).rejects.toThrow(ReadOnlyError)

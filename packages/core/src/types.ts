@@ -33,10 +33,10 @@ export interface EncryptedEnvelope {
   readonly _by?: string
 }
 
-// ─── Compartment Snapshot ──────────────────────────────────────────────
+// ─── Vault Snapshot ──────────────────────────────────────────────
 
 /** All records across all collections for a compartment. */
-export type CompartmentSnapshot = Record<string, Record<string, EncryptedEnvelope>>
+export type VaultSnapshot = Record<string, Record<string, EncryptedEnvelope>>
 
 /**
  * Result of a single page fetch via the optional `listPage` adapter extension.
@@ -64,11 +64,11 @@ export interface NoydbStore {
   name?: string
 
   /** Get a single record. Returns null if not found. */
-  get(compartment: string, collection: string, id: string): Promise<EncryptedEnvelope | null>
+  get(vault: string, collection: string, id: string): Promise<EncryptedEnvelope | null>
 
   /** Put a record. Throws ConflictError if expectedVersion doesn't match. */
   put(
-    compartment: string,
+    vault: string,
     collection: string,
     id: string,
     envelope: EncryptedEnvelope,
@@ -76,16 +76,16 @@ export interface NoydbStore {
   ): Promise<void>
 
   /** Delete a record. */
-  delete(compartment: string, collection: string, id: string): Promise<void>
+  delete(vault: string, collection: string, id: string): Promise<void>
 
   /** List all record IDs in a collection. */
-  list(compartment: string, collection: string): Promise<string[]>
+  list(vault: string, collection: string): Promise<string[]>
 
-  /** Load all records for a compartment (initial hydration). */
-  loadAll(compartment: string): Promise<CompartmentSnapshot>
+  /** Load all records for a vault (initial hydration). */
+  loadAll(vault: string): Promise<VaultSnapshot>
 
-  /** Save all records for a compartment (bulk write / restore). */
-  saveAll(compartment: string, data: CompartmentSnapshot): Promise<void>
+  /** Save all records for a vault (bulk write / restore). */
+  saveAll(vault: string, data: VaultSnapshot): Promise<void>
 
   /** Optional connectivity check for sync engine. */
   ping?(): Promise<boolean>
@@ -95,7 +95,7 @@ export interface NoydbStore {
    * Used by partial sync (`pull({ modifiedSince })`). Adapters that omit this
    * fall back to a full `loadAll` + client-side timestamp filter.
    */
-  listSince?(compartment: string, collection: string, since: string): Promise<string[]>
+  listSince?(vault: string, collection: string, since: string): Promise<string[]>
 
   /**
    * Optional pagination extension. Adapters that implement `listPage` get
@@ -117,7 +117,7 @@ export interface NoydbStore {
    * extension discovered via `'listPage' in adapter`.
    */
   listPage?(
-    compartment: string,
+    vault: string,
     collection: string,
     cursor?: string,
     limit?: number,
@@ -138,16 +138,16 @@ export interface NoydbStore {
   presenceSubscribe?(channel: string, callback: (payload: string) => void): () => void
 
   /**
-   * Optional cross-compartment enumeration extension (v0.5 #63).
+   * Optional cross-vault enumeration extension (v0.5 #63).
    *
-   * Returns the names of every top-level compartment the store
-   * currently stores. Used by `Noydb.listAccessibleCompartments()` to
-   * enumerate the universe of compartments before filtering down to
+   * Returns the names of every top-level vault the store
+   * currently stores. Used by `Noydb.listAccessibleVaults()` to
+   * enumerate the universe of vaults before filtering down to
    * the ones the calling principal can actually unwrap.
    *
    * **Why this is optional:** the storage shape of compartments
    * differs across backends. Memory and file stores store
-   * compartments as top-level keys / directories and can enumerate
+   * vaults as top-level keys / directories and can enumerate
    * them in O(1) calls. DynamoDB stores everything in a single table
    * keyed by `(compartment#collection, id)` — enumerating compartments
    * requires either a Scan (expensive, eventually consistent, leaks
@@ -155,28 +155,28 @@ export interface NoydbStore {
    * provisioned. S3 needs a prefix list (cheap if enabled, ACL-sensitive
    * otherwise). Browser localStorage can scan keys by prefix.
    *
-   * Stores that cannot implement `listCompartments` cheaply or
+   * Stores that cannot implement `listVaults` cheaply or
    * cleanly should omit it. Core surfaces a `StoreCapabilityError`
    * with a clear message when a caller invokes
-   * `listAccessibleCompartments()` against a store that doesn't
+   * `listAccessibleVaults()` against a store that doesn't
    * provide this method, so consumers know to either upgrade their
    * store, provide a candidate list explicitly to `queryAcross()`,
    * or fall back to maintaining the compartment index out of band.
    *
-   * **Privacy note:** `listCompartments` returns *every* compartment
+   * **Privacy note:** `listVaults` returns *every* compartment
    * the store has, not just the ones the caller can access. The
    * existence-leak filtering (returning only compartments whose
    * keyring the caller can unwrap) happens in core, not in the
    * store. The store is trusted to know its own contents — that
    * is not a leak in the threat model. The leak the API guards
-   * against is the *return value* of `listAccessibleCompartments()`
+   * against is the *return value* of `listAccessibleVaults()`
    * exposing existence to a downstream observer who only sees that
    * function's output.
    *
    * The 6-method core contract is unchanged — this is an additive
-   * extension discovered via `'listCompartments' in store`.
+   * extension discovered via `'listVaults' in store`.
    */
-  listCompartments?(): Promise<string[]>
+  listVaults?(): Promise<string[]>
 }
 
 // ─── Store Factory Helper ──────────────────────────────────────────────
@@ -204,13 +204,13 @@ export interface KeyringFile {
 
 // ─── Backup ────────────────────────────────────────────────────────────
 
-export interface CompartmentBackup {
+export interface VaultBackup {
   readonly _noydb_backup: typeof NOYDB_BACKUP_VERSION
   readonly _compartment: string
   readonly _exported_at: string
   readonly _exported_by: string
   readonly keyrings: Record<string, KeyringFile>
-  readonly collections: CompartmentSnapshot
+  readonly collections: VaultSnapshot
   /**
    * Internal collections (`_ledger`, `_ledger_deltas`, `_history`, `_sync`, …)
    * captured alongside the data collections. Optional for backwards
@@ -218,7 +218,7 @@ export interface CompartmentBackup {
    * loading a v0.3 backup leaves the ledger empty (and `verifyBackupIntegrity`
    * skips the chain check, surfacing only a console warning).
    */
-  readonly _internal?: CompartmentSnapshot
+  readonly _internal?: VaultSnapshot
   /**
    * Verifiable-backup metadata (v0.4 #46). Embeds the ledger head at
    * dump time so `load()` can cross-check that the loaded chain matches
@@ -242,7 +242,7 @@ export interface CompartmentBackup {
 // ─── Export ────────────────────────────────────────────────────────────
 
 /**
- * Options for `Compartment.exportStream()` and `Compartment.exportJSON()`.
+ * Options for `Vault.exportStream()` and `Vault.exportJSON()`.
  *
  * The defaults match the most common consumer pattern: one chunk per
  * collection, no ledger metadata. Per-record streaming and ledger-head
@@ -279,7 +279,7 @@ export interface ExportStreamOptions {
 }
 
 /**
- * One chunk yielded by `Compartment.exportStream()`.
+ * One chunk yielded by `Vault.exportStream()`.
  *
  * `granularity: 'collection'` yields one chunk per collection with the
  * full record array in `records`. `granularity: 'record'` yields one
@@ -335,7 +335,7 @@ export interface ExportChunk<T = unknown> {
   >
 
   /**
-   * Compartment ledger head at export time. Present only when
+   * Vault ledger head at export time. Present only when
    * `exportStream({ withLedgerHead: true })` was called. Identical
    * across every chunk in the same export — included on every chunk
    * for forward-compatibility with future per-partition ledgers, where
@@ -351,7 +351,7 @@ export interface ExportChunk<T = unknown> {
 // ─── Sync ──────────────────────────────────────────────────────────────
 
 export interface DirtyEntry {
-  readonly compartment: string
+  readonly vault: string
   readonly collection: string
   readonly id: string
   readonly action: 'put' | 'delete'
@@ -367,7 +367,7 @@ export interface SyncMetadata {
 }
 
 export interface Conflict {
-  readonly compartment: string
+  readonly vault: string
   readonly collection: string
   readonly id: string
   readonly local: EncryptedEnvelope
@@ -464,7 +464,7 @@ export interface SyncStatus {
 // ─── Events ────────────────────────────────────────────────────────────
 
 export interface ChangeEvent {
-  readonly compartment: string
+  readonly vault: string
   readonly collection: string
   readonly id: string
   readonly action: 'put' | 'delete'
@@ -478,8 +478,8 @@ export interface NoydbEventMap {
   'sync:conflict': Conflict
   'sync:online': void
   'sync:offline': void
-  'history:save': { compartment: string; collection: string; id: string; version: number }
-  'history:prune': { compartment: string; collection: string; id: string; pruned: number }
+  'history:save': { vault: string; collection: string; id: string; version: number }
+  'history:prune': { vault: string; collection: string; id: string; pruned: number }
 }
 
 // ─── Grant / Revoke ────────────────────────────────────────────────────
@@ -519,30 +519,30 @@ export interface RevokeOptions {
   readonly cascade?: 'strict' | 'warn'
 }
 
-// ─── Cross-compartment queries (v0.5 #63) ──────────────────────────────
+// ─── Cross-vault queries (v0.5 #63) ──────────────────────────────
 
 /**
- * One entry returned by `Noydb.listAccessibleCompartments()`. Carries
+ * One entry returned by `Noydb.listAccessibleVaults()`. Carries
  * the compartment id and the role the calling principal holds in it,
  * so the consumer can decide how to fan out without re-checking
- * permissions per compartment.
+ * permissions per vault.
  */
-export interface AccessibleCompartment {
+export interface AccessibleVault {
   readonly id: string
   readonly role: Role
 }
 
 /**
- * Options for `Noydb.listAccessibleCompartments()`.
+ * Options for `Noydb.listAccessibleVaults()`.
  */
-export interface ListAccessibleCompartmentsOptions {
+export interface ListAccessibleVaultsOptions {
   /**
    * Minimum role the caller must hold to include a compartment in the
    * result. Compartments where the caller's role is strictly *below*
    * this threshold are silently excluded. Defaults to `'client'`,
-   * which means "every compartment I can unwrap is returned." Set to
-   * `'admin'` for "compartments where I can grant/revoke," or
-   * `'owner'` for "compartments I own."
+   * which means "every vault I can unwrap is returned." Set to
+   * `'admin'` for "vaults where I can grant/revoke," or
+   * `'owner'` for "vaults I own."
    *
    * The privilege ordering used:
    *   `client (1) < viewer (2) < operator (3) < admin (4) < owner (5)`
@@ -586,8 +586,8 @@ export interface QueryAcrossOptions {
  * `r.error !== undefined` and short-circuit themselves.
  */
 export type QueryAcrossResult<T> =
-  | { readonly compartment: string; readonly result: T; readonly error?: undefined }
-  | { readonly compartment: string; readonly result?: undefined; readonly error: Error }
+  | { readonly vault: string; readonly result: T; readonly error?: undefined }
+  | { readonly vault: string; readonly result?: undefined; readonly error: Error }
 
 // ─── User Info ─────────────────────────────────────────────────────────
 

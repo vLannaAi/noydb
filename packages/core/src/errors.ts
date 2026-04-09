@@ -82,8 +82,8 @@ export class PermissionDeniedError extends NoydbError {
  * store capability the active store does not implement (v0.5
  * #63).
  *
- * Today the only call site is `Noydb.listAccessibleCompartments()`,
- * which depends on the optional `NoydbStore.listCompartments()`
+ * Today the only call site is `Noydb.listAccessibleVaults()`,
+ * which depends on the optional `NoydbStore.listVaults()`
  * method. The error message names the missing method and the calling
  * API so consumers know exactly which combination is unsupported,
  * and the `capability` field is machine-readable so library code can
@@ -107,7 +107,7 @@ export class StoreCapabilityError extends NoydbError {
       `${callerApi} requires the optional store capability "${capability}" ` +
         `but the active store${storeName ? ` (${storeName})` : ''} does not implement it. ` +
         `Use a store that supports "${capability}" (store-memory, store-file) or pass an explicit ` +
-        `compartment list to bypass enumeration.`,
+        `vault list to bypass enumeration.`,
     )
     this.name = 'StoreCapabilityError'
     this.capability = capability
@@ -280,11 +280,11 @@ export class BundleIntegrityError extends NoydbError {
 // ─── i18n / Dictionary Errors (v0.8 #81 #82) ──────────────────────────
 
 /**
- * Thrown when `compartment.collection()` is called with a name that is
+ * Thrown when `vault.collection()` is called with a name that is
  * reserved for NOYDB internal use (any name starting with `_dict_`).
  *
  * Dictionary collections are accessed exclusively via
- * `compartment.dictionary(name)` — attempting to open one as a regular
+ * `vault.dictionary(name)` — attempting to open one as a regular
  * collection would bypass the dictionary invariants (ACL, rename
  * tracking, reserved-name policy).
  */
@@ -296,7 +296,7 @@ export class ReservedCollectionNameError extends NoydbError {
     super(
       'RESERVED_COLLECTION_NAME',
       `"${collectionName}" is a reserved collection name. ` +
-        `Use compartment.dictionary("${collectionName.replace(/^_dict_/, '')}") ` +
+        `Use vault.dictionary("${collectionName.replace(/^_dict_/, '')}") ` +
         `to access dictionary collections.`,
     )
     this.name = 'ReservedCollectionNameError'
@@ -395,8 +395,8 @@ export class MissingTranslationError extends NoydbError {
 
 /**
  * Thrown when reading an `i18nText` field without specifying a locale —
- * either at the call site (`get(id, { locale })`) or on the compartment
- * (`openCompartment(name, { locale })`).
+ * either at the call site (`get(id, { locale })`) or on the vault
+ * (`openVault(name, { locale })`).
  *
  * Also thrown when `resolveI18nText()` exhausts the fallback chain and
  * no translation is available for the requested locale.
@@ -414,7 +414,7 @@ export class LocaleNotSpecifiedError extends NoydbError {
       message ??
         `Cannot read i18nText field "${field}" without a locale. ` +
         `Pass { locale } to get()/list()/query() or set a default via ` +
-        `openCompartment(name, { locale }).`,
+        `openVault(name, { locale }).`,
     )
     this.name = 'LocaleNotSpecifiedError'
     this.field = field
@@ -454,7 +454,7 @@ export class TranslatorNotConfiguredError extends NoydbError {
 // ─── Backup Errors (v0.4 #46) ─────────────────────────────────────────
 
 /**
- * Thrown when `Compartment.load()` finds that a backup's hash chain
+ * Thrown when `Vault.load()` finds that a backup's hash chain
  * doesn't verify, or that its embedded `ledgerHead.hash` doesn't
  * match the chain head reconstructed from the loaded entries.
  *
@@ -475,7 +475,7 @@ export class BackupLedgerError extends NoydbError {
 }
 
 /**
- * Thrown when `Compartment.load()` finds that the backup's data
+ * Thrown when `Vault.load()` finds that the backup's data
  * collection content doesn't match the ledger's recorded
  * `payloadHash`es. This is the "envelope was tampered with after
  * dump" detection — the chain itself can be intact, but if any
@@ -614,7 +614,7 @@ export class JoinTooLargeError extends NoydbError {
  * happen at different lifecycle phases and deserve different
  * remediation in documentation: a RefIntegrityError on `put()`
  * means the input is invalid; a DanglingReferenceError on `.join()`
- * means stored data has drifted and `compartment.checkIntegrity()`
+ * means stored data has drifted and `vault.checkIntegrity()`
  * is the right tool to find the full set of orphans.
  */
 export class DanglingReferenceError extends NoydbError {

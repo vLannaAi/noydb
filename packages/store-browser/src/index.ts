@@ -1,4 +1,4 @@
-import type { NoydbStore, EncryptedEnvelope, CompartmentSnapshot } from '@noy-db/core'
+import type { NoydbStore, EncryptedEnvelope, VaultSnapshot } from '@noy-db/core'
 import { ConflictError } from '@noy-db/core'
 
 export interface BrowserOptions {
@@ -14,7 +14,7 @@ export interface BrowserOptions {
  * Create a browser storage adapter.
  * Uses localStorage for small datasets (<5MB) or IndexedDB for larger ones.
  *
- * Key scheme (normal):    `{prefix}:{compartment}:{collection}:{id}`
+ * Key scheme (normal):    `{prefix}:{vault}:{collection}:{id}`
  * Key scheme (obfuscated): `{prefix}:{hash}:{hash}:{hash}`
  */
 export function browser(options: BrowserOptions = {}): NoydbStore {
@@ -144,29 +144,29 @@ function unwrapValue(raw: string, obfuscate: boolean, obfKey: string): { envelop
 // ─── localStorage Backend ──────────────────────────────────────────────
 
 function createLocalStorageAdapter(prefix: string, obfuscate: boolean, obfKey: string): NoydbStore {
-  function key(compartment: string, collection: string, id: string): string {
-    return `${prefix}:${hashComponent(compartment, obfuscate)}:${hashComponent(collection, obfuscate)}:${hashComponent(id, obfuscate)}`
+  function key(vault: string, collection: string, id: string): string {
+    return `${prefix}:${hashComponent(vault, obfuscate)}:${hashComponent(collection, obfuscate)}:${hashComponent(id, obfuscate)}`
   }
 
-  function collectionPrefix(compartment: string, collection: string): string {
-    return `${prefix}:${hashComponent(compartment, obfuscate)}:${hashComponent(collection, obfuscate)}:`
+  function collectionPrefix(vault: string, collection: string): string {
+    return `${prefix}:${hashComponent(vault, obfuscate)}:${hashComponent(collection, obfuscate)}:`
   }
 
-  function compartmentPrefix(compartment: string): string {
-    return `${prefix}:${hashComponent(compartment, obfuscate)}:`
+  function compartmentPrefix(vault: string): string {
+    return `${prefix}:${hashComponent(vault, obfuscate)}:`
   }
 
   return {
     name: 'browser:localStorage',
 
-    async get(compartment, collection, id) {
-      const data = localStorage.getItem(key(compartment, collection, id))
+    async get(vault, collection, id) {
+      const data = localStorage.getItem(key(vault, collection, id))
       if (!data) return null
       return unwrapValue(data, obfuscate, obfKey).envelope
     },
 
-    async put(compartment, collection, id, envelope, expectedVersion) {
-      const k = key(compartment, collection, id)
+    async put(vault, collection, id, envelope, expectedVersion) {
+      const k = key(vault, collection, id)
 
       if (expectedVersion !== undefined) {
         const existing = localStorage.getItem(k)
@@ -181,12 +181,12 @@ function createLocalStorageAdapter(prefix: string, obfuscate: boolean, obfKey: s
       localStorage.setItem(k, wrapValue(envelope, collection, id, obfuscate, obfKey))
     },
 
-    async delete(compartment, collection, id) {
-      localStorage.removeItem(key(compartment, collection, id))
+    async delete(vault, collection, id) {
+      localStorage.removeItem(key(vault, collection, id))
     },
 
-    async list(compartment, collection) {
-      const pfx = collectionPrefix(compartment, collection)
+    async list(vault, collection) {
+      const pfx = collectionPrefix(vault, collection)
       const ids: string[] = []
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i)
@@ -206,9 +206,9 @@ function createLocalStorageAdapter(prefix: string, obfuscate: boolean, obfKey: s
       return ids
     },
 
-    async loadAll(compartment) {
-      const pfx = compartmentPrefix(compartment)
-      const snapshot: CompartmentSnapshot = {}
+    async loadAll(vault) {
+      const pfx = compartmentPrefix(vault)
+      const snapshot: VaultSnapshot = {}
 
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i)
@@ -242,11 +242,11 @@ function createLocalStorageAdapter(prefix: string, obfuscate: boolean, obfKey: s
       return snapshot
     },
 
-    async saveAll(compartment, data) {
+    async saveAll(vault, data) {
       for (const [collection, records] of Object.entries(data)) {
         for (const [id, envelope] of Object.entries(records)) {
           localStorage.setItem(
-            key(compartment, collection, id),
+            key(vault, collection, id),
             wrapValue(envelope, collection, id, obfuscate, obfKey),
           )
         }
@@ -274,8 +274,8 @@ function createLocalStorageAdapter(prefix: string, obfuscate: boolean, obfKey: s
      * browsers, so listing the matching keys upfront is faster than
      * iterating in slices.
      */
-    async listPage(compartment, collection, cursor, limit = 100) {
-      const pfx = collectionPrefix(compartment, collection)
+    async listPage(vault, collection, cursor, limit = 100) {
+      const pfx = collectionPrefix(vault, collection)
       const matchedKeys: string[] = []
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i)
@@ -328,8 +328,8 @@ function createIndexedDBAdapter(prefix: string, obfuscate: boolean, obfKey: stri
     return dbPromise
   }
 
-  function key(compartment: string, collection: string, id: string): string {
-    return `${hashComponent(compartment, obfuscate)}:${hashComponent(collection, obfuscate)}:${hashComponent(id, obfuscate)}`
+  function key(vault: string, collection: string, id: string): string {
+    return `${hashComponent(vault, obfuscate)}:${hashComponent(collection, obfuscate)}:${hashComponent(id, obfuscate)}`
   }
 
   function tx(mode: IDBTransactionMode): Promise<{ store: IDBObjectStore; complete: Promise<void> }> {
@@ -354,9 +354,9 @@ function createIndexedDBAdapter(prefix: string, obfuscate: boolean, obfKey: stri
   return {
     name: 'browser:indexedDB',
 
-    async get(compartment, collection, id) {
+    async get(vault, collection, id) {
       const { store } = await tx('readonly')
-      const raw = await idbRequest(store.get(key(compartment, collection, id)))
+      const raw = await idbRequest(store.get(key(vault, collection, id)))
       if (!raw) return null
       if (obfuscate && typeof raw === 'object' && '_e' in (raw as StoredValue)) {
         return (raw as StoredValue)._e
@@ -364,8 +364,8 @@ function createIndexedDBAdapter(prefix: string, obfuscate: boolean, obfKey: stri
       return raw as EncryptedEnvelope
     },
 
-    async put(compartment, collection, id, envelope, expectedVersion) {
-      const k = key(compartment, collection, id)
+    async put(vault, collection, id, envelope, expectedVersion) {
+      const k = key(vault, collection, id)
 
       const { store, complete } = await tx('readwrite')
       if (expectedVersion !== undefined) {
@@ -383,14 +383,14 @@ function createIndexedDBAdapter(prefix: string, obfuscate: boolean, obfKey: stri
       await complete
     },
 
-    async delete(compartment, collection, id) {
+    async delete(vault, collection, id) {
       const { store, complete } = await tx('readwrite')
-      store.delete(key(compartment, collection, id))
+      store.delete(key(vault, collection, id))
       await complete
     },
 
-    async list(compartment, collection) {
-      const pfx = `${hashComponent(compartment, obfuscate)}:${hashComponent(collection, obfuscate)}:`
+    async list(vault, collection) {
+      const pfx = `${hashComponent(vault, obfuscate)}:${hashComponent(collection, obfuscate)}:`
       const { store } = await tx('readonly')
       const allKeys = await idbRequest(store.getAllKeys()) as string[]
 
@@ -412,11 +412,11 @@ function createIndexedDBAdapter(prefix: string, obfuscate: boolean, obfKey: stri
       return ids
     },
 
-    async loadAll(compartment) {
-      const pfx = `${hashComponent(compartment, obfuscate)}:`
+    async loadAll(vault) {
+      const pfx = `${hashComponent(vault, obfuscate)}:`
       const { store } = await tx('readonly')
       const allKeys = await idbRequest(store.getAllKeys()) as string[]
-      const snapshot: CompartmentSnapshot = {}
+      const snapshot: VaultSnapshot = {}
 
       for (const k of allKeys) {
         if (typeof k !== 'string' || !k.startsWith(pfx)) continue
@@ -450,12 +450,12 @@ function createIndexedDBAdapter(prefix: string, obfuscate: boolean, obfKey: stri
       return snapshot
     },
 
-    async saveAll(compartment, data) {
+    async saveAll(vault, data) {
       const { store, complete } = await tx('readwrite')
       for (const [collection, records] of Object.entries(data)) {
         for (const [id, envelope] of Object.entries(records)) {
           const value = obfuscate ? { _oi: xorEncode(id, obfKey), _oc: xorEncode(collection, obfKey), _e: envelope } : envelope
-          store.put(value, key(compartment, collection, id))
+          store.put(value, key(vault, collection, id))
         }
       }
       await complete
@@ -479,8 +479,8 @@ function createIndexedDBAdapter(prefix: string, obfuscate: boolean, obfKey: stri
      * Firefox 78+, Safari 14+, Edge 88+ — same baseline as the rest of
      * the v0.3 build target).
      */
-    async listPage(compartment, collection, cursor, limit = 100) {
-      const pfx = `${hashComponent(compartment, obfuscate)}:${hashComponent(collection, obfuscate)}:`
+    async listPage(vault, collection, cursor, limit = 100) {
+      const pfx = `${hashComponent(vault, obfuscate)}:${hashComponent(collection, obfuscate)}:`
       const { store } = await tx('readonly')
       const allKeys = await idbRequest(store.getAllKeys()) as string[]
       const matchedKeys = allKeys

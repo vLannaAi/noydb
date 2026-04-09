@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import type { NoydbStore, EncryptedEnvelope, CompartmentSnapshot } from '../src/types.js'
+import type { NoydbStore, EncryptedEnvelope, VaultSnapshot } from '../src/types.js'
 import { ConflictError } from '../src/errors.js'
 import { createNoydb } from '../src/noydb.js'
 import { SyncTransaction } from '../src/sync-transaction.js'
@@ -23,7 +23,7 @@ function inlineMemory(): NoydbStore {
     async delete(c, col, id) { store.get(c)?.get(col)?.delete(id) },
     async list(c, col) { const coll = store.get(c)?.get(col); return coll ? [...coll.keys()] : [] },
     async loadAll(c) {
-      const comp = store.get(c); const s: CompartmentSnapshot = {}
+      const comp = store.get(c); const s: VaultSnapshot = {}
       if (comp) for (const [n, coll] of comp) { if (!n.startsWith('_')) { const r: Record<string, EncryptedEnvelope> = {}; for (const [id, e] of coll) r[id] = e; s[n] = r } }
       return s
     },
@@ -43,13 +43,13 @@ describe('SyncTransaction (v0.9 #135)', () => {
     const local = inlineMemory()
     const remote = inlineMemory()
     const db = await createNoydb({ store: local, sync: remote, user: 'u', encrypt: false })
-    await db.openCompartment(COMP)
+    await db.openVault(COMP)
 
     const tx = db.transaction(COMP)
     expect(tx).toBeInstanceOf(SyncTransaction)
   })
 
-  it('throws if compartment is not open', async () => {
+  it('throws if vault is not open', async () => {
     const local = inlineMemory()
     const remote = inlineMemory()
     const db = await createNoydb({ store: local, sync: remote, user: 'u', encrypt: false })
@@ -60,7 +60,7 @@ describe('SyncTransaction (v0.9 #135)', () => {
   it('throws if no sync adapter is configured', async () => {
     const local = inlineMemory()
     const db = await createNoydb({ store: local, user: 'u', encrypt: false })
-    await db.openCompartment(COMP)
+    await db.openVault(COMP)
 
     expect(() => db.transaction(COMP)).toThrow(/No sync adapter/)
   })
@@ -69,7 +69,7 @@ describe('SyncTransaction (v0.9 #135)', () => {
     const local = inlineMemory()
     const remote = inlineMemory()
     const db = await createNoydb({ store: local, sync: remote, user: 'u', encrypt: false })
-    await db.openCompartment(COMP)
+    await db.openVault(COMP)
 
     const tx = db.transaction(COMP)
     tx.put('invoices', 'inv-1', { amount: 100, status: 'draft' } as Invoice)
@@ -90,7 +90,7 @@ describe('SyncTransaction (v0.9 #135)', () => {
     const local = inlineMemory()
     const remote = inlineMemory()
     const db = await createNoydb({ store: local, sync: remote, user: 'u', encrypt: false })
-    const comp = await db.openCompartment(COMP)
+    const comp = await db.openVault(COMP)
 
     // Seed a record
     await comp.collection<Invoice>('invoices').put('inv-del', { amount: 1, status: 'x' })
@@ -108,7 +108,7 @@ describe('SyncTransaction (v0.9 #135)', () => {
     const local = inlineMemory()
     const remote = inlineMemory()
     const db = await createNoydb({ store: local, sync: remote, user: 'u', encrypt: false })
-    await db.openCompartment(COMP)
+    await db.openVault(COMP)
 
     const result = await db.transaction(COMP)
       .put('invoices', 'inv-1', { amount: 1, status: 'a' } as Invoice)
@@ -122,7 +122,7 @@ describe('SyncTransaction (v0.9 #135)', () => {
     const local = inlineMemory()
     const remote = inlineMemory()
     const db = await createNoydb({ store: local, sync: remote, user: 'u', encrypt: false })
-    await db.openCompartment(COMP)
+    await db.openVault(COMP)
 
     // Pre-seed remote with a higher version to cause a conflict
     await remote.put(COMP, 'invoices', 'inv-1', {
@@ -141,7 +141,7 @@ describe('SyncTransaction (v0.9 #135)', () => {
     const local = inlineMemory()
     const remote = inlineMemory()
     const db = await createNoydb({ store: local, sync: remote, user: 'u', encrypt: false })
-    const comp = await db.openCompartment(COMP)
+    const comp = await db.openVault(COMP)
 
     // Dirty record outside the transaction
     await comp.collection<Invoice>('payments').put('pay-outside', { amount: 99, status: 'pending' })

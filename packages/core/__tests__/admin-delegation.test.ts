@@ -4,7 +4,7 @@
  * Coverage:
  *   1. **Grant capability** — admin can grant another admin (rejected
  *      under v0.4), and the resulting admin can actually unlock the
- *      compartment with their own passphrase and read collections.
+ *      vault with their own passphrase and read collections.
  *   2. **PrivilegeEscalationError class** — exported from the public
  *      API, has the right shape, distinct from PermissionDeniedError.
  *      The error is structurally unreachable in the v0.5 admin model
@@ -25,7 +25,7 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import type { NoydbStore, EncryptedEnvelope, CompartmentSnapshot } from '../src/types.js'
+import type { NoydbStore, EncryptedEnvelope, VaultSnapshot } from '../src/types.js'
 import {
   ConflictError,
   PrivilegeEscalationError,
@@ -52,7 +52,7 @@ function memory(): NoydbStore {
     async delete(c, col, id) { store.get(c)?.get(col)?.delete(id) },
     async list(c, col) { const coll = store.get(c)?.get(col); return coll ? [...coll.keys()] : [] },
     async loadAll(c) {
-      const comp = store.get(c); const s: CompartmentSnapshot = {}
+      const comp = store.get(c); const s: VaultSnapshot = {}
       if (comp) for (const [n, coll] of comp) {
         if (!n.startsWith('_')) {
           const r: Record<string, EncryptedEnvelope> = {}
@@ -81,7 +81,7 @@ describe('admin-grants-admin (bounded delegation) — #62', () => {
   beforeEach(async () => {
     adapter = memory()
     ownerDb = await createNoydb({ store: adapter, user: 'owner-01', secret: 'owner-pass' })
-    const comp = await ownerDb.openCompartment(COMP)
+    const comp = await ownerDb.openVault(COMP)
     await comp.collection<Invoice>('invoices').put('inv-1', { amount: 100, client: 'Globex' })
 
     // Standing setup: one owner, one admin granted by owner.
@@ -106,7 +106,7 @@ describe('admin-grants-admin (bounded delegation) — #62', () => {
       ).resolves.not.toThrow()
     })
 
-    it('the granted admin can unlock the compartment and read records', async () => {
+    it('the granted admin can unlock the vault and read records', async () => {
       const admin1Db = await createNoydb({ store: adapter, user: 'admin-1', secret: 'admin-1-pass' })
       await admin1Db.grant(COMP, {
         userId: 'admin-2',
@@ -116,7 +116,7 @@ describe('admin-grants-admin (bounded delegation) — #62', () => {
       })
 
       const admin2Db = await createNoydb({ store: adapter, user: 'admin-2', secret: 'admin-2-pass' })
-      const comp = await admin2Db.openCompartment(COMP)
+      const comp = await admin2Db.openVault(COMP)
       const inv = await comp.collection<Invoice>('invoices').get('inv-1')
       expect(inv?.amount).toBe(100)
     })

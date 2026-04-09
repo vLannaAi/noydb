@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import type { NoydbStore, EncryptedEnvelope, CompartmentSnapshot, PushResult, PullResult, Conflict } from '../src/types.js'
+import type { NoydbStore, EncryptedEnvelope, VaultSnapshot, PushResult, PullResult, Conflict } from '../src/types.js'
 import { ConflictError } from '../src/errors.js'
 import { createNoydb } from '../src/noydb.js'
 import type { Noydb } from '../src/noydb.js'
@@ -21,7 +21,7 @@ function inlineMemory(): NoydbStore {
     async delete(c, col, id) { store.get(c)?.get(col)?.delete(id) },
     async list(c, col) { const coll = store.get(c)?.get(col); return coll ? [...coll.keys()] : [] },
     async loadAll(c) {
-      const comp = store.get(c); const s: CompartmentSnapshot = {}
+      const comp = store.get(c); const s: VaultSnapshot = {}
       if (comp) for (const [n, coll] of comp) { if (!n.startsWith('_')) { const r: Record<string, EncryptedEnvelope> = {}; for (const [id, e] of coll) r[id] = e; s[n] = r } }
       return s
     },
@@ -53,14 +53,14 @@ describe('sync engine', () => {
     })
 
     it('A writes, pushes; B pulls, sees the record', async () => {
-      const compA = await dbA.openCompartment(COMP)
+      const compA = await dbA.openVault(COMP)
       await compA.collection<Invoice>('invoices').put('inv-001', { amount: 5000, status: 'draft' })
 
       const pushResult = await dbA.push(COMP)
       expect(pushResult.pushed).toBe(1)
       expect(pushResult.conflicts).toHaveLength(0)
 
-      await dbB.openCompartment(COMP) // must open to initialize sync engine
+      await dbB.openVault(COMP) // must open to initialize sync engine
       const pullResult = await dbB.pull(COMP)
       expect(pullResult.pulled).toBe(1)
 
@@ -69,7 +69,7 @@ describe('sync engine', () => {
     })
 
     it('A writes multiple records, pushes; B pulls all', async () => {
-      const compA = await dbA.openCompartment(COMP)
+      const compA = await dbA.openVault(COMP)
       const invoices = compA.collection<Invoice>('invoices')
       await invoices.put('inv-001', { amount: 1000, status: 'a' })
       await invoices.put('inv-002', { amount: 2000, status: 'b' })
@@ -78,16 +78,16 @@ describe('sync engine', () => {
       const pushResult = await dbA.push(COMP)
       expect(pushResult.pushed).toBe(3)
 
-      await dbB.openCompartment(COMP)
+      await dbB.openVault(COMP)
       const pullResult = await dbB.pull(COMP)
       expect(pullResult.pulled).toBe(3)
     })
 
     it('A and B write different records; both push+pull; both see all', async () => {
-      const compA = await dbA.openCompartment(COMP)
+      const compA = await dbA.openVault(COMP)
       await compA.collection<Invoice>('invoices').put('inv-A', { amount: 100, status: 'from-a' })
 
-      const compB = await dbB.openCompartment(COMP)
+      const compB = await dbB.openVault(COMP)
       await compB.collection<Invoice>('invoices').put('inv-B', { amount: 200, status: 'from-b' })
 
       await dbA.push(COMP)
@@ -100,13 +100,13 @@ describe('sync engine', () => {
     })
 
     it('delete syncs correctly', async () => {
-      const compA = await dbA.openCompartment(COMP)
+      const compA = await dbA.openVault(COMP)
       const invoices = compA.collection<Invoice>('invoices')
       await invoices.put('inv-del', { amount: 999, status: 'delete-me' })
       await dbA.push(COMP)
 
       // B pulls the record
-      await dbB.openCompartment(COMP)
+      await dbB.openVault(COMP)
       await dbB.pull(COMP)
       expect(await localB.get(COMP, 'invoices', 'inv-del')).not.toBeNull()
 
@@ -119,7 +119,7 @@ describe('sync engine', () => {
     })
 
     it('dirty tracking accumulates and clears after push', async () => {
-      const compA = await dbA.openCompartment(COMP)
+      const compA = await dbA.openVault(COMP)
       const invoices = compA.collection<Invoice>('invoices')
 
       await invoices.put('inv-1', { amount: 100, status: 'x' })
@@ -134,7 +134,7 @@ describe('sync engine', () => {
     })
 
     it('sync() does pull then push', async () => {
-      const compA = await dbA.openCompartment(COMP)
+      const compA = await dbA.openVault(COMP)
       await compA.collection<Invoice>('invoices').put('inv-1', { amount: 100, status: 'x' })
 
       const result = await dbA.sync(COMP)
@@ -147,7 +147,7 @@ describe('sync engine', () => {
       dbA.on('sync:push', () => events.push('push'))
       dbA.on('sync:pull', () => events.push('pull'))
 
-      const compA = await dbA.openCompartment(COMP)
+      const compA = await dbA.openVault(COMP)
       await compA.collection<Invoice>('invoices').put('inv-1', { amount: 100, status: 'x' })
 
       await dbA.push(COMP)
@@ -185,7 +185,7 @@ describe('sync engine', () => {
         store: localAdapter, sync: remoteAdapter, user: 'u', encrypt: false,
         conflict: 'version',
       })
-      const comp = await db.openCompartment(COMP)
+      const comp = await db.openVault(COMP)
       // Force a dirty entry by writing
       await comp.collection<Invoice>('invoices').put('inv-1', { amount: 0, status: 'local-update' })
 
@@ -204,7 +204,7 @@ describe('sync engine', () => {
       })
 
       // Write to both local and remote with same ID
-      const comp = await db.openCompartment(COMP)
+      const comp = await db.openVault(COMP)
       await comp.collection<Invoice>('invoices').put('inv-1', { amount: 100, status: 'local' })
 
       // Manually put a conflicting version on remote
@@ -230,7 +230,7 @@ describe('sync engine', () => {
         conflict: 'remote-wins',
       })
 
-      const comp = await db.openCompartment(COMP)
+      const comp = await db.openVault(COMP)
       await comp.collection<Invoice>('invoices').put('inv-1', { amount: 100, status: 'local' })
 
       // Put conflicting version on remote
@@ -257,7 +257,7 @@ describe('sync engine', () => {
         },
       })
 
-      const comp = await db.openCompartment(COMP)
+      const comp = await db.openVault(COMP)
       await comp.collection<Invoice>('invoices').put('inv-1', { amount: 100, status: 'local' })
 
       await remote.put(COMP, 'invoices', 'inv-1', {

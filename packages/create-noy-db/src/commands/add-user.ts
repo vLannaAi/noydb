@@ -1,6 +1,6 @@
 /**
  * `noy-db add user <id> <role>` — grant a new user access to a
- * compartment.
+ * vault.
  *
  * What it does
  * ------------
@@ -11,7 +11,7 @@
  *   2. Prompt for the new user's passphrase.
  *   3. Prompt for confirmation of the new passphrase.
  *   4. Reject on mismatch.
- *   5. Call `noydb.grant(compartment, { userId, role, passphrase, permissions })`.
+ *   5. Call `noydb.grant(vault, { userId, role, passphrase, permissions })`.
  *
  * For owner/admin/viewer roles, every collection is granted
  * automatically (the core keyring.ts grant logic handles that via
@@ -34,13 +34,13 @@ import type { ReadPassphrase } from './shared.js'
 import { defaultReadPassphrase } from './shared.js'
 
 export interface AddUserOptions {
-  /** Directory containing the compartment data (file adapter only). */
+  /** Directory containing the vault data (file adapter only). */
   dir: string
-  /** Compartment (tenant) name to grant access to. */
-  compartment: string
+  /** Vault (tenant) name to grant access to. */
+  vault: string
   /** The user id of the caller running the grant. */
   callerUser: string
-  /** The new user's id (must not already exist in the compartment keyring). */
+  /** The new user's id (must not already exist in the vault keyring). */
   newUserId: string
   /** The new user's display name — shown in UI and audit logs. Defaults to `newUserId`. */
   newUserDisplayName?: string
@@ -128,7 +128,7 @@ export async function addUser(options: AddUserOptions): Promise<AddUserResult> {
       ...(options.permissions ? { permissions: options.permissions } : {}),
     }
 
-    await db.grant(options.compartment, grantOpts)
+    await db.grant(options.vault, grantOpts)
 
     return {
       userId: options.newUserId,

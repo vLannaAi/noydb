@@ -2,7 +2,7 @@
  * Magic-link unlock — v0.7 #113
  *
  * A magic link is a one-time URL that lets a recipient (a "client portal
- * viewer") open a compartment in a read-only, viewer-scoped session WITHOUT
+ * viewer") open a vault in a read-only, viewer-scoped session WITHOUT
  * entering a passphrase. The link expires after use or after the TTL, and
  * the resulting session is strictly limited to the viewer role.
  *
@@ -22,8 +22,8 @@
  *     cannot derive the KEK without the server secret.
  *   - `token` is a ULID embedded in the URL. It is single-use at the
  *     application layer (the server marks it consumed after first use).
- *   - `compartmentId` binds the derived key to a specific compartment —
- *     a token for compartment A cannot be used to unlock compartment B.
+ *   - `compartmentId` binds the derived key to a specific vault —
+ *     a token for vault A cannot be used to unlock vault B.
  *
  * The resulting keyring is ALWAYS viewer-scoped (role: 'viewer'). The
  * DEKs available to the viewer are only the collections in the
@@ -44,7 +44,7 @@
  *   3. Viewer clicks the link → browser sends token to server endpoint.
  *   4. Server calls `deriveMagicLinkKEK()` with the same serverSecret + token
  *      + compartmentId → gets back the viewer KEK.
- *   5. Server calls `grant(compartment, viewerOptions)` using the derived KEK,
+ *   5. Server calls `grant(vault, viewerOptions)` using the derived KEK,
  *      creating a viewer keyring in the adapter.
  *   6. Viewer client calls `resolveMagicLink()` with the token → gets a
  *      short-lived UnlockedKeyring that can hydrate a session token.
@@ -72,8 +72,8 @@ export const MAGIC_LINK_DEFAULT_TTL_MS = 24 * 60 * 60 * 1000
 export interface MagicLinkToken {
   /** Unique one-time token (ULID). Embed this in the URL. */
   readonly token: string
-  /** The compartment this link unlocks (viewer-only). */
-  readonly compartment: string
+  /** The vault this link unlocks (viewer-only). */
+  readonly vault: string
   /** ISO timestamp after which the link is invalid. */
   readonly expiresAt: string
   /** Role of the resulting session. Always 'viewer' for magic links. */
@@ -101,12 +101,12 @@ export interface CreateMagicLinkOptions {
  *
  * @param serverSecret - Server-held secret (never sent to the client).
  * @param token - The ULID from the magic link URL.
- * @param compartment - The compartment ID this link is for.
+ * @param vault - The vault ID this link is for.
  */
 export async function deriveMagicLinkKEK(
   serverSecret: string | Uint8Array<ArrayBuffer>,
   token: string,
-  compartment: string,
+  vault: string,
 ): Promise<CryptoKey> {
   const subtle = globalThis.crypto.subtle
 
@@ -123,7 +123,7 @@ export async function deriveMagicLinkKEK(
   const saltBuffer = await subtle.digest('SHA-256', tokenBytes)
 
   // Info: "noydb-magic-link-v1:" + compartmentId
-  const info = new TextEncoder().encode(MAGIC_LINK_INFO_PREFIX + compartment)
+  const info = new TextEncoder().encode(MAGIC_LINK_INFO_PREFIX + vault)
 
   const ikm = await subtle.importKey('raw', ikmBytes, 'HKDF', false, ['deriveKey'])
 
@@ -152,17 +152,17 @@ export async function deriveMagicLinkKEK(
  *   1. Validate that the token has not expired or been used.
  *   2. Call `deriveMagicLinkKEK()` to create the viewer keyring.
  *
- * @param compartment - The compartment to grant viewer access to.
+ * @param vault - The vault to grant viewer access to.
  * @param options - Optional TTL configuration.
  */
 export function createMagicLinkToken(
-  compartment: string,
+  vault: string,
   options: CreateMagicLinkOptions = {},
 ): MagicLinkToken {
   const ttlMs = options.ttlMs ?? MAGIC_LINK_DEFAULT_TTL_MS
   return {
     token: generateULID(),
-    compartment,
+    vault,
     expiresAt: new Date(Date.now() + ttlMs).toISOString(),
     role: 'viewer',
   }
@@ -190,7 +190,7 @@ export function isMagicLinkValid(linkToken: MagicLinkToken): boolean {
  * it into a session token should call `createSession()` from `@noy-db/core`.
  *
  * @param viewerUserId - The user ID the viewer keyring was granted for.
- * @param deks - The unwrapped DEKs (viewer-scoped subset of the compartment).
+ * @param deks - The unwrapped DEKs (viewer-scoped subset of the vault).
  * @param kek - The magic-link KEK (AES-KW, non-extractable).
  * @param salt - The salt embedded in the viewer's keyring file.
  */

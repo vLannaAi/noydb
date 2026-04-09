@@ -1,4 +1,4 @@
-import type { NoydbStore, EncryptedEnvelope, CompartmentSnapshot } from '@noy-db/core'
+import type { NoydbStore, EncryptedEnvelope, VaultSnapshot } from '@noy-db/core'
 import { ConflictError } from '@noy-db/core'
 import {
   S3Client as AwsS3Client,
@@ -37,7 +37,7 @@ export interface S3Options {
 
 /**
  * Create an S3 adapter.
- * Key scheme: `{prefix}/{compartment}/{collection}/{id}.json`
+ * Key scheme: `{prefix}/{vault}/{collection}/{id}.json`
  */
 export function s3(options: S3Options): NoydbStore {
   const { bucket, prefix = '' } = options
@@ -51,28 +51,28 @@ export function s3(options: S3Options): NoydbStore {
     ...(options.endpoint ? { endpoint: options.endpoint, forcePathStyle: true } : {}),
   })) as AwsS3Client
 
-  function objectKey(compartment: string, collection: string, id: string): string {
-    const parts = [compartment, collection, `${id}.json`]
+  function objectKey(vault: string, collection: string, id: string): string {
+    const parts = [vault, collection, `${id}.json`]
     return prefix ? `${prefix}/${parts.join('/')}` : parts.join('/')
   }
 
-  function collPrefix(compartment: string, collection: string): string {
-    const parts = [compartment, collection, '']
+  function collPrefix(vault: string, collection: string): string {
+    const parts = [vault, collection, '']
     return prefix ? `${prefix}/${parts.join('/')}` : parts.join('/')
   }
 
-  function compPrefix(compartment: string): string {
-    return prefix ? `${prefix}/${compartment}/` : `${compartment}/`
+  function compPrefix(vault: string): string {
+    return prefix ? `${prefix}/${vault}/` : `${vault}/`
   }
 
   return {
     name: 's3',
 
-    async get(compartment, collection, id) {
+    async get(vault, collection, id) {
       try {
         const result = await client.send(new GetObjectCommand({
           Bucket: bucket,
-          Key: objectKey(compartment, collection, id),
+          Key: objectKey(vault, collection, id),
         }))
 
         if (!result.Body) return null
@@ -86,9 +86,9 @@ export function s3(options: S3Options): NoydbStore {
       }
     },
 
-    async put(compartment, collection, id, envelope, expectedVersion) {
+    async put(vault, collection, id, envelope, expectedVersion) {
       if (expectedVersion !== undefined) {
-        const existing = await this.get(compartment, collection, id)
+        const existing = await this.get(vault, collection, id)
         if (existing && existing._v !== expectedVersion) {
           throw new ConflictError(existing._v, `Version conflict: expected ${expectedVersion}, found ${existing._v}`)
         }
@@ -96,21 +96,21 @@ export function s3(options: S3Options): NoydbStore {
 
       await client.send(new PutObjectCommand({
         Bucket: bucket,
-        Key: objectKey(compartment, collection, id),
+        Key: objectKey(vault, collection, id),
         Body: JSON.stringify(envelope),
         ContentType: 'application/json',
       }))
     },
 
-    async delete(compartment, collection, id) {
+    async delete(vault, collection, id) {
       await client.send(new DeleteObjectCommand({
         Bucket: bucket,
-        Key: objectKey(compartment, collection, id),
+        Key: objectKey(vault, collection, id),
       }))
     },
 
-    async list(compartment, collection) {
-      const pfx = collPrefix(compartment, collection)
+    async list(vault, collection) {
+      const pfx = collPrefix(vault, collection)
       const result = await client.send(new ListObjectsV2Command({
         Bucket: bucket,
         Prefix: pfx,
@@ -122,14 +122,14 @@ export function s3(options: S3Options): NoydbStore {
         .map(k => k.slice(pfx.length, -5))
     },
 
-    async loadAll(compartment) {
-      const pfx = compPrefix(compartment)
+    async loadAll(vault) {
+      const pfx = compPrefix(vault)
       const listResult = await client.send(new ListObjectsV2Command({
         Bucket: bucket,
         Prefix: pfx,
       }))
 
-      const snapshot: CompartmentSnapshot = {}
+      const snapshot: VaultSnapshot = {}
 
       for (const obj of listResult.Contents ?? []) {
         const key = obj.Key ?? ''
@@ -158,10 +158,10 @@ export function s3(options: S3Options): NoydbStore {
       return snapshot
     },
 
-    async saveAll(compartment, data) {
+    async saveAll(vault, data) {
       for (const [collection, records] of Object.entries(data)) {
         for (const [id, envelope] of Object.entries(records)) {
-          await this.put(compartment, collection, id, envelope)
+          await this.put(vault, collection, id, envelope)
         }
       }
     },
@@ -187,8 +187,8 @@ export function s3(options: S3Options): NoydbStore {
      * the parallel GETs amortize well, and consumers willing to pay for
      * stronger pagination should use a different adapter (Dynamo).
      */
-    async listPage(compartment, collection, cursor, limit = 100) {
-      const pfx = collPrefix(compartment, collection)
+    async listPage(vault, collection, cursor, limit = 100) {
+      const pfx = collPrefix(vault, collection)
       const listResult = await client.send(new ListObjectsV2Command({
         Bucket: bucket,
         Prefix: pfx,

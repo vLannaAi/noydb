@@ -20,7 +20,7 @@ runStoreConformanceTests(
 describe('obfuscation: key opacity', () => {
   beforeEach(() => { localStorage.clear() })
 
-  it('localStorage keys do not contain plaintext compartment, collection, or ID', async () => {
+  it('localStorage keys do not contain plaintext vault, collection, or ID', async () => {
     const adapter = browser({ prefix: 'test', backend: 'localStorage', obfuscate: true })
 
     await adapter.put('MyCompany', 'invoices', 'INV-001', {

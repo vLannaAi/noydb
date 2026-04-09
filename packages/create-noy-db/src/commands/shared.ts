@@ -1,6 +1,6 @@
 /**
  * Shared primitives for the interactive `noy-db` subcommands that
- * need to unlock a real compartment.
+ * need to unlock a real vault.
  *
  * Three things live here:
  *

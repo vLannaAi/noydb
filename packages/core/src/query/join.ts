@@ -1,5 +1,5 @@
 /**
- * Query DSL `.join()` — eager, single-FK, intra-compartment joins.
+ * Query DSL `.join()` — eager, single-FK, intra-vault joins.
  *
  * v0.6 #73 — resolves a ref()-declared foreign key into an attached
  * right-side record under an alias, using one of two planner paths
@@ -20,7 +20,7 @@
  *   - Equi-joins on declared `ref()` fields only. Joins on
  *     undeclared fields throw at plan time with an actionable error
  *     naming the field and collection.
- *   - Same-compartment only. Cross-compartment correlation goes
+ *   - Same-vault only. Cross-vault correlation goes
  *     through `queryAcross` (#63); this is an architectural
  *     invariant, not a limitation we plan to lift.
  *   - Hard row ceiling via `JoinTooLargeError` — default 50k per
@@ -115,7 +115,7 @@ export interface JoinLeg {
  * that omit `subscribe` still work for live joins — they just
  * don't drive re-fires when their right side mutates. Collection
  * implements `subscribe` by hooking into the existing per-
- * compartment event emitter.
+ * vault event emitter.
  */
 export interface JoinableSource {
   snapshot(): readonly unknown[]
@@ -135,10 +135,10 @@ export interface JoinableSource {
  * translate a field name into a target collection + ref mode, and
  * everything the executor needs to read the right side.
  *
- * Kept as a structural interface so `Compartment` can implement it
- * without `Query` needing to import `Compartment` (circular-import
+ * Kept as a structural interface so `Vault` can implement it
+ * without `Query` needing to import `Vault` (circular-import
  * avoid). The Collection wires this up in its `query()` method using
- * the `joinResolver` back-reference the Compartment passes in.
+ * the `joinResolver` back-reference the Vault passes in.
  */
 export interface JoinContext {
   /** Name of the left-side (owning) collection. */
@@ -293,7 +293,7 @@ function applyOneJoin(
     throw new Error(
       `.join() cannot resolve target collection "${leg.target}" ` +
         `(referenced from field "${leg.field}" on "${context.leftCollection}"). ` +
-        `Make sure the target collection has been opened via compartment.collection() ` +
+        `Make sure the target collection has been opened via vault.collection() ` +
         `at least once before running the query.`,
     )
   }
@@ -439,7 +439,7 @@ function attachJoin(
           `.join() strict dangling: record references "${leg.target}:${refKey}" ` +
           `via field "${leg.field}", but no such record exists. Use ref() mode 'warn' ` +
           `or 'cascade' if dangling refs are acceptable, or run ` +
-          `compartment.checkIntegrity() to find and fix the orphans.`,
+          `vault.checkIntegrity() to find and fix the orphans.`,
       })
     }
     if (refKey !== null && leg.mode === 'warn') {

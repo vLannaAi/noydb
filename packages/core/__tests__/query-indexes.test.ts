@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { CollectionIndexes } from '../src/query/indexes.js'
 import { createNoydb } from '../src/noydb.js'
 import type { Noydb } from '../src/noydb.js'
-import type { NoydbStore, EncryptedEnvelope, CompartmentSnapshot } from '../src/types.js'
+import type { NoydbStore, EncryptedEnvelope, VaultSnapshot } from '../src/types.js'
 import { ConflictError } from '../src/errors.js'
 
 /**
@@ -34,7 +34,7 @@ function memory(): NoydbStore & { _putCalls: Array<{ collection: string; id: str
     async delete(c, col, id) { store.get(c)?.get(col)?.delete(id) },
     async list(c, col) { const coll = store.get(c)?.get(col); return coll ? [...coll.keys()] : [] },
     async loadAll(c) {
-      const comp = store.get(c); const s: CompartmentSnapshot = {}
+      const comp = store.get(c); const s: VaultSnapshot = {}
       if (comp) for (const [n, coll] of comp) {
         if (!n.startsWith('_')) {
           const r: Record<string, EncryptedEnvelope> = {}
@@ -208,7 +208,7 @@ describe('Collection.query() — index-aware execution', () => {
   })
 
   it('13. declared indexes do not break the legacy predicate query() form', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const invoices = c.collection<Invoice>('invoices', { indexes: ['status'] })
     await invoices.put('a', { id: 'a', status: 'draft', amount: 100, client: 'A', dueDate: '2026-04-01' })
     const drafts = invoices.query(i => i.status === 'draft')
@@ -217,7 +217,7 @@ describe('Collection.query() — index-aware execution', () => {
 
   it('14. indexed query returns identical results to a non-indexed query', async () => {
     // Build an indexed and a non-indexed collection with the same data.
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const indexed = c.collection<Invoice>('indexed', { indexes: ['status'] })
     const plain = c.collection<Invoice>('plain')
     const records: Invoice[] = []
@@ -243,7 +243,7 @@ describe('Collection.query() — index-aware execution', () => {
   })
 
   it('15. `in` lookup against an indexed field returns the union', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const invoices = c.collection<Invoice>('invoices', { indexes: ['status'] })
     await invoices.put('a', { id: 'a', status: 'draft',   amount: 1, client: 'A', dueDate: '2026-04-01' })
     await invoices.put('b', { id: 'b', status: 'open',    amount: 2, client: 'B', dueDate: '2026-04-02' })
@@ -257,7 +257,7 @@ describe('Collection.query() — index-aware execution', () => {
   })
 
   it('16. unindexed fields fall back to a linear scan and still return correct results', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const invoices = c.collection<Invoice>('invoices', { indexes: ['status'] })
     // status IS indexed, client is NOT — query against client should still work.
     await invoices.put('a', { id: 'a', status: 'open', amount: 1, client: 'Alpha',   dueDate: '2026-04-01' })
@@ -270,7 +270,7 @@ describe('Collection.query() — index-aware execution', () => {
   })
 
   it('17. indexes are maintained on update (record moves between buckets)', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const invoices = c.collection<Invoice>('invoices', { indexes: ['status'] })
     await invoices.put('a', { id: 'a', status: 'draft', amount: 1, client: 'A', dueDate: '2026-04-01' })
     expect(invoices.query().where('status', '==', 'draft').count()).toBe(1)
@@ -283,7 +283,7 @@ describe('Collection.query() — index-aware execution', () => {
   })
 
   it('18. indexes are maintained on delete', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const invoices = c.collection<Invoice>('invoices', { indexes: ['status'] })
     await invoices.put('a', { id: 'a', status: 'open', amount: 1, client: 'A', dueDate: '2026-04-01' })
     await invoices.put('b', { id: 'b', status: 'open', amount: 2, client: 'B', dueDate: '2026-04-02' })
@@ -294,7 +294,7 @@ describe('Collection.query() — index-aware execution', () => {
   })
 
   it('19. multiple indexes on the same collection are independently maintained', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const invoices = c.collection<Invoice>('invoices', { indexes: ['status', 'client'] })
     await invoices.put('a', { id: 'a', status: 'open', amount: 1, client: 'Alpha', dueDate: '2026-04-01' })
     await invoices.put('b', { id: 'b', status: 'open', amount: 2, client: 'Bravo', dueDate: '2026-04-02' })
@@ -313,7 +313,7 @@ describe('Collection.query() — index-aware execution', () => {
       user: 'owner',
       secret: 'index-spy-passphrase-2026',
     })
-    const c = await localDb.openCompartment('TEST')
+    const c = await localDb.openVault('TEST')
     const invoices = c.collection<Invoice>('invoices', { indexes: ['status'] })
     await invoices.put('a', { id: 'a', status: 'paid', amount: 999, client: 'SecretClient', dueDate: '2026-04-01' })
 
@@ -337,7 +337,7 @@ describe('Collection.query() — index-aware execution', () => {
   })
 
   it('21. indexes survive collection re-open via the same Noydb instance', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const invoices = c.collection<Invoice>('invoices', { indexes: ['status'] })
     await invoices.put('a', { id: 'a', status: 'open', amount: 1, client: 'A', dueDate: '2026-04-01' })
 
@@ -353,7 +353,7 @@ describe('Collection.query() — index-aware execution', () => {
       secret: 'bench-passphrase-2026',
       history: { enabled: false }, // skip history snapshots for the bench
     })
-    const c = await localDb.openCompartment('BENCH')
+    const c = await localDb.openVault('BENCH')
     const indexed = c.collection<Invoice>('indexed', { indexes: ['status'] })
     const plain = c.collection<Invoice>('plain')
 

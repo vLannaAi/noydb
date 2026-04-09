@@ -77,10 +77,10 @@ function warnOnceFallback(adapterName: string): void {
   )
 }
 
-/** A typed collection of records within a compartment. */
+/** A typed collection of records within a vault. */
 export class Collection<T> {
   private readonly adapter: NoydbStore
-  private readonly compartment: string
+  private readonly vault: string
   private readonly name: string
   private readonly keyring: UnlockedKeyring
   private readonly encrypted: boolean
@@ -146,10 +146,10 @@ export class Collection<T> {
   private readonly schema: StandardSchemaV1<unknown, T> | undefined
 
   /**
-   * Compartment-default locale. Used as the fallback when no per-call
-   * locale option is passed to `get()`/`list()`. Provided by Compartment
+   * Vault-default locale. Used as the fallback when no per-call
+   * locale option is passed to `get()`/`list()`. Provided by Vault
    * at collection construction time via the `collection({ locale })` or
-   * `openCompartment(name, { locale })` path.
+   * `openVault(name, { locale })` path.
    *
    * `undefined` means "no default locale set" — i18nText fields will
    * throw `LocaleNotSpecifiedError` unless a per-call locale is passed.
@@ -174,7 +174,7 @@ export class Collection<T> {
   private readonly dictKeyFields: Record<string, DictKeyDescriptor> | undefined
 
   /**
-   * Async callback provided by the Compartment that resolves a dict key
+   * Async callback provided by the Vault that resolves a dict key
    * to its label for a given locale. Used by the locale-read path for
    * dictKey fields.
    *
@@ -190,7 +190,7 @@ export class Collection<T> {
     | undefined
 
   /**
-   * Synchronous callback provided by the Compartment that validates
+   * Synchronous callback provided by the Vault that validates
    * i18nText fields on `put()`. Throws `MissingTranslationError` when
    * a required translation is absent. Called after schema validation,
    * before encryption.
@@ -198,7 +198,7 @@ export class Collection<T> {
   private readonly i18nPutValidator: ((record: unknown) => void) | undefined
 
   /**
-   * Async translator callback provided by Noydb via Compartment for
+   * Async translator callback provided by Noydb via Vault for
    * `i18nText` fields with `autoTranslate: true` (v0.8 #83). Called
    * before i18n validation so translated values are present when the
    * validator runs. `undefined` when no `plaintextTranslator` was
@@ -209,21 +209,21 @@ export class Collection<T> {
     | undefined
 
   /**
-   * Optional reference to the compartment-level hash-chained audit
+   * Optional reference to the vault-level hash-chained audit
    * log. When present, every successful `put()` and `delete()` appends
    * an entry to the ledger AFTER the adapter write succeeds (so a
    * failed adapter write never produces an orphan ledger entry).
    *
-   * The ledger is always a compartment-wide singleton — all
-   * collections in the same compartment share the same LedgerStore.
-   * Compartment.ledger() does the lazy init; this field just holds
+   * The ledger is always a vault-wide singleton — all
+   * collections in the same vault share the same LedgerStore.
+   * Vault.ledger() does the lazy init; this field just holds
    * the reference so Collection doesn't need to reach back up to the
-   * compartment on every mutation.
+   * vault on every mutation.
    *
    * `undefined` means "no ledger attached" — supported for tests that
-   * construct a Collection directly without a compartment, and for
+   * construct a Collection directly without a vault, and for
    * future backwards-compat scenarios. Production usage always has a
-   * ledger because Compartment.collection() passes one through.
+   * ledger because Vault.collection() passes one through.
    */
   private readonly ledger: LedgerStore | undefined
 
@@ -239,12 +239,12 @@ export class Collection<T> {
    * `refEnforcer.enforceRefsOnPut(name, record)` before the adapter
    * write, and `Collection.delete` calls
    * `refEnforcer.enforceRefsOnDelete(name, id)` before its own
-   * adapter delete. The Compartment handles the actual registry
+   * adapter delete. The Vault handles the actual registry
    * lookup and cross-collection enforcement — Collection just
    * notifies it at the right points in the lifecycle.
    *
-   * Typed as a structural interface rather than `Compartment`
-   * directly to avoid a circular import. Compartment implements
+   * Typed as a structural interface rather than `Vault`
+   * directly to avoid a circular import. Vault implements
    * these two methods; any other object with the same shape would
    * work too (used only in unit tests).
    */
@@ -272,8 +272,8 @@ export class Collection<T> {
    *     `null` when the field has no ref, which makes `.join()`
    *     throw at plan time before any records are touched.
    *
-   * Typed structurally rather than as `Compartment` to avoid a
-   * circular import. Compartment implements these two methods; any
+   * Typed structurally rather than as `Vault` to avoid a
+   * circular import. Vault implements these two methods; any
    * other object with the same shape works too (used only in unit
    * tests against a plain object).
    */
@@ -287,7 +287,7 @@ export class Collection<T> {
 
   constructor(opts: {
     adapter: NoydbStore
-    compartment: string
+    vault: string
     name: string
     keyring: UnlockedKeyring
     encrypted: boolean
@@ -318,8 +318,8 @@ export class Collection<T> {
     /**
      * Optional reference to the compartment's hash-chained ledger.
      * When present, successful mutations append a ledger entry via
-     * `LedgerStore.append()`. Constructed at the Compartment level and
-     * threaded through — see the Compartment.collection() source for
+     * `LedgerStore.append()`. Constructed at the Vault level and
+     * threaded through — see the Vault.collection() source for
      * the wiring.
      */
     ledger?: LedgerStore | undefined
@@ -343,8 +343,8 @@ export class Collection<T> {
      * `JoinContext` so `.join(field)` can resolve through the
      * existing `ref()` declaration into the target collection.
      * Absent in tests that construct a Collection directly without
-     * a compartment; production usage always has one because
-     * Compartment.collection() passes `this` through.
+     * a vault; production usage always has one because
+     * Vault.collection() passes `this` through.
      */
     joinResolver?:
       | {
@@ -358,7 +358,7 @@ export class Collection<T> {
     dictKeyFields?: Record<string, DictKeyDescriptor> | undefined
     /**
      * v0.8 #81 — async callback that resolves a dict key to its label
-     * for a given locale. Provided by the Compartment.
+     * for a given locale. Provided by the Vault.
      */
     dictLabelResolver?:
       | ((
@@ -370,7 +370,7 @@ export class Collection<T> {
       | undefined
     /**
      * v0.8 #82 — synchronous callback that validates i18nText fields
-     * on put. Provided by the Compartment. Throws MissingTranslationError.
+     * on put. Provided by the Vault. Throws MissingTranslationError.
      */
     i18nPutValidator?: ((record: unknown) => void) | undefined
     /**
@@ -382,8 +382,8 @@ export class Collection<T> {
       | ((text: string, from: string, to: string, field: string, collection: string) => Promise<string>)
       | undefined
     /**
-     * v0.8 — compartment-default locale, inherited from
-     * `openCompartment(name, { locale })` or `compartment.setLocale()`.
+     * v0.8 — vault-default locale, inherited from
+     * `openVault(name, { locale })` or `vault.setLocale()`.
      */
     defaultLocale?: string | undefined
     /**
@@ -393,7 +393,7 @@ export class Collection<T> {
     conflictPolicy?: ConflictPolicy<T> | undefined
     /**
      * v0.9 #131 — callback to register an envelope-level resolver with the
-     * SyncEngine. Provided by the Compartment (wired from the SyncEngine).
+     * SyncEngine. Provided by the Vault (wired from the SyncEngine).
      */
     onRegisterConflictResolver?: ((name: string, resolver: CollectionConflictResolver) => void) | undefined
     /**
@@ -410,7 +410,7 @@ export class Collection<T> {
     syncAdapter?: NoydbStore | undefined
   }) {
     this.adapter = opts.adapter
-    this.compartment = opts.compartment
+    this.vault = opts.vault
     this.name = opts.name
     this.keyring = opts.keyring
     this.encrypted = opts.encrypted
@@ -453,7 +453,7 @@ export class Collection<T> {
     // v0.9 #131 — build and register per-collection conflict resolver with SyncEngine
     if (opts.conflictPolicy !== undefined && opts.onRegisterConflictResolver) {
       const policy = opts.conflictPolicy
-      const compartmentName = this.compartment
+      const compartmentName = this.vault
       const collectionName = this.name
       const emitter = this.emitter
       let resolver: CollectionConflictResolver
@@ -473,7 +473,7 @@ export class Collection<T> {
               }
             }
             emitter.emit('sync:conflict', {
-              compartment: compartmentName,
+              vault: compartmentName,
               collection: collectionName,
               id,
               local,
@@ -543,7 +543,7 @@ export class Collection<T> {
    * Return the Standard Schema validator attached to this collection,
    * or `undefined` if none was provided at construction time.
    *
-   * Exposed (read-only) for the Compartment-level export primitive,
+   * Exposed (read-only) for the Vault-level export primitive,
    * which surfaces each collection's schema in the per-chunk metadata
    * so downstream serializers (`@noy-db/decrypt-*` packages, custom
    * exporters) can produce schema-aware output without poking at
@@ -577,7 +577,7 @@ export class Collection<T> {
         record = cached.record
       } else {
         // Cache miss: hit the adapter, decrypt, populate the LRU.
-        const envelope = await this.adapter.get(this.compartment, this.name, id)
+        const envelope = await this.adapter.get(this.vault, this.name, id)
         if (!envelope) return null
         record = await this.decryptRecord(envelope)
         this.lru.set(id, { record, version: envelope._v }, estimateRecordBytes(record))
@@ -606,7 +606,7 @@ export class Collection<T> {
         `is created with a 'crdt' option ('lww-map', 'rga', or 'yjs').`,
       )
     }
-    const envelope = await this.adapter.get(this.compartment, this.name, id)
+    const envelope = await this.adapter.get(this.vault, this.name, id)
     if (!envelope) return null
     const json = await this.decryptJsonString(envelope)
     return JSON.parse(json) as CrdtState
@@ -627,7 +627,7 @@ export class Collection<T> {
   presence<P = unknown>(opts?: { staleMs?: number; pollIntervalMs?: number }): PresenceHandle<P> {
     const presenceOpts: PresenceHandleOpts = {
       adapter: this.adapter,
-      compartment: this.compartment,
+      vault: this.vault,
       collectionName: this.name,
       userId: this.keyring.userId,
       encrypted: this.encrypted,
@@ -712,7 +712,7 @@ export class Collection<T> {
     // Foreign-key ref enforcement (v0.4 #45). Runs AFTER schema
     // validation (so the record shape is trustworthy) but BEFORE
     // any write (so a failed strict ref leaves no trace on disk,
-    // in history, or in the ledger). The Compartment handles the
+    // in history, or in the ledger). The Vault handles the
     // actual target lookups — see `enforceRefsOnPut` over there.
     if (this.refEnforcer !== undefined) {
       await this.refEnforcer.enforceRefsOnPut(this.name, record)
@@ -723,7 +723,7 @@ export class Collection<T> {
     // the existing CRDT state, merge the incoming record into it, then
     // encrypt the merged CRDT state — bypassing the normal version path.
     if (this.crdtMode) {
-      const existingEnvelope = await this.adapter.get(this.compartment, this.name, id)
+      const existingEnvelope = await this.adapter.get(this.vault, this.name, id)
       const existingVersion = existingEnvelope?._v ?? 0
       const now = new Date().toISOString()
 
@@ -757,7 +757,7 @@ export class Collection<T> {
 
       const version = existingVersion + 1
       const envelope = await this.encryptJsonString(JSON.stringify(crdtState), version)
-      await this.adapter.put(this.compartment, this.name, id, envelope)
+      await this.adapter.put(this.vault, this.name, id, envelope)
 
       // Resolve snapshot for cache and history
       const resolvedRecord = resolveCrdtSnapshot(crdtState) as T
@@ -767,10 +767,10 @@ export class Collection<T> {
 
       if (existingResolved && this.historyConfig.enabled !== false) {
         const histEnvelope = await this.encryptRecord(existingResolved.record, existingResolved.version)
-        await saveHistory(this.adapter, this.compartment, this.name, id, histEnvelope)
-        this.emitter.emit('history:save', { compartment: this.compartment, collection: this.name, id, version: existingResolved.version })
+        await saveHistory(this.adapter, this.vault, this.name, id, histEnvelope)
+        this.emitter.emit('history:save', { vault: this.vault, collection: this.name, id, version: existingResolved.version })
         if (this.historyConfig.maxVersions) {
-          await pruneHistoryEntries(this.adapter, this.compartment, this.name, id, { keepVersions: this.historyConfig.maxVersions })
+          await pruneHistoryEntries(this.adapter, this.vault, this.name, id, { keepVersions: this.historyConfig.maxVersions })
         }
       }
 
@@ -791,7 +791,7 @@ export class Collection<T> {
       }
 
       await this.onDirty?.(this.name, id, 'put', version)
-      this.emitter.emit('change', { compartment: this.compartment, collection: this.name, id, action: 'put' } satisfies ChangeEvent)
+      this.emitter.emit('change', { vault: this.vault, collection: this.name, id, action: 'put' } satisfies ChangeEvent)
       return
     }
     // ─── End CRDT mode ──────────────────────────────────────────────────
@@ -803,7 +803,7 @@ export class Collection<T> {
     if (this.lazy && this.lru) {
       existing = this.lru.get(id)
       if (!existing) {
-        const previousEnvelope = await this.adapter.get(this.compartment, this.name, id)
+        const previousEnvelope = await this.adapter.get(this.vault, this.name, id)
         if (previousEnvelope) {
           const previousRecord = await this.decryptRecord(previousEnvelope)
           existing = { record: previousRecord, version: previousEnvelope._v }
@@ -819,10 +819,10 @@ export class Collection<T> {
     // Save history snapshot of the PREVIOUS version before overwriting
     if (existing && this.historyConfig.enabled !== false) {
       const historyEnvelope = await this.encryptRecord(existing.record, existing.version)
-      await saveHistory(this.adapter, this.compartment, this.name, id, historyEnvelope)
+      await saveHistory(this.adapter, this.vault, this.name, id, historyEnvelope)
 
       this.emitter.emit('history:save', {
-        compartment: this.compartment,
+        vault: this.vault,
         collection: this.name,
         id,
         version: existing.version,
@@ -830,14 +830,14 @@ export class Collection<T> {
 
       // Auto-prune if maxVersions configured
       if (this.historyConfig.maxVersions) {
-        await pruneHistoryEntries(this.adapter, this.compartment, this.name, id, {
+        await pruneHistoryEntries(this.adapter, this.vault, this.name, id, {
           keepVersions: this.historyConfig.maxVersions,
         })
       }
     }
 
     const envelope = await this.encryptRecord(record, version)
-    await this.adapter.put(this.compartment, this.name, id, envelope)
+    await this.adapter.put(this.vault, this.name, id, envelope)
 
     // Ledger append — AFTER the adapter write succeeds so a failed
     // write never produces an orphan ledger entry. Computing the
@@ -890,7 +890,7 @@ export class Collection<T> {
     await this.onDirty?.(this.name, id, 'put', version)
 
     this.emitter.emit('change', {
-      compartment: this.compartment,
+      vault: this.vault,
       collection: this.name,
       id,
       action: 'put',
@@ -920,7 +920,7 @@ export class Collection<T> {
     if (this.lazy && this.lru) {
       existing = this.lru.get(id)
       if (!existing && this.historyConfig.enabled !== false) {
-        const previousEnvelope = await this.adapter.get(this.compartment, this.name, id)
+        const previousEnvelope = await this.adapter.get(this.vault, this.name, id)
         if (previousEnvelope) {
           const previousRecord = await this.decryptRecord(previousEnvelope)
           existing = { record: previousRecord, version: previousEnvelope._v }
@@ -933,7 +933,7 @@ export class Collection<T> {
     // Save history snapshot before deleting
     if (existing && this.historyConfig.enabled !== false) {
       const historyEnvelope = await this.encryptRecord(existing.record, existing.version)
-      await saveHistory(this.adapter, this.compartment, this.name, id, historyEnvelope)
+      await saveHistory(this.adapter, this.vault, this.name, id, historyEnvelope)
     }
 
     // Capture the previous envelope's payloadHash BEFORE delete so we
@@ -941,10 +941,10 @@ export class Collection<T> {
     // whatever was last visible to readers — for a `delete` of a
     // never-existed record, we use the empty string (which the
     // ledger entry's `payloadHash` field tolerates).
-    const previousEnvelope = await this.adapter.get(this.compartment, this.name, id)
+    const previousEnvelope = await this.adapter.get(this.vault, this.name, id)
     const previousPayloadHash = await envelopePayloadHash(previousEnvelope)
 
-    await this.adapter.delete(this.compartment, this.name, id)
+    await this.adapter.delete(this.vault, this.name, id)
 
     // Ledger append — same after-write timing as put(). The recorded
     // version is the version that WAS deleted (existing?.version), not
@@ -976,7 +976,7 @@ export class Collection<T> {
     await this.onDirty?.(this.name, id, 'delete', existing?.version ?? 0)
 
     this.emitter.emit('change', {
-      compartment: this.compartment,
+      vault: this.vault,
       collection: this.name,
       id,
       action: 'delete',
@@ -1046,7 +1046,7 @@ export class Collection<T> {
       snapshot: () => [...this.cache.values()].map(e => e.record),
       subscribe: (cb: () => void) => {
         const handler = (event: ChangeEvent): void => {
-          if (event.compartment === this.compartment && event.collection === this.name) {
+          if (event.vault === this.vault && event.collection === this.name) {
             cb()
           }
         }
@@ -1059,7 +1059,7 @@ export class Collection<T> {
       getIndexes: () => this.getIndexes(),
       lookupById: (id: string) => this.cache.get(id)?.record,
     }
-    // Build a JoinContext if the compartment passed a join resolver.
+    // Build a JoinContext if the vault passed a join resolver.
     // Without one, .join() on the resulting Query will throw with an
     // actionable error — the case is unreachable in production but
     // matters for unit tests that construct Collection directly.
@@ -1080,7 +1080,7 @@ export class Collection<T> {
 
   /**
    * Return a minimal JoinableSource view of this collection's
-   * in-memory cache. Used by the Compartment's `resolveSource`
+   * in-memory cache. Used by the Vault's `resolveSource`
    * method when another collection's `.join()` needs to probe this
    * one as the right side.
    *
@@ -1116,7 +1116,7 @@ export class Collection<T> {
       lookupById: (id: string) => this.cache.get(id)?.record,
       subscribe: (cb: () => void) => {
         const handler = (event: ChangeEvent): void => {
-          if (event.compartment === this.compartment && event.collection === this.name) {
+          if (event.vault === this.vault && event.collection === this.name) {
             cb()
           }
         }
@@ -1153,7 +1153,7 @@ export class Collection<T> {
   /** Get version history for a record, newest first. */
   async history(id: string, options?: HistoryOptions): Promise<HistoryEntry<T>[]> {
     const envelopes = await getHistoryEntries(
-      this.adapter, this.compartment, this.name, id, options,
+      this.adapter, this.vault, this.name, id, options,
     )
 
     const entries: HistoryEntry<T>[] = []
@@ -1181,7 +1181,7 @@ export class Collection<T> {
    */
   async getVersion(id: string, version: number): Promise<T | null> {
     const envelope = await getVersionEnvelope(
-      this.adapter, this.compartment, this.name, id, version,
+      this.adapter, this.vault, this.name, id, version,
     )
     if (!envelope) return null
     return this.decryptRecord(envelope, { skipValidation: true })
@@ -1229,11 +1229,11 @@ export class Collection<T> {
   /** Prune history entries for a record (or all records if id is undefined). */
   async pruneRecordHistory(id: string | undefined, options: PruneOptions): Promise<number> {
     const pruned = await pruneHistoryEntries(
-      this.adapter, this.compartment, this.name, id, options,
+      this.adapter, this.vault, this.name, id, options,
     )
     if (pruned > 0) {
       this.emitter.emit('history:prune', {
-        compartment: this.compartment,
+        vault: this.vault,
         collection: this.name,
         id: id ?? '*',
         pruned,
@@ -1244,7 +1244,7 @@ export class Collection<T> {
 
   /** Clear all history for this collection (or a specific record). */
   async clearHistory(id?: string): Promise<number> {
-    return clearHistory(this.adapter, this.compartment, this.name, id)
+    return clearHistory(this.adapter, this.vault, this.name, id)
   }
 
   // ─── Core Methods ─────────────────────────────────────────────
@@ -1258,7 +1258,7 @@ export class Collection<T> {
    */
   async count(): Promise<number> {
     if (this.lazy) {
-      const ids = await this.adapter.list(this.compartment, this.name)
+      const ids = await this.adapter.list(this.vault, this.name)
       return ids.length
     }
     await this.ensureHydrated()
@@ -1287,7 +1287,7 @@ export class Collection<T> {
     const limit = opts.limit ?? 100
 
     if (this.adapter.listPage) {
-      const result = await this.adapter.listPage(this.compartment, this.name, opts.cursor, limit)
+      const result = await this.adapter.listPage(this.vault, this.name, opts.cursor, limit)
       const decrypted: T[] = []
       for (const { record, version, id } of await this.decryptPage(result.items)) {
         // Update cache opportunistically — if the page-fetched record isn't
@@ -1308,13 +1308,13 @@ export class Collection<T> {
     // native path because every id requires its own round-trip, but
     // correct for adapters that haven't opted in.
     warnOnceFallback(this.adapter.name ?? 'unknown')
-    const ids = (await this.adapter.list(this.compartment, this.name)).slice().sort()
+    const ids = (await this.adapter.list(this.vault, this.name)).slice().sort()
     const start = opts.cursor ? parseInt(opts.cursor, 10) : 0
     const end = Math.min(start + limit, ids.length)
     const items: T[] = []
     for (let i = start; i < end; i++) {
       const id = ids[i]!
-      const envelope = await this.adapter.get(this.compartment, this.name, id)
+      const envelope = await this.adapter.get(this.vault, this.name, id)
       if (envelope) {
         const record = await this.decryptRecord(envelope)
         items.push(record)
@@ -1367,7 +1367,7 @@ export class Collection<T> {
    */
   scan(opts: { pageSize?: number } = {}): ScanBuilder<T> {
     const pageSize = opts.pageSize ?? 100
-    // Build a JoinContext if the compartment passed a join resolver
+    // Build a JoinContext if the vault passed a join resolver
     // — same machinery as `query()` (#73). Without one, `.join()`
     // on the resulting ScanBuilder will throw with an actionable
     // error. The resolver is unreachable in production but matters
@@ -1418,9 +1418,9 @@ export class Collection<T> {
   private async ensureHydrated(): Promise<void> {
     if (this.hydrated) return
 
-    const ids = await this.adapter.list(this.compartment, this.name)
+    const ids = await this.adapter.list(this.vault, this.name)
     for (const id of ids) {
-      const envelope = await this.adapter.get(this.compartment, this.name, id)
+      const envelope = await this.adapter.get(this.vault, this.name, id)
       if (envelope) {
         const record = await this.decryptRecord(envelope)
         this.cache.set(id, { record, version: envelope._v })
@@ -1430,7 +1430,7 @@ export class Collection<T> {
     this.rebuildIndexes()
   }
 
-  /** Hydrate from a pre-loaded snapshot (used by Compartment). */
+  /** Hydrate from a pre-loaded snapshot (used by Vault). */
   async hydrateFromSnapshot(records: Record<string, EncryptedEnvelope>): Promise<void> {
     for (const [id, envelope] of Object.entries(records)) {
       const record = await this.decryptRecord(envelope)

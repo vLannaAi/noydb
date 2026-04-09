@@ -13,7 +13,7 @@
  *   - Truncation detection
  *   - Compression algorithm selection (auto / gzip / none)
  *   - Brotli explicit-fail when unsupported
- *   - ULID handle stability across re-exports of the same compartment
+ *   - ULID handle stability across re-exports of the same vault
  *   - getBundleHandle generates a fresh handle on first call,
  *     persists it, returns the same handle on subsequent calls
  */
@@ -24,7 +24,7 @@ import type { Noydb } from '../src/noydb.js'
 import type {
   NoydbStore,
   EncryptedEnvelope,
-  CompartmentSnapshot,
+  VaultSnapshot,
   ListPageResult,
 } from '../src/types.js'
 import {
@@ -64,7 +64,7 @@ function memory(): NoydbStore {
     async delete(c, col, id) { store.get(c)?.get(col)?.delete(id) },
     async list(c, col) { const coll = store.get(c)?.get(col); return coll ? [...coll.keys()] : [] },
     async loadAll(c) {
-      const comp = store.get(c); const s: CompartmentSnapshot = {}
+      const comp = store.get(c); const s: VaultSnapshot = {}
       if (comp) for (const [n, coll] of comp) {
         if (!n.startsWith('_')) {
           const r: Record<string, EncryptedEnvelope> = {}
@@ -173,8 +173,8 @@ describe('bundle > header validator', () => {
 
   it('rejects forbidden disclosure keys', () => {
     expect(() =>
-      validateBundleHeader({ ...valid, compartment: 'Acme Corp' }),
-    ).toThrow(/forbidden key "compartment"/)
+      validateBundleHeader({ ...valid, vault: 'Acme Corp' }),
+    ).toThrow(/forbidden key "vault"/)
     expect(() =>
       validateBundleHeader({ ...valid, _exported_at: '2026-04-08' }),
     ).toThrow(/forbidden key "_exported_at"/)
@@ -247,7 +247,7 @@ describe('bundle > magic byte detection', () => {
 })
 
 // ---------------------------------------------------------------------------
-// Round-trip — write → read with real compartment
+// Round-trip — write → read with real vault
 // ---------------------------------------------------------------------------
 
 describe('bundle > round-trip with real compartment', () => {
@@ -261,8 +261,8 @@ describe('bundle > round-trip with real compartment', () => {
     })
   })
 
-  it('round-trips a small compartment with brotli/auto compression', async () => {
-    const c = await db.openCompartment('TEST')
+  it('round-trips a small vault with brotli/auto compression', async () => {
+    const c = await db.openVault('TEST')
     const invoices = c.collection<Invoice>('invoices')
     await invoices.put('inv-1', { id: 'inv-1', amount: 100, status: 'open' })
     await invoices.put('inv-2', { id: 'inv-2', amount: 200, status: 'paid' })
@@ -298,8 +298,8 @@ describe('bundle > round-trip with real compartment', () => {
     expect(second.dumpJson).toBe(result.dumpJson)
   })
 
-  it('round-trips a medium compartment with many records', async () => {
-    const c = await db.openCompartment('TEST')
+  it('round-trips a medium vault with many records', async () => {
+    const c = await db.openVault('TEST')
     const invoices = c.collection<Invoice>('invoices')
     for (let i = 0; i < 200; i++) {
       await invoices.put(`inv-${String(i).padStart(4, '0')}`, {
@@ -325,7 +325,7 @@ describe('bundle > round-trip with real compartment', () => {
     // compression + sha256 + decompression pipeline. Verifying the
     // PLAINTEXT survives decryption is covered by other tests
     // (integration.test.ts round-trip).
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const invoices = c.collection<Invoice>('invoices')
     await invoices.put('inv-1', {
       id: 'inv-1',
@@ -336,7 +336,7 @@ describe('bundle > round-trip with real compartment', () => {
     const bytes = await writeNoydbBundle(c)
     const result = await readNoydbBundle(bytes)
     // Same single-bundle round-trip pattern: parse the result and
-    // confirm the compartment name and collection structure
+    // confirm the vault name and collection structure
     // survive. The Thai content lives inside an encrypted record
     // envelope, so it's not searchable in dumpJson — that's the
     // job of the integration round-trip test in integration.test.ts.
@@ -350,7 +350,7 @@ describe('bundle > round-trip with real compartment', () => {
   })
 
   it('round-trips with explicit gzip compression', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const invoices = c.collection<Invoice>('invoices')
     await invoices.put('inv-1', { id: 'inv-1', amount: 100, status: 'open' })
     // Capture the dump ONCE — every call regenerates _exported_at
@@ -362,7 +362,7 @@ describe('bundle > round-trip with real compartment', () => {
     expect(bytes[5]).toBe(1) // COMPRESSION_GZIP
     const result = await readNoydbBundle(bytes)
     // Both dumpDirect and the round-tripped bundle were captured
-    // from the same compartment state — the bundle's internal dump
+    // from the same vault state — the bundle's internal dump
     // is taken at writeNoydbBundle time, which may have a different
     // _exported_at. We verify the bundle round-trips by comparing
     // the bundle's reader output to the bundle's writer input,
@@ -380,7 +380,7 @@ describe('bundle > round-trip with real compartment', () => {
   })
 
   it('round-trips with no compression (uncompressed body)', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const invoices = c.collection<Invoice>('invoices')
     await invoices.put('inv-1', { id: 'inv-1', amount: 100, status: 'open' })
     const bytes = await writeNoydbBundle(c, { compression: 'none' })
@@ -409,7 +409,7 @@ describe('bundle > readNoydbBundleHeader (no decompression)', () => {
   })
 
   it('parses just the header without touching the body', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const invoices = c.collection<Invoice>('invoices')
     await invoices.put('inv-1', { id: 'inv-1', amount: 100, status: 'open' })
     const bytes = await writeNoydbBundle(c)
@@ -447,7 +447,7 @@ describe('bundle > integrity tampering', () => {
   })
 
   it('flipping a single body byte triggers BundleIntegrityError', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const invoices = c.collection<Invoice>('invoices')
     await invoices.put('inv-1', { id: 'inv-1', amount: 100, status: 'open' })
     const bytes = await writeNoydbBundle(c)
@@ -471,7 +471,7 @@ describe('bundle > integrity tampering', () => {
   })
 
   it('truncating the body bytes triggers BundleIntegrityError on length check', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const invoices = c.collection<Invoice>('invoices')
     await invoices.put('inv-1', { id: 'inv-1', amount: 100, status: 'open' })
     const bytes = await writeNoydbBundle(c)
@@ -505,7 +505,7 @@ describe('bundle > handle stability across re-exports', () => {
   })
 
   it('getBundleHandle returns the same handle across multiple calls', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const a = await c.getBundleHandle()
     const b = await c.getBundleHandle()
     const cc = await c.getBundleHandle()
@@ -514,7 +514,7 @@ describe('bundle > handle stability across re-exports', () => {
   })
 
   it('the bundle header carries the same handle across re-exports', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const invoices = c.collection<Invoice>('invoices')
     await invoices.put('inv-1', { id: 'inv-1', amount: 100, status: 'open' })
 
@@ -529,7 +529,7 @@ describe('bundle > handle stability across re-exports', () => {
     expect(header1.bodySha256).not.toBe(header2.bodySha256)
   })
 
-  it('the handle survives reopening the compartment on the same adapter', async () => {
+  it('the handle survives reopening the vault on the same adapter', async () => {
     // Both compartments share the same adapter via the noydb
     // instance, so the persisted _meta/handle envelope is visible
     // to both.
@@ -539,7 +539,7 @@ describe('bundle > handle stability across re-exports', () => {
       user: 'owner',
       secret: 'bundle-test-passphrase-2026',
     })
-    const c1 = await db1.openCompartment('TEST')
+    const c1 = await db1.openVault('TEST')
     const handle1 = await c1.getBundleHandle()
 
     // New noydb instance over the same adapter.
@@ -548,15 +548,15 @@ describe('bundle > handle stability across re-exports', () => {
       user: 'owner',
       secret: 'bundle-test-passphrase-2026',
     })
-    const c2 = await db2.openCompartment('TEST')
+    const c2 = await db2.openVault('TEST')
     const handle2 = await c2.getBundleHandle()
 
     expect(handle2).toBe(handle1)
   })
 
   it('different compartments get different handles', async () => {
-    const cA = await db.openCompartment('COMP-A')
-    const cB = await db.openCompartment('COMP-B')
+    const cA = await db.openVault('COMP-A')
+    const cB = await db.openVault('COMP-B')
     const handleA = await cA.getBundleHandle()
     const handleB = await cB.getBundleHandle()
     expect(handleA).not.toBe(handleB)

@@ -14,7 +14,7 @@
  *   - It runs in well under one second, so users actually run it.
  *
  * What this command does NOT do (intentionally):
- *   - Open the user's actual compartment file/dynamo/s3/browser store.
+ *   - Open the user's actual vault file/dynamo/s3/browser store.
  *     That requires the user's passphrase — not something we want a CLI
  *     `verify` command to prompt for. The full passphrase-driven verify
  *     belongs in `nuxi noydb verify` once the auth story for CLIs lands
@@ -50,7 +50,7 @@ export async function verifyIntegrity(): Promise<VerifyResult> {
       // PBKDF2 properly.
       secret: 'noy-db-verify-passphrase-2026',
     })
-    const company = await db.openCompartment('verify-co')
+    const company = await db.openVault('verify-co')
     const collection = company.collection<{ id: string; n: number }>('verify')
 
     // Round-trip a single record. We pick a value that's small enough

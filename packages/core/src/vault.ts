@@ -1,8 +1,8 @@
 import type {
   NoydbStore,
   EncryptedEnvelope,
-  CompartmentBackup,
-  CompartmentSnapshot,
+  VaultBackup,
+  VaultSnapshot,
   HistoryConfig,
   ExportStreamOptions,
   ExportChunk,
@@ -41,8 +41,8 @@ import type { LocaleReadOptions, ConflictPolicy } from './types.js'
 import type { CrdtMode } from './crdt.js'
 import { ReservedCollectionNameError } from './errors.js'
 
-/** A compartment (tenant namespace) containing collections. */
-export class Compartment {
+/** A vault (tenant namespace) containing collections. */
+export class Vault {
   private readonly adapter: NoydbStore
   private readonly name: string
   /**
@@ -68,8 +68,8 @@ export class Compartment {
    * `this.keyring` so the next DEK access uses the loaded wrapped
    * DEKs instead of the stale pre-load ones.
    *
-   * Provided by Noydb at openCompartment() time. Tests that
-   * construct Compartment directly can pass `undefined`; load()
+   * Provided by Noydb at openVault() time. Tests that
+   * construct Vault directly can pass `undefined`; load()
    * skips the refresh in that case (which is fine for plaintext
    * compartments — there's nothing to re-unwrap).
    */
@@ -77,13 +77,13 @@ export class Compartment {
   private readonly collectionCache = new Map<string, Collection<unknown>>()
 
   /**
-   * Per-compartment ledger store. Lazy-initialized on first
+   * Per-vault ledger store. Lazy-initialized on first
    * `collection()` call (which passes it through to the Collection)
    * or on first `ledger()` call from user code.
    *
-   * One LedgerStore is shared across all collections in a compartment
-   * because the hash chain is compartment-scoped: the chain head is a
-   * single "what did this compartment do last" identifier, not a
+   * One LedgerStore is shared across all collections in a vault
+   * because the hash chain is vault-scoped: the chain head is a
+   * single "what did this vault do last" identifier, not a
    * per-collection one. Two collections appending concurrently is the
    * single-writer concurrency concern documented in the LedgerStore
    * docstring.
@@ -91,9 +91,9 @@ export class Compartment {
   private ledgerStore: LedgerStore | null = null
 
   /**
-   * Per-compartment foreign-key reference registry. Collections
+   * Per-vault foreign-key reference registry. Collections
    * register their `refs` option here on construction; the
-   * compartment uses the registry on every put/delete/checkIntegrity
+   * vault uses the registry on every put/delete/checkIntegrity
    * call. One instance lives for the compartment's lifetime.
    */
   private readonly refRegistry = new RefRegistry()
@@ -109,8 +109,8 @@ export class Compartment {
   private readonly cascadeInProgress = new Set<string>()
 
   /**
-   * Compartment-default locale (v0.8 #81 #82). Set via
-   * `openCompartment(name, { locale })`. Used as the fallback locale
+   * Vault-default locale (v0.8 #81 #82). Set via
+   * `openVault(name, { locale })`. Used as the fallback locale
    * when per-call `{ locale }` options are not specified on individual
    * `get()`/`list()` calls.
    */
@@ -118,7 +118,7 @@ export class Compartment {
 
   /**
    * Registry of dictKey fields declared across all collections in this
-   * compartment. Keyed by collection name → field name → dictionary name.
+   * vault. Keyed by collection name → field name → dictionary name.
    * Used by `DictionaryHandle.rename()` to find and update all records
    * referencing a renamed key.
    *
@@ -161,7 +161,7 @@ export class Compartment {
     onDirty?: OnDirtyCallback | undefined
     historyConfig?: HistoryConfig | undefined
     reloadKeyring?: (() => Promise<UnlockedKeyring>) | undefined
-    /** Compartment-default locale (v0.8 #81 #82). */
+    /** Vault-default locale (v0.8 #81 #82). */
     locale?: string | undefined
     /** Translator callback from Noydb (v0.8 #83). */
     plaintextTranslator?:
@@ -217,7 +217,7 @@ export class Compartment {
   }
 
   /**
-   * Open a typed collection within this compartment.
+   * Open a typed collection within this vault.
    *
    * - `options.indexes` declares secondary indexes for the query DSL.
    *   Indexes are computed in memory after decryption; adapters never
@@ -238,7 +238,7 @@ export class Compartment {
    *   with `{ locale }` add `<field>Label` virtual fields.
    *
    * Throws `ReservedCollectionNameError` for names starting with `_dict_`.
-   * Use `compartment.dictionary(name)` to access dictionary collections.
+   * Use `vault.dictionary(name)` to access dictionary collections.
    *
    * Lazy mode + indexes is rejected at construction time — see the
    * Collection constructor for the rationale.
@@ -265,10 +265,10 @@ export class Compartment {
 
     let coll = this.collectionCache.get(collectionName)
     if (!coll) {
-      // Register ref declarations (if any) with the compartment-level
+      // Register ref declarations (if any) with the vault-level
       // registry BEFORE constructing the Collection. This way the
       // first put() on the new collection already sees its refs via
-      // compartment.enforceRefsOnPut.
+      // vault.enforceRefsOnPut.
       if (options?.refs) {
         this.refRegistry.register(collectionName, options.refs)
       }
@@ -289,7 +289,7 @@ export class Compartment {
 
       const collOpts: ConstructorParameters<typeof Collection<T>>[0] = {
         adapter: this.adapter,
-        compartment: this.name,
+        vault: this.name,
         name: collectionName,
         keyring: this.keyring,
         encrypted: this.encrypted,
@@ -483,7 +483,7 @@ export class Compartment {
    * The snapshot is built synchronously from the DictionaryHandle's
    * write-through cache, which is populated on every `put()`, `rename()`,
    * `delete()`, and `list()` call. For pre-existing data not yet touched
-   * this session, call `await compartment.dictionary(name).list()` first
+   * this session, call `await vault.dictionary(name).list()` first
    * to warm the cache.
    *
    * Returns `null` when `field` is not a dictKey in `leftCollection`.
@@ -506,15 +506,15 @@ export class Compartment {
   }
 
   /**
-   * Set or update the compartment-default locale at runtime.
+   * Set or update the vault-default locale at runtime.
    * Useful when the user switches their preferred language after opening
-   * the compartment.
+   * the vault.
    */
   setLocale(locale: string | undefined): void {
     this.locale = locale
   }
 
-  /** Return the current compartment-default locale. */
+  /** Return the current vault-default locale. */
   getLocale(): string | undefined {
     return this.locale
   }
@@ -669,9 +669,9 @@ export class Compartment {
    * join will see an empty snapshot; consumers who hit this can
    * open the target collection explicitly before running the query.
    *
-   * Only same-compartment targets are resolvable — cross-compartment
+   * Only same-vault targets are resolvable — cross-vault
    * joins are explicitly forbidden by the architecture (v0.5 #63
-   * `queryAcross` is the sanctioned path for cross-compartment
+   * `queryAcross` is the sanctioned path for cross-vault
    * correlation, not `.join()`).
    */
   resolveSource(collectionName: string): JoinableSource | null {
@@ -750,8 +750,8 @@ export class Compartment {
    * Return this compartment's hash-chained audit log.
    *
    * The ledger is lazy-initialized on first access and cached for the
-   * lifetime of the Compartment instance. Every LedgerStore instance
-   * shares the same adapter and DEK resolver, so `compartment.ledger()`
+   * lifetime of the Vault instance. Every LedgerStore instance
+   * shares the same adapter and DEK resolver, so `vault.ledger()`
    * can be called repeatedly without performance cost.
    *
    * The LedgerStore itself is the public API: consumers call
@@ -763,7 +763,7 @@ export class Compartment {
     if (!this.ledgerStore) {
       this.ledgerStore = new LedgerStore({
         adapter: this.adapter,
-        compartment: this.name,
+        vault: this.name,
         encrypted: this.encrypted,
         getDEK: this.getDEK,
         actor: this.keyring.userId,
@@ -772,21 +772,21 @@ export class Compartment {
     return this.ledgerStore
   }
 
-  /** List all collection names in this compartment. */
+  /** List all collection names in this vault. */
   async collections(): Promise<string[]> {
     const snapshot = await this.adapter.loadAll(this.name)
     return Object.keys(snapshot)
   }
 
   /**
-   * Return the stable opaque bundle handle for this compartment,
+   * Return the stable opaque bundle handle for this vault,
    * generating and persisting a fresh ULID on first call.
    *
    * v0.6 #100 — used by `writeNoydbBundle()` to identify the
-   * compartment in the unencrypted bundle header without
-   * exposing the compartment name. The handle is persisted in
+   * vault in the unencrypted bundle header without
+   * exposing the vault name. The handle is persisted in
    * the reserved `_meta` internal collection so subsequent
-   * exports of the same compartment produce the same handle —
+   * exports of the same vault produce the same handle —
    * v0.11 bundle adapters (Drive, Dropbox, iCloud) will use it
    * as their primary key.
    *
@@ -801,17 +801,17 @@ export class Compartment {
    *
    * **Cross-process stability:** the handle survives process
    * restarts because it's persisted on the adapter, not just
-   * cached in memory. A new Compartment instance opened on the
+   * cached in memory. A new Vault instance opened on the
    * same adapter sees the same `_meta/handle` envelope and
    * returns the same ULID.
    *
-   * **Round-trip after restore:** the receiving compartment of a
+   * **Round-trip after restore:** the receiving vault of a
    * `load()` call generates its OWN handle on first export. The
    * dump body does not include `_meta`, because handle stability
-   * is per-compartment-instance, not per-compartment-content. Two
+   * is per-vault-instance, not per-vault-content. Two
    * separate restorations of the same backup produce two
    * distinct handles, which is the right behavior — they're
-   * separate compartment instances now.
+   * separate vault instances now.
    */
   async getBundleHandle(): Promise<string> {
     const existing = await this.adapter.get(this.name, '_meta', 'handle')
@@ -831,8 +831,8 @@ export class Compartment {
       }
     }
     // Lazy import to avoid a top-of-file circular dependency:
-    // bundle/bundle.ts imports from compartment.ts (the
-    // Compartment type), and compartment.ts can't statically
+    // bundle/bundle.ts imports from vault.ts (the
+    // Vault type), and vault.ts can't statically
     // import from bundle/* without forming a cycle. The dynamic
     // import is invoked once per fresh handle generation, which
     // is rare enough that the cost doesn't matter.
@@ -850,7 +850,7 @@ export class Compartment {
   }
 
   /**
-   * Dump compartment as a verifiable encrypted JSON backup string.
+   * Dump vault as a verifiable encrypted JSON backup string.
    *
    * v0.4 backups embed the current ledger head and the full
    * `_ledger` + `_ledger_deltas` internal collections so the
@@ -878,7 +878,7 @@ export class Compartment {
     // the chain after restore. Without this, `load()` would have an
     // empty ledger and `verifyBackupIntegrity()` would have nothing
     // to compare against.
-    const internalSnapshot: CompartmentSnapshot = {}
+    const internalSnapshot: VaultSnapshot = {}
     for (const internalName of [LEDGER_COLLECTION, LEDGER_DELTAS_COLLECTION]) {
       const ids = await this.adapter.list(this.name, internalName)
       if (ids.length === 0) continue
@@ -891,16 +891,16 @@ export class Compartment {
     }
 
     // Embed the ledger head if there's a chain. An empty ledger
-    // (fresh compartment) leaves `ledgerHead` undefined, which
+    // (fresh vault) leaves `ledgerHead` undefined, which
     // load() treats the same as a legacy backup (no integrity
     // check, console warning).
     const head = await this.ledger().head()
-    const backup: CompartmentBackup = {
+    const backup: VaultBackup = {
       _noydb_backup: NOYDB_BACKUP_VERSION,
       _compartment: this.name,
       _exported_at: new Date().toISOString(),
       _exported_by: this.keyring.userId,
-      keyrings: keyrings as CompartmentBackup['keyrings'],
+      keyrings: keyrings as VaultBackup['keyrings'],
       collections: snapshot,
       ...(Object.keys(internalSnapshot).length > 0
         ? { _internal: internalSnapshot }
@@ -920,7 +920,7 @@ export class Compartment {
   }
 
   /**
-   * Restore a compartment from a verifiable backup.
+   * Restore a vault from a verifiable backup.
    *
    * After loading, runs `verifyBackupIntegrity()` to confirm:
    *   1. The hash chain is intact (no `prevHash` mismatches)
@@ -932,7 +932,7 @@ export class Compartment {
    *
    * On any failure, throws `BackupLedgerError` (chain or head
    * mismatch) or `BackupCorruptedError` (data envelope mismatch).
-   * The compartment state on the adapter has already been written
+   * The vault state on the adapter has already been written
    * by the time we throw, so the caller is responsible for either
    * accepting the suspect state or wiping it and trying a different
    * backup.
@@ -942,7 +942,7 @@ export class Compartment {
    * — there's no chain to verify against.
    */
   async load(backupJson: string): Promise<void> {
-    const backup = JSON.parse(backupJson) as CompartmentBackup
+    const backup = JSON.parse(backupJson) as VaultBackup
 
     // 1. Restore data collections.
     await this.adapter.saveAll(this.name, backup.collections)
@@ -970,13 +970,13 @@ export class Compartment {
     }
 
     // 4. Refresh the in-memory keyring from the freshly-loaded
-    //    keyring file. Without this, the Compartment's getDEK
+    //    keyring file. Without this, the Vault's getDEK
     //    closure still holds the OLD session's DEKs, and every
     //    decrypt of a loaded ledger entry / data envelope fails
     //    with TamperedError because the DEK doesn't match the
     //    ciphertext that was encrypted with the SOURCE user's DEK.
-    //    Skipped for plaintext compartments and for tests that
-    //    construct Compartment without a reloadKeyring callback.
+    //    Skipped for plaintext vaults and for tests that
+    //    construct Vault without a reloadKeyring callback.
     if (this.reloadKeyring) {
       this.keyring = await this.reloadKeyring()
       // Rebuild the DEK resolver against the refreshed keyring so
@@ -1054,7 +1054,7 @@ export class Compartment {
    *
    * This method is exposed so users can call it any time, not just
    * during `load()`. A scheduled background check is the simplest
-   * way to detect tampering of an in-place compartment.
+   * way to detect tampering of an in-place vault.
    */
   async verifyBackupIntegrity(): Promise<
     | { readonly ok: true; readonly head: string; readonly length: number }
@@ -1153,7 +1153,7 @@ export class Compartment {
   }
 
   /**
-   * Stream every collection in this compartment as decrypted, ACL-scoped
+   * Stream every collection in this vault as decrypted, ACL-scoped
    * chunks.
    *
    * ⚠ **This method decrypts your records.** noy-db's threat model assumes
@@ -1169,7 +1169,7 @@ export class Compartment {
    * - **ACL-scoped.** Collections the calling principal cannot read are
    *   silently skipped (same rule as `Collection.list()`). An operator
    *   with `{ invoices: 'rw', clients: 'ro' }` permissions on a
-   *   five-collection compartment exports only `invoices` and `clients`,
+   *   five-collection vault exports only `invoices` and `clients`,
    *   with no error on the others.
    * - **Streaming.** Returns an `AsyncIterableIterator` so consumers can
    *   process chunks as they arrive without holding the full export in
@@ -1187,8 +1187,8 @@ export class Compartment {
    *
    * ## Composition
    *
-   * Once cross-compartment queries land (#63), fanning this out across
-   * every compartment the caller can unlock is `queryAcross(ids, c =>
+   * Once cross-vault queries land (#63), fanning this out across
+   * every vault the caller can unlock is `queryAcross(ids, c =>
    * c.exportStream())` — no new primitive needed. That's part of why this
    * method belongs in core: it's the single decrypt+ACL+metadata path
    * that every export-format package will build on, and pushing it into
@@ -1224,7 +1224,7 @@ export class Compartment {
     const collectionNames = Object.keys(snapshot).sort()
 
     // Resolve the ledger head once if requested. The head is identical
-    // across every yielded chunk (one ledger per compartment) — we copy
+    // across every yielded chunk (one ledger per vault) — we copy
     // it onto each chunk so consumers doing per-record streaming don't
     // have to thread state across yields, and so the chunk shape stays
     // forward-compatible with future per-partition ledgers where the

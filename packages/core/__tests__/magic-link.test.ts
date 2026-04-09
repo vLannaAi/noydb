@@ -6,7 +6,7 @@
  * Covers:
  * - createMagicLinkToken() — structure, expiry, ULID token
  * - isMagicLinkValid() — TTL / expiry boundary
- * - deriveMagicLinkKEK() — determinism and compartment binding
+ * - deriveMagicLinkKEK() — determinism and vault binding
  * - buildMagicLinkKeyring() — structure and viewer role enforcement
  */
 
@@ -29,7 +29,7 @@ describe('createMagicLinkToken', () => {
   it('returns an object with the correct fields', () => {
     const link = createMagicLinkToken('company-a')
     expect(link.role).toBe('viewer')
-    expect(link.compartment).toBe('company-a')
+    expect(link.vault).toBe('company-a')
     expect(typeof link.token).toBe('string')
     expect(link.token.length).toBeGreaterThan(10)  // ULID is 26 chars
     expect(typeof link.expiresAt).toBe('string')

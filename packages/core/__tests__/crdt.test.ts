@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import type { NoydbStore, EncryptedEnvelope, CompartmentSnapshot } from '../src/types.js'
+import type { NoydbStore, EncryptedEnvelope, VaultSnapshot } from '../src/types.js'
 import { ConflictError } from '../src/errors.js'
 import { createNoydb } from '../src/noydb.js'
 import type { LwwMapState, RgaState } from '../src/crdt.js'
@@ -23,7 +23,7 @@ function inlineMemory(): NoydbStore {
     async delete(c, col, id) { store.get(c)?.get(col)?.delete(id) },
     async list(c, col) { const coll = store.get(c)?.get(col); return coll ? [...coll.keys()] : [] },
     async loadAll(c) {
-      const comp = store.get(c); const s: CompartmentSnapshot = {}
+      const comp = store.get(c); const s: VaultSnapshot = {}
       if (comp) for (const [n, coll] of comp) { if (!n.startsWith('_')) { const r: Record<string, EncryptedEnvelope> = {}; for (const [id, e] of coll) r[id] = e; s[n] = r } }
       return s
     },
@@ -43,7 +43,7 @@ describe('CRDT mode (v0.9 #132)', () => {
   describe('lww-map', () => {
     it('get() returns the resolved snapshot, not the CRDT state', async () => {
       const db = await createNoydb({ store: inlineMemory(), user: 'u', encrypt: false })
-      const comp = await db.openCompartment(COMP)
+      const comp = await db.openVault(COMP)
       const notes = comp.collection<Note>('notes', { crdt: 'lww-map' })
 
       await notes.put('n1', { title: 'Hello', body: 'World', priority: 1 })
@@ -54,7 +54,7 @@ describe('CRDT mode (v0.9 #132)', () => {
 
     it('getRaw() returns the LwwMapState', async () => {
       const db = await createNoydb({ store: inlineMemory(), user: 'u', encrypt: false })
-      const comp = await db.openCompartment(COMP)
+      const comp = await db.openVault(COMP)
       const notes = comp.collection<Note>('notes', { crdt: 'lww-map' })
 
       await notes.put('n1', { title: 'Hello', body: 'World', priority: 1 })
@@ -69,7 +69,7 @@ describe('CRDT mode (v0.9 #132)', () => {
 
     it('getRaw() returns null for non-existent record', async () => {
       const db = await createNoydb({ store: inlineMemory(), user: 'u', encrypt: false })
-      const comp = await db.openCompartment(COMP)
+      const comp = await db.openVault(COMP)
       const notes = comp.collection<Note>('notes', { crdt: 'lww-map' })
 
       expect(await notes.getRaw('missing')).toBeNull()
@@ -77,7 +77,7 @@ describe('CRDT mode (v0.9 #132)', () => {
 
     it('getRaw() throws on non-CRDT collection', async () => {
       const db = await createNoydb({ store: inlineMemory(), user: 'u', encrypt: false })
-      const comp = await db.openCompartment(COMP)
+      const comp = await db.openVault(COMP)
       const plain = comp.collection<Note>('plain')
 
       await expect(plain.getRaw('n1')).rejects.toThrow(/getRaw\(\)/)
@@ -85,7 +85,7 @@ describe('CRDT mode (v0.9 #132)', () => {
 
     it('preserves fields from existing state that are absent from new record', async () => {
       const db = await createNoydb({ store: inlineMemory(), user: 'u', encrypt: false })
-      const comp = await db.openCompartment(COMP)
+      const comp = await db.openVault(COMP)
       const notes = comp.collection<Note>('notes', { crdt: 'lww-map' })
 
       await notes.put('n1', { title: 'First', body: 'Body', priority: 1 })
@@ -105,7 +105,7 @@ describe('CRDT mode (v0.9 #132)', () => {
       const dbA = await createNoydb({ store: local, sync: remote, user: 'a', encrypt: false })
       const dbB = await createNoydb({ store: remote, user: 'b', encrypt: false })
 
-      const compA = await dbA.openCompartment(COMP)
+      const compA = await dbA.openVault(COMP)
       const notesA = compA.collection<Note>('notes', { crdt: 'lww-map' })
 
       // Push a base record from A
@@ -113,7 +113,7 @@ describe('CRDT mode (v0.9 #132)', () => {
       await dbA.push(COMP)
 
       // dbB reads the record and modifies only 'body'
-      const compB = await dbB.openCompartment(COMP)
+      const compB = await dbB.openVault(COMP)
       const notesB = compB.collection<Note>('notes', { crdt: 'lww-map' })
       const existing = await notesB.get('n1')
       expect(existing).not.toBeNull()
@@ -132,7 +132,7 @@ describe('CRDT mode (v0.9 #132)', () => {
 
     it('list() returns resolved snapshots', async () => {
       const db = await createNoydb({ store: inlineMemory(), user: 'u', encrypt: false })
-      const comp = await db.openCompartment(COMP)
+      const comp = await db.openVault(COMP)
       const notes = comp.collection<Note>('notes', { crdt: 'lww-map' })
 
       await notes.put('n1', { title: 'A', body: 'aa', priority: 1 })
@@ -149,7 +149,7 @@ describe('CRDT mode (v0.9 #132)', () => {
   describe('rga', () => {
     it('get() returns the resolved array snapshot', async () => {
       const db = await createNoydb({ store: inlineMemory(), user: 'u', encrypt: false })
-      const comp = await db.openCompartment(COMP)
+      const comp = await db.openVault(COMP)
       const tags = comp.collection<string[]>('tags', { crdt: 'rga' })
 
       await tags.put('rec1', ['alpha', 'beta', 'gamma'])
@@ -159,7 +159,7 @@ describe('CRDT mode (v0.9 #132)', () => {
 
     it('getRaw() returns the RgaState with nids', async () => {
       const db = await createNoydb({ store: inlineMemory(), user: 'u', encrypt: false })
-      const comp = await db.openCompartment(COMP)
+      const comp = await db.openVault(COMP)
       const tags = comp.collection<string[]>('tags', { crdt: 'rga' })
 
       await tags.put('rec1', ['alpha', 'beta'])
@@ -174,7 +174,7 @@ describe('CRDT mode (v0.9 #132)', () => {
 
     it('removing an element tombstones it', async () => {
       const db = await createNoydb({ store: inlineMemory(), user: 'u', encrypt: false })
-      const comp = await db.openCompartment(COMP)
+      const comp = await db.openVault(COMP)
       const tags = comp.collection<string[]>('tags', { crdt: 'rga' })
 
       await tags.put('rec1', ['alpha', 'beta', 'gamma'])
@@ -191,7 +191,7 @@ describe('CRDT mode (v0.9 #132)', () => {
 
     it('stable NID reuse: re-inserting same element reuses existing NID', async () => {
       const db = await createNoydb({ store: inlineMemory(), user: 'u', encrypt: false })
-      const comp = await db.openCompartment(COMP)
+      const comp = await db.openVault(COMP)
       const tags = comp.collection<string[]>('tags', { crdt: 'rga' })
 
       await tags.put('rec1', ['alpha', 'beta'])
@@ -211,14 +211,14 @@ describe('CRDT mode (v0.9 #132)', () => {
       const dbA = await createNoydb({ store: local, sync: remote, user: 'a', encrypt: false })
       const dbB = await createNoydb({ store: remote, user: 'b', encrypt: false })
 
-      const compA = await dbA.openCompartment(COMP)
+      const compA = await dbA.openVault(COMP)
       const tagsA = compA.collection<string[]>('tags', { crdt: 'rga' })
 
       await tagsA.put('rec1', ['alpha', 'beta'])
       await dbA.push(COMP)
 
       // B adds 'foo'
-      const compB = await dbB.openCompartment(COMP)
+      const compB = await dbB.openVault(COMP)
       const tagsB = compB.collection<string[]>('tags', { crdt: 'rga' })
       const bState = await tagsB.get('rec1')
       await tagsB.put('rec1', [...(bState ?? []), 'foo'])
@@ -236,7 +236,7 @@ describe('CRDT mode (v0.9 #132)', () => {
   describe('yjs', () => {
     it('stores and retrieves a base64 update blob', async () => {
       const db = await createNoydb({ store: inlineMemory(), user: 'u', encrypt: false })
-      const comp = await db.openCompartment(COMP)
+      const comp = await db.openVault(COMP)
       // T is treated as string (base64 blob) for yjs collections
       const docs = comp.collection<string>('docs', { crdt: 'yjs' })
 
@@ -250,7 +250,7 @@ describe('CRDT mode (v0.9 #132)', () => {
 
     it('getRaw() returns the YjsState with the update blob', async () => {
       const db = await createNoydb({ store: inlineMemory(), user: 'u', encrypt: false })
-      const comp = await db.openCompartment(COMP)
+      const comp = await db.openVault(COMP)
       const docs = comp.collection<string>('docs', { crdt: 'yjs' })
 
       const fakeUpdate = btoa('fake-yjs-state')

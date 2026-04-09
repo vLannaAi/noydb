@@ -3,8 +3,8 @@ import { dirname, join } from 'node:path'
 import type {
   NoydbStore,
   EncryptedEnvelope,
-  CompartmentSnapshot,
-  Compartment,
+  VaultSnapshot,
+  Vault,
   WriteNoydbBundleOptions,
   NoydbBundleReadResult,
 } from '@noy-db/core'
@@ -26,19 +26,19 @@ export interface JsonFileOptions {
  * Maps the NOYDB hierarchy to the filesystem:
  *
  * ```
- * {dir}/{compartment}/{collection}/{id}.json
- * {dir}/{compartment}/_keyring/{userId}.json
+ * {dir}/{vault}/{collection}/{id}.json
+ * {dir}/{vault}/_keyring/{userId}.json
  * ```
  */
 export function jsonFile(options: JsonFileOptions): NoydbStore {
   const { dir, pretty = true } = options
 
-  function recordPath(compartment: string, collection: string, id: string): string {
-    return join(dir, compartment, collection, `${id}.json`)
+  function recordPath(vault: string, collection: string, id: string): string {
+    return join(dir, vault, collection, `${id}.json`)
   }
 
-  function collectionDir(compartment: string, collection: string): string {
-    return join(dir, compartment, collection)
+  function collectionDir(vault: string, collection: string): string {
+    return join(dir, vault, collection)
   }
 
   async function ensureDir(path: string): Promise<void> {
@@ -61,8 +61,8 @@ export function jsonFile(options: JsonFileOptions): NoydbStore {
   return {
     name: 'file',
 
-    async get(compartment, collection, id) {
-      const path = recordPath(compartment, collection, id)
+    async get(vault, collection, id) {
+      const path = recordPath(vault, collection, id)
       try {
         const content = await readFile(path, 'utf-8')
         return JSON.parse(content) as EncryptedEnvelope
@@ -71,8 +71,8 @@ export function jsonFile(options: JsonFileOptions): NoydbStore {
       }
     },
 
-    async put(compartment, collection, id, envelope, expectedVersion) {
-      const path = recordPath(compartment, collection, id)
+    async put(vault, collection, id, envelope, expectedVersion) {
+      const path = recordPath(vault, collection, id)
 
       if (expectedVersion !== undefined && await fileExists(path)) {
         const existing = JSON.parse(await readFile(path, 'utf-8')) as EncryptedEnvelope
@@ -81,12 +81,12 @@ export function jsonFile(options: JsonFileOptions): NoydbStore {
         }
       }
 
-      await ensureDir(collectionDir(compartment, collection))
+      await ensureDir(collectionDir(vault, collection))
       await writeFile(path, serialize(envelope), 'utf-8')
     },
 
-    async delete(compartment, collection, id) {
-      const path = recordPath(compartment, collection, id)
+    async delete(vault, collection, id) {
+      const path = recordPath(vault, collection, id)
       try {
         await unlink(path)
       } catch {
@@ -94,8 +94,8 @@ export function jsonFile(options: JsonFileOptions): NoydbStore {
       }
     },
 
-    async list(compartment, collection) {
-      const dirPath = collectionDir(compartment, collection)
+    async list(vault, collection) {
+      const dirPath = collectionDir(vault, collection)
       try {
         const entries = await readdir(dirPath)
         return entries
@@ -106,9 +106,9 @@ export function jsonFile(options: JsonFileOptions): NoydbStore {
       }
     },
 
-    async loadAll(compartment) {
-      const compDir = join(dir, compartment)
-      const snapshot: CompartmentSnapshot = {}
+    async loadAll(vault) {
+      const compDir = join(dir, vault)
+      const snapshot: VaultSnapshot = {}
 
       try {
         const collections = await readdir(compDir)
@@ -135,9 +135,9 @@ export function jsonFile(options: JsonFileOptions): NoydbStore {
       return snapshot
     },
 
-    async saveAll(compartment, data) {
+    async saveAll(vault, data) {
       for (const [collName, records] of Object.entries(data)) {
-        const collDir = collectionDir(compartment, collName)
+        const collDir = collectionDir(vault, collName)
         await ensureDir(collDir)
         for (const [id, envelope] of Object.entries(records)) {
           await writeFile(join(collDir, `${id}.json`), serialize(envelope), 'utf-8')
@@ -155,9 +155,9 @@ export function jsonFile(options: JsonFileOptions): NoydbStore {
     },
 
     /**
-     * Enumerate every top-level compartment subdirectory under the
+     * Enumerate every top-level vault subdirectory under the
      * configured base directory. Used by
-     * `Noydb.listAccessibleCompartments()` (v0.5 #63).
+     * `Noydb.listAccessibleVaults()` (v0.5 #63).
      *
      * The implementation is `readdir(dir)` filtered to entries that
      * are themselves directories — files at the top level (READMEs,
@@ -166,7 +166,7 @@ export function jsonFile(options: JsonFileOptions): NoydbStore {
      * filesystem-defined; consumers that want stable order should
      * sort themselves.
      */
-    async listCompartments() {
+    async listVaults() {
       let entries: string[]
       try {
         entries = await readdir(dir)
@@ -194,8 +194,8 @@ export function jsonFile(options: JsonFileOptions): NoydbStore {
      * The default `limit` is 100. Each item carries its decoded envelope
      * so callers don't need an extra `get()` round-trip per id.
      */
-    async listPage(compartment, collection, cursor, limit = 100) {
-      const dirPath = collectionDir(compartment, collection)
+    async listPage(vault, collection, cursor, limit = 100) {
+      const dirPath = collectionDir(vault, collection)
       let files: string[]
       try {
         files = await readdir(dirPath)
@@ -233,7 +233,7 @@ export function jsonFile(options: JsonFileOptions): NoydbStore {
 // ─── .noydb bundle helpers (v0.6 #100) ─────────────────────────────────
 
 /**
- * Write a `.noydb` container for a compartment to a local file.
+ * Write a `.noydb` container for a vault to a local file.
  *
  * Thin wrapper around `writeNoydbBundle` from `@noy-db/core` —
  * the core primitive returns a `Uint8Array`, this helper just
@@ -243,7 +243,7 @@ export function jsonFile(options: JsonFileOptions): NoydbStore {
  * **Path convention** is up to the caller — `.noydb` is the
  * recommended extension. Consumers using cloud-sync folders
  * should name files by the bundle handle (available via
- * `compartment.getBundleHandle()`) rather than the compartment
+ * `vault.getBundleHandle()`) rather than the vault
  * name to avoid leaking metadata at the filesystem layer:
  *
  * ```ts
@@ -259,10 +259,10 @@ export function jsonFile(options: JsonFileOptions): NoydbStore {
  */
 export async function saveBundle(
   path: string,
-  compartment: Compartment,
+  vault: Vault,
   opts: WriteNoydbBundleOptions = {},
 ): Promise<void> {
-  const bytes = await writeNoydbBundle(compartment, opts)
+  const bytes = await writeNoydbBundle(vault, opts)
   // Ensure the parent directory exists — `writeFile` does NOT
   // create intermediate directories on its own. Recursive mkdir
   // is a no-op when the directory already exists.
@@ -274,7 +274,7 @@ export async function saveBundle(
  * Read and verify a `.noydb` container from a local file.
  *
  * Returns the parsed header plus the unwrapped `dump()` JSON
- * string ready to feed to `compartment.load(json, passphrase)`.
+ * string ready to feed to `vault.load(json, passphrase)`.
  * Throws `BundleIntegrityError` from `@noy-db/core` if the body
  * bytes don't match the integrity hash declared in the header
  * (the bundle was modified between write and read), or any
@@ -282,10 +282,10 @@ export async function saveBundle(
  * bundle at all.
  *
  * Does NOT take a passphrase — the bundle reader is purely a
- * format layer. Restoring a compartment from the returned dump
- * JSON requires a separate `compartment.load()` call with the
+ * format layer. Restoring a vault from the returned dump
+ * JSON requires a separate `vault.load()` call with the
  * passphrase, mirroring the split between
- * `readNoydbBundle()` and `compartment.load()` in core.
+ * `readNoydbBundle()` and `vault.load()` in core.
  */
 export async function loadBundle(path: string): Promise<NoydbBundleReadResult> {
   const bytes = await readFile(path)

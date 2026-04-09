@@ -371,7 +371,7 @@ jobs:
 
       # Also exercise the `noy-db` bin — the ongoing CLI tool.
       # `verify` runs an in-memory integrity check; it doesn't need
-      # a real compartment on disk and has no user prompts.
+      # a real vault on disk and has no user prompts.
       - name: noy-db verify bin
         working-directory: ${{ runner.temp }}/consumer
         run: |

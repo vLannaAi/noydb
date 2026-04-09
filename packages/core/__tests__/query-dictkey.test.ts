@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import type { NoydbStore, EncryptedEnvelope, CompartmentSnapshot } from '../src/types.js'
+import type { NoydbStore, EncryptedEnvelope, VaultSnapshot } from '../src/types.js'
 import { ConflictError } from '../src/errors.js'
 import { createNoydb } from '../src/noydb.js'
 import { dictKey } from '../src/dictionary.js'
@@ -34,7 +34,7 @@ function memory(): NoydbStore {
     async delete(c, col, id) { store.get(c)?.get(col)?.delete(id) },
     async list(c, col) { const coll = store.get(c)?.get(col); return coll ? [...coll.keys()] : [] },
     async loadAll(c) {
-      const comp = store.get(c); const s: CompartmentSnapshot = {}
+      const comp = store.get(c); const s: VaultSnapshot = {}
       if (comp) for (const [n, coll] of comp) {
         if (!n.startsWith('_')) { const r: Record<string, EncryptedEnvelope> = {}; for (const [id, e] of coll) r[id] = e; s[n] = r }
       }
@@ -53,7 +53,7 @@ interface Invoice {
 async function setup() {
   const adapter = memory()
   const db = await createNoydb({ store: adapter, user: 'alice', encrypt: false })
-  const company = await db.openCompartment('company')
+  const company = await db.openVault('company')
 
   const statusDict = company.dictionary('status')
   await statusDict.putAll({

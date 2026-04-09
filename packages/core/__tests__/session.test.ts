@@ -68,7 +68,7 @@ describe('session tokens (#109)', () => {
     expect(token._noydb_session).toBe(1)
     expect(token.sessionId).toBe(sessionId)
     expect(token.userId).toBe('alice')
-    expect(token.compartment).toBe('company-a')
+    expect(token.vault).toBe('company-a')
     expect(token.role).toBe('owner')
     expect(token.expiresAt).toBeTruthy()
     expect(new Date(token.expiresAt).getTime()).toBeGreaterThan(Date.now())

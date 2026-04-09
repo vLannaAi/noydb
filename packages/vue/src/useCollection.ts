@@ -25,12 +25,12 @@ export function useCollection<T>(
   const loading = ref(true)
   const error = ref<Error | null>(null)
 
-  let compartmentPromise: ReturnType<Noydb['openCompartment']> | null = null
+  let compartmentPromise: ReturnType<Noydb['openVault']> | null = null
 
   async function refresh(): Promise<void> {
     try {
       if (!compartmentPromise) {
-        compartmentPromise = db.openCompartment(compartmentName)
+        compartmentPromise = db.openVault(compartmentName)
       }
       const comp = await compartmentPromise
       const coll = comp.collection<T>(collectionName)

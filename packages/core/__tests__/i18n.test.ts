@@ -6,7 +6,7 @@
  *   - MissingTranslationError on put when required langs missing
  *   - Per-call { locale, fallback } on get() and list()
  *   - Raw mode ({ locale: 'raw' }) returns full { [locale]: string } map
- *   - Compartment-default locale via openCompartment({ locale })
+ *   - Vault-default locale via openVault({ locale })
  *   - LocaleNotSpecifiedError when locale chain exhausted
  *   - Fallback chain (single + multi-step + 'any')
  *   - Schema validation on put + read
@@ -16,7 +16,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { createNoydb } from '../src/noydb.js'
 import type { Noydb } from '../src/noydb.js'
-import type { NoydbStore, EncryptedEnvelope, CompartmentSnapshot } from '../src/types.js'
+import type { NoydbStore, EncryptedEnvelope, VaultSnapshot } from '../src/types.js'
 import { ConflictError } from '../src/errors.js'
 import {
   MissingTranslationError,
@@ -48,7 +48,7 @@ function memory(): NoydbStore {
     async delete(c, col, id) { store.get(c)?.get(col)?.delete(id) },
     async list(c, col) { const coll = store.get(c)?.get(col); return coll ? [...coll.keys()] : [] },
     async loadAll(c) {
-      const comp = store.get(c); const s: CompartmentSnapshot = {}
+      const comp = store.get(c); const s: VaultSnapshot = {}
       if (comp) for (const [n, coll] of comp) {
         if (!n.startsWith('_')) {
           const r: Record<string, EncryptedEnvelope> = {}
@@ -190,7 +190,7 @@ describe('i18nText — Collection integration (#82)', () => {
   })
 
   it('put and get with locale resolves the field', async () => {
-    const company = await db.openCompartment('co1')
+    const company = await db.openVault('co1')
 
     type LineItem = { id: string; description: Record<string, string> }
     const items = company.collection<LineItem>('line-items', {
@@ -209,7 +209,7 @@ describe('i18nText — Collection integration (#82)', () => {
   })
 
   it('get with locale "en" resolves to English', async () => {
-    const company = await db.openCompartment('co1')
+    const company = await db.openVault('co1')
 
     type LineItem = { id: string; description: Record<string, string> }
     const items = company.collection<LineItem>('line-items', {
@@ -228,7 +228,7 @@ describe('i18nText — Collection integration (#82)', () => {
   })
 
   it('get with locale "raw" returns the full map', async () => {
-    const company = await db.openCompartment('co1')
+    const company = await db.openVault('co1')
 
     type LineItem = { id: string; description: Record<string, string> }
     const items = company.collection<LineItem>('line-items', {
@@ -247,7 +247,7 @@ describe('i18nText — Collection integration (#82)', () => {
   })
 
   it('get without locale returns raw map', async () => {
-    const company = await db.openCompartment('co1')
+    const company = await db.openVault('co1')
 
     type LineItem = { id: string; description: Record<string, string> }
     const items = company.collection<LineItem>('line-items', {
@@ -266,7 +266,7 @@ describe('i18nText — Collection integration (#82)', () => {
   })
 
   it('put throws MissingTranslationError when required lang missing (mode: all)', async () => {
-    const company = await db.openCompartment('co1')
+    const company = await db.openVault('co1')
 
     type LineItem = { id: string; description: Record<string, string> }
     const items = company.collection<LineItem>('line-items', {
@@ -284,7 +284,7 @@ describe('i18nText — Collection integration (#82)', () => {
   })
 
   it('put allows missing optional language (mode: any)', async () => {
-    const company = await db.openCompartment('co1')
+    const company = await db.openVault('co1')
 
     type LineItem = { id: string; description: Record<string, string> }
     const items = company.collection<LineItem>('line-items', {
@@ -303,7 +303,7 @@ describe('i18nText — Collection integration (#82)', () => {
   })
 
   it('list() with locale resolves all records', async () => {
-    const company = await db.openCompartment('co1')
+    const company = await db.openVault('co1')
 
     type LineItem = { id: string; description: Record<string, string> }
     const items = company.collection<LineItem>('line-items', {
@@ -328,8 +328,8 @@ describe('i18nText — Collection integration (#82)', () => {
     expect(li2?.description).toBe('ออกแบบ')
   })
 
-  it('compartment-default locale from openCompartment', async () => {
-    const company = await db.openCompartment('co1', { locale: 'th' })
+  it('compartment-default locale from openVault', async () => {
+    const company = await db.openVault('co1', { locale: 'th' })
 
     type LineItem = { id: string; description: Record<string, string> }
     const items = company.collection<LineItem>('line-items', {
@@ -343,13 +343,13 @@ describe('i18nText — Collection integration (#82)', () => {
       description: { en: 'Consulting', th: 'ที่ปรึกษา' },
     })
 
-    // No locale on get() — uses compartment default 'th'
+    // No locale on get() — uses vault default 'th'
     const result = await items.get('li-1') as { id: string; description: string }
     expect(result?.description).toBe('ที่ปรึกษา')
   })
 
-  it('per-call locale overrides compartment default', async () => {
-    const company = await db.openCompartment('co1', { locale: 'th' })
+  it('per-call locale overrides vault default', async () => {
+    const company = await db.openVault('co1', { locale: 'th' })
 
     type LineItem = { id: string; description: Record<string, string> }
     const items = company.collection<LineItem>('line-items', {
@@ -363,13 +363,13 @@ describe('i18nText — Collection integration (#82)', () => {
       description: { en: 'Consulting', th: 'ที่ปรึกษา' },
     })
 
-    // Per-call 'en' overrides compartment default 'th'
+    // Per-call 'en' overrides vault default 'th'
     const result = await items.get('li-1', { locale: 'en' }) as { id: string; description: string }
     expect(result?.description).toBe('Consulting')
   })
 
   it('fallback chain resolves when primary locale is missing', async () => {
-    const company = await db.openCompartment('co1')
+    const company = await db.openVault('co1')
 
     type LineItem = { id: string; description: Record<string, string> }
     const items = company.collection<LineItem>('line-items', {
@@ -389,7 +389,7 @@ describe('i18nText — Collection integration (#82)', () => {
   })
 
   it('throws LocaleNotSpecifiedError when locale chain exhausted', async () => {
-    const company = await db.openCompartment('co1')
+    const company = await db.openVault('co1')
 
     type LineItem = { id: string; description: Record<string, string> }
     const items = company.collection<LineItem>('line-items', {

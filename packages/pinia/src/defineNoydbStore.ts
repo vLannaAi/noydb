@@ -1,6 +1,6 @@
 /**
  * `defineNoydbStore` — drop-in `defineStore` that wires a Pinia store to a
- * NOYDB compartment + collection.
+ * NOYDB vault + collection.
  *
  * Returned store exposes:
  *   - `items`        — reactive array of all records
@@ -20,7 +20,7 @@ import { defineStore } from 'pinia'
 import { computed, shallowRef, type Ref, type ComputedRef } from 'vue'
 import type {
   Noydb,
-  Compartment,
+  Vault,
   Collection,
   Query,
   StandardSchemaV1,
@@ -35,9 +35,9 @@ import { resolveNoydb } from './context.js'
  * for full type safety.
  */
 export interface NoydbStoreOptions<T> {
-  /** Compartment (tenant) name. */
-  compartment: string
-  /** Collection name within the compartment. Defaults to the store id. */
+  /** Vault (tenant) name. */
+  vault: string
+  /** Collection name within the vault. Defaults to the store id. */
   collection?: string
   /**
    * Optional explicit Noydb instance. If omitted, the store resolves the
@@ -92,7 +92,7 @@ export interface NoydbStore<T> {
  * import { defineNoydbStore } from '@noy-db/pinia';
  *
  * export const useInvoices = defineNoydbStore<Invoice>('invoices', {
- *   compartment: 'C101',
+ *   vault: 'C101',
  *   schema: InvoiceSchema, // optional
  * });
  * ```
@@ -111,13 +111,13 @@ export function defineNoydbStore<T>(
     const count = computed(() => items.value.length)
 
     // Lazy collection handle — created on first hydrate.
-    let cachedCompartment: Compartment | null = null
+    let cachedCompartment: Vault | null = null
     let cachedCollection: Collection<T> | null = null
 
     async function getCollection(): Promise<Collection<T>> {
       if (cachedCollection) return cachedCollection
       const noydb = resolveNoydb(options.noydb ?? null)
-      cachedCompartment = await noydb.openCompartment(options.compartment)
+      cachedCompartment = await noydb.openVault(options.vault)
       // Pass the schema down to the Collection so validation runs at
       // the encrypt/decrypt boundary instead of only at the store
       // layer. This catches drifted stored data on read (which the

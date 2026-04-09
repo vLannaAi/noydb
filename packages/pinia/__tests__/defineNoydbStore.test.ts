@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { setActivePinia, createPinia, storeToRefs } from 'pinia'
-import { createNoydb, type Noydb, type NoydbStore, type EncryptedEnvelope, type CompartmentSnapshot, type StandardSchemaV1, ConflictError, Query } from '@noy-db/core'
+import { createNoydb, type Noydb, type NoydbStore, type EncryptedEnvelope, type VaultSnapshot, type StandardSchemaV1, ConflictError, Query } from '@noy-db/core'
 import { defineNoydbStore, setActiveNoydb } from '../src/index.js'
 
 /** Inline memory adapter — same pattern as @noy-db/core integration tests. */
@@ -25,7 +25,7 @@ function memory(): NoydbStore {
     async delete(c, col, id) { store.get(c)?.get(col)?.delete(id) },
     async list(c, col) { const coll = store.get(c)?.get(col); return coll ? [...coll.keys()] : [] },
     async loadAll(c) {
-      const comp = store.get(c); const s: CompartmentSnapshot = {}
+      const comp = store.get(c); const s: VaultSnapshot = {}
       if (comp) for (const [n, coll] of comp) {
         if (!n.startsWith('_')) {
           const r: Record<string, EncryptedEnvelope> = {}
@@ -82,14 +82,14 @@ describe('defineNoydbStore — greenfield path', () => {
   })
 
   it('1. instantiates against an in-memory adapter and exposes items', async () => {
-    const useInvoices = defineNoydbStore<Invoice>('invoices', { compartment: 'C1' })
+    const useInvoices = defineNoydbStore<Invoice>('invoices', { vault: 'C1' })
     const store = useInvoices()
     await store.$ready
     expect(store.items).toEqual([])
   })
 
   it('2. items reactivity reflects add()', async () => {
-    const useInvoices = defineNoydbStore<Invoice>('invoices', { compartment: 'C1' })
+    const useInvoices = defineNoydbStore<Invoice>('invoices', { vault: 'C1' })
     const store = useInvoices()
     await store.$ready
     await store.add('inv-001', { id: 'inv-001', amount: 100, status: 'draft', client: 'A' })
@@ -98,7 +98,7 @@ describe('defineNoydbStore — greenfield path', () => {
   })
 
   it('3. items reactivity reflects update() (upsert)', async () => {
-    const useInvoices = defineNoydbStore<Invoice>('invoices', { compartment: 'C1' })
+    const useInvoices = defineNoydbStore<Invoice>('invoices', { vault: 'C1' })
     const store = useInvoices()
     await store.$ready
     await store.add('inv-001', { id: 'inv-001', amount: 100, status: 'draft', client: 'A' })
@@ -109,7 +109,7 @@ describe('defineNoydbStore — greenfield path', () => {
   })
 
   it('4. items reactivity reflects remove()', async () => {
-    const useInvoices = defineNoydbStore<Invoice>('invoices', { compartment: 'C1' })
+    const useInvoices = defineNoydbStore<Invoice>('invoices', { vault: 'C1' })
     const store = useInvoices()
     await store.$ready
     await store.add('inv-001', { id: 'inv-001', amount: 100, status: 'draft', client: 'A' })
@@ -120,7 +120,7 @@ describe('defineNoydbStore — greenfield path', () => {
   })
 
   it('5. byId() returns the matching record or undefined', async () => {
-    const useInvoices = defineNoydbStore<Invoice>('invoices', { compartment: 'C1' })
+    const useInvoices = defineNoydbStore<Invoice>('invoices', { vault: 'C1' })
     const store = useInvoices()
     await store.$ready
     await store.add('inv-001', { id: 'inv-001', amount: 100, status: 'draft', client: 'A' })
@@ -129,7 +129,7 @@ describe('defineNoydbStore — greenfield path', () => {
   })
 
   it('6. count is reactive', async () => {
-    const useInvoices = defineNoydbStore<Invoice>('invoices', { compartment: 'C1' })
+    const useInvoices = defineNoydbStore<Invoice>('invoices', { vault: 'C1' })
     const store = useInvoices()
     await store.$ready
     expect(store.count).toBe(0)
@@ -139,7 +139,7 @@ describe('defineNoydbStore — greenfield path', () => {
   })
 
   it('7. $ready is a Promise<void> resolved exactly once per store instance', async () => {
-    const useInvoices = defineNoydbStore<Invoice>('invoices', { compartment: 'C1' })
+    const useInvoices = defineNoydbStore<Invoice>('invoices', { vault: 'C1' })
     const store = useInvoices()
     expect(store.$ready).toBeInstanceOf(Promise)
     await expect(store.$ready).resolves.toBeUndefined()
@@ -174,7 +174,7 @@ describe('defineNoydbStore — greenfield path', () => {
       },
     }
     const useInvoices = defineNoydbStore<Invoice>('invoices', {
-      compartment: 'C1',
+      vault: 'C1',
       schema,
     })
     const store = useInvoices()
@@ -185,14 +185,14 @@ describe('defineNoydbStore — greenfield path', () => {
   })
 
   it('9. persistence round-trip across store re-creation', async () => {
-    const useInvoices1 = defineNoydbStore<Invoice>('invoices', { compartment: 'C1' })
+    const useInvoices1 = defineNoydbStore<Invoice>('invoices', { vault: 'C1' })
     const store1 = useInvoices1()
     await store1.$ready
     await store1.add('inv-001', { id: 'inv-001', amount: 100, status: 'draft', client: 'A' })
 
     // Reset Pinia and create a new store backed by the same Noydb instance.
     setActivePinia(createPinia())
-    const useInvoices2 = defineNoydbStore<Invoice>('invoices', { compartment: 'C1' })
+    const useInvoices2 = defineNoydbStore<Invoice>('invoices', { vault: 'C1' })
     const store2 = useInvoices2()
     await store2.$ready
     expect(store2.items).toHaveLength(1)
@@ -200,8 +200,8 @@ describe('defineNoydbStore — greenfield path', () => {
   })
 
   it('10. multi-store isolation: two compartments do not bleed', async () => {
-    const useA = defineNoydbStore<Invoice>('invoicesA', { compartment: 'C1', collection: 'invoices' })
-    const useB = defineNoydbStore<Invoice>('invoicesB', { compartment: 'C2', collection: 'invoices' })
+    const useA = defineNoydbStore<Invoice>('invoicesA', { vault: 'C1', collection: 'invoices' })
+    const useB = defineNoydbStore<Invoice>('invoicesB', { vault: 'C2', collection: 'invoices' })
     const a = useA()
     const b = useB()
     await Promise.all([a.$ready, b.$ready])
@@ -216,7 +216,7 @@ describe('defineNoydbStore — greenfield path', () => {
   })
 
   it('11. storeToRefs returns reactive refs for items and count', async () => {
-    const useInvoices = defineNoydbStore<Invoice>('invoices', { compartment: 'C1' })
+    const useInvoices = defineNoydbStore<Invoice>('invoices', { vault: 'C1' })
     const store = useInvoices()
     await store.$ready
     const { items, count } = storeToRefs(store)
@@ -230,7 +230,7 @@ describe('defineNoydbStore — greenfield path', () => {
 
   it('12. throws a clear error when no Noydb instance is bound', async () => {
     setActiveNoydb(null)
-    const useInvoices = defineNoydbStore<Invoice>('invoices', { compartment: 'C1' })
+    const useInvoices = defineNoydbStore<Invoice>('invoices', { vault: 'C1' })
     const store = useInvoices()
     await expect(store.$ready).rejects.toThrow(/no Noydb instance bound/)
   })
@@ -239,7 +239,7 @@ describe('defineNoydbStore — greenfield path', () => {
     setActiveNoydb(null)
     const local = await makeNoydb()
     const useInvoices = defineNoydbStore<Invoice>('invoices', {
-      compartment: 'C1',
+      vault: 'C1',
       noydb: local,
     })
     const store = useInvoices()
@@ -249,12 +249,12 @@ describe('defineNoydbStore — greenfield path', () => {
   })
 
   it('14. prefetch: false defers hydration until refresh()', async () => {
-    // Pre-seed the underlying compartment so refresh has something to load.
-    const c = await db.openCompartment('C1')
+    // Pre-seed the underlying vault so refresh has something to load.
+    const c = await db.openVault('C1')
     await c.collection<Invoice>('invoices').put('seeded', { id: 'seeded', amount: 99, status: 'draft', client: 'X' })
 
     const useInvoices = defineNoydbStore<Invoice>('invoices', {
-      compartment: 'C1',
+      vault: 'C1',
       prefetch: false,
     })
     const store = useInvoices()
@@ -267,7 +267,7 @@ describe('defineNoydbStore — greenfield path', () => {
   })
 
   it('15. query() returns a chainable Query<T> bound to the collection', async () => {
-    const useInvoices = defineNoydbStore<Invoice>('invoices', { compartment: 'C1' })
+    const useInvoices = defineNoydbStore<Invoice>('invoices', { vault: 'C1' })
     const store = useInvoices()
     await store.$ready
     await store.add('a', { id: 'a', amount: 100,  status: 'draft', client: 'Alpha' })
@@ -282,7 +282,7 @@ describe('defineNoydbStore — greenfield path', () => {
 
   it('16. query() before $ready throws when prefetch is false', async () => {
     const useInvoices = defineNoydbStore<Invoice>('invoices', {
-      compartment: 'C1',
+      vault: 'C1',
       prefetch: false,
     })
     const store = useInvoices()
@@ -290,12 +290,12 @@ describe('defineNoydbStore — greenfield path', () => {
   })
 
   it('17. refresh() re-hydrates after external mutation', async () => {
-    const useInvoices = defineNoydbStore<Invoice>('invoices', { compartment: 'C1' })
+    const useInvoices = defineNoydbStore<Invoice>('invoices', { vault: 'C1' })
     const store = useInvoices()
     await store.$ready
 
     // Mutate the underlying collection out-of-band (simulating sync pull).
-    const c = await db.openCompartment('C1')
+    const c = await db.openVault('C1')
     await c.collection<Invoice>('invoices').put('external', { id: 'external', amount: 1, status: 'draft', client: 'X' })
 
     expect(store.items).toHaveLength(0) // stale until refresh
@@ -305,7 +305,7 @@ describe('defineNoydbStore — greenfield path', () => {
 
   it('18. supports `collection` option distinct from store id', async () => {
     const useInvoices = defineNoydbStore<Invoice>('myInvoices', {
-      compartment: 'C1',
+      vault: 'C1',
       collection: 'invoices_v2',
     })
     const store = useInvoices()
@@ -313,7 +313,7 @@ describe('defineNoydbStore — greenfield path', () => {
     await store.add('a', { id: 'a', amount: 1, status: 'draft', client: 'A' })
 
     // Verify the data landed in the renamed collection on the underlying Noydb.
-    const c = await db.openCompartment('C1')
+    const c = await db.openVault('C1')
     const direct = await c.collection<Invoice>('invoices_v2').list()
     expect(direct).toHaveLength(1)
     expect(direct[0]?.id).toBe('a')

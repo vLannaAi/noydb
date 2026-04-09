@@ -1,6 +1,6 @@
 /**
  * `noy-db rotate` — rotate the DEKs for one or more collections in
- * a compartment.
+ * a vault.
  *
  * What it does
  * ------------
@@ -41,16 +41,16 @@ import type { ReadPassphrase } from './shared.js'
 import { defaultReadPassphrase } from './shared.js'
 
 export interface RotateOptions {
-  /** Directory containing the compartment data (file adapter only). */
+  /** Directory containing the vault data (file adapter only). */
   dir: string
-  /** Compartment (tenant) name to rotate keys in. */
-  compartment: string
+  /** Vault (tenant) name to rotate keys in. */
+  vault: string
   /** The user id of the operator running the rotate. */
   user: string
   /**
    * Explicit list of collections to rotate. When undefined, the
    * rotation targets every collection the user has a DEK for —
-   * resolved at run time by reading the compartment snapshot.
+   * resolved at run time by reading the vault snapshot.
    */
   collections?: string[]
   /** Injected passphrase reader. Defaults to the clack implementation. */
@@ -75,7 +75,7 @@ export interface RotateResult {
 }
 
 /**
- * Run the rotate flow against a file-adapter compartment. Returns
+ * Run the rotate flow against a file-adapter vault. Returns
  * the list of collections that were rotated so callers can display
  * it to the user.
  *
@@ -102,23 +102,23 @@ export async function rotate(options: RotateOptions): Promise<RotateResult> {
       secret,
     })
 
-    // Resolve "all collections" by asking the compartment. This
+    // Resolve "all collections" by asking the vault. This
     // happens BEFORE rotate() is called, so the list is stable
     // across the operation — adding a new collection mid-rotate
     // would be a race we're not guarding against (single-writer
     // assumption applies).
-    const compartment = await db.openCompartment(options.compartment)
+    const vault = await db.openVault(options.vault)
     const targets = options.collections && options.collections.length > 0
       ? options.collections
-      : await compartment.collections()
+      : await vault.collections()
 
     if (targets.length === 0) {
       throw new Error(
-        `Compartment "${options.compartment}" has no collections to rotate.`,
+        `Vault "${options.vault}" has no collections to rotate.`,
       )
     }
 
-    await db.rotate(options.compartment, targets)
+    await db.rotate(options.vault, targets)
     return { rotated: targets }
   } finally {
     // Always close the DB on exit — success or failure. Close()

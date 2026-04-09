@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { createNoydb } from '../src/noydb.js'
 import type { Noydb } from '../src/noydb.js'
-import type { NoydbStore, EncryptedEnvelope, CompartmentSnapshot } from '../src/types.js'
+import type { NoydbStore, EncryptedEnvelope, VaultSnapshot } from '../src/types.js'
 import { ConflictError } from '../src/errors.js'
 import { Query } from '../src/query/index.js'
 
@@ -27,7 +27,7 @@ function memory(): NoydbStore {
     async delete(c, col, id) { store.get(c)?.get(col)?.delete(id) },
     async list(c, col) { const coll = store.get(c)?.get(col); return coll ? [...coll.keys()] : [] },
     async loadAll(c) {
-      const comp = store.get(c); const s: CompartmentSnapshot = {}
+      const comp = store.get(c); const s: VaultSnapshot = {}
       if (comp) for (const [n, coll] of comp) {
         if (!n.startsWith('_')) {
           const r: Record<string, EncryptedEnvelope> = {}
@@ -72,7 +72,7 @@ describe('Collection.query() — integration with crypto + adapter', () => {
       user: 'owner',
       secret: 'integration-test-passphrase-2026',
     })
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const invoices = c.collection<Invoice>('invoices')
     await invoices.put('inv-001', { amount: 100,  status: 'draft', client: 'Alpha',   dueDate: '2026-04-01' })
     await invoices.put('inv-002', { amount: 250,  status: 'open',  client: 'Bravo',   dueDate: '2026-03-15' })
@@ -82,14 +82,14 @@ describe('Collection.query() — integration with crypto + adapter', () => {
   })
 
   it('returns a Query builder when called with no arguments', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const invoices = c.collection<Invoice>('invoices')
     const q = invoices.query()
     expect(q).toBeInstanceOf(Query)
   })
 
   it('still supports the legacy predicate form', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const invoices = c.collection<Invoice>('invoices')
     const drafts = invoices.query(i => i.status === 'draft')
     expect(drafts).toHaveLength(1)
@@ -97,7 +97,7 @@ describe('Collection.query() — integration with crypto + adapter', () => {
   })
 
   it('runs a chained query against decrypted records', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const invoices = c.collection<Invoice>('invoices')
     const result = invoices.query()
       .where('status', '==', 'open')
@@ -108,7 +108,7 @@ describe('Collection.query() — integration with crypto + adapter', () => {
   })
 
   it('orderBy + limit work together', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const invoices = c.collection<Invoice>('invoices')
     const top2 = invoices.query()
       .orderBy('amount', 'desc')
@@ -118,20 +118,20 @@ describe('Collection.query() — integration with crypto + adapter', () => {
   })
 
   it('count() reports total matches', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const invoices = c.collection<Invoice>('invoices')
     expect(invoices.query().where('status', '==', 'open').count()).toBe(2)
   })
 
   it('first() returns one or null', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const invoices = c.collection<Invoice>('invoices')
     expect(invoices.query().where('status', '==', 'paid').first()?.client).toBe('Delta')
     expect(invoices.query().where('status', '==', 'nonexistent').first()).toBeNull()
   })
 
   it('subscribe() reacts to put() and delete()', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const invoices = c.collection<Invoice>('invoices')
 
     const seen: Invoice[][] = []
@@ -156,7 +156,7 @@ describe('Collection.query() — integration with crypto + adapter', () => {
   })
 
   it('survives a 1K-record dataset across all operators', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const stress = c.collection<Invoice>('stress')
     const N = 1000
     for (let i = 0; i < N; i++) {

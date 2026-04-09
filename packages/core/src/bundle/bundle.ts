@@ -1,12 +1,12 @@
 /**
  * `.noydb` container primitives — write, read, header-only read.
  *
- * v0.6 #100. Wraps a `compartment.dump()` JSON string in the
+ * v0.6 #100. Wraps a `vault.dump()` JSON string in the
  * binary container described in `format.ts`.
  *
  * **Three primitives:**
  *
- *   - `writeNoydbBundle(compartment, opts?)` — produces the
+ *   - `writeNoydbBundle(vault, opts?)` — produces the
  *     full container bytes ready to write to disk or upload
  *   - `readNoydbBundleHeader(bytes)` — parses just the header
  *     without decompressing the body, fast file-type and
@@ -14,19 +14,19 @@
  *   - `readNoydbBundle(bytes)` — full read: validates magic,
  *     header, integrity hash, and decompresses the body to
  *     return the original `dump()` JSON string for use with
- *     `compartment.load()`
+ *     `vault.load()`
  *
  * **Compression strategy:** brotli when available (Node 22+,
  * Chrome 124+, Firefox 122+), gzip fallback elsewhere. The
  * algorithm choice is encoded in the format byte at offset 5,
  * so readers handle either transparently. Brotli wins ~30-50%
- * on JSON payloads with repeated keys (which compartment dumps
+ * on JSON payloads with repeated keys (which vault dumps
  * are).
  *
  * **Why split read/load?** `readNoydbBundle` returns the
- * *unwrapped JSON string*, not a Compartment object. The caller
+ * *unwrapped JSON string*, not a Vault object. The caller
  * is responsible for piping that JSON into
- * `compartment.load(json, passphrase)`. Splitting the layers
+ * `vault.load(json, passphrase)`. Splitting the layers
  * keeps the bundle module free of any crypto/passphrase
  * concerns — it's purely a format layer. The same `readNoydbBundle`
  * call can also feed verification tools, format inspectors, or
@@ -51,7 +51,7 @@ import {
   type NoydbBundleHeader,
 } from './format.js'
 import { BundleIntegrityError } from '../errors.js'
-import type { Compartment } from '../compartment.js'
+import type { Vault } from '../vault.js'
 
 /**
  * Options accepted by `writeNoydbBundle`.
@@ -67,8 +67,8 @@ export interface WriteNoydbBundleOptions {
 
 /**
  * Result returned by `readNoydbBundle`. The caller is expected to
- * pass `dumpJson` into `compartment.load(json, passphrase)` to
- * actually restore a compartment. Splitting the layers keeps the
+ * pass `dumpJson` into `vault.load(json, passphrase)` to
+ * actually restore a vault. Splitting the layers keeps the
  * bundle module free of crypto concerns — see file-level docs.
  */
 export interface NoydbBundleReadResult {
@@ -218,14 +218,14 @@ function concatBytes(parts: readonly Uint8Array[]): Uint8Array {
 }
 
 /**
- * Write a `.noydb` bundle for the given compartment.
+ * Write a `.noydb` bundle for the given vault.
  *
  * Pipeline:
  *   1. Resolve or create the compartment's stable bundle handle
- *      via `compartment.getBundleHandle()` — same handle on
- *      every export from the same compartment instance, so cloud
+ *      via `vault.getBundleHandle()` — same handle on
+ *      every export from the same vault instance, so cloud
  *      adapters can use it as a primary key.
- *   2. `compartment.dump()` → JSON string with encrypted records
+ *   2. `vault.dump()` → JSON string with encrypted records
  *      inside.
  *   3. UTF-8 encode the dump string.
  *   4. Compress (brotli if available, gzip fallback by default).
@@ -238,14 +238,14 @@ function concatBytes(parts: readonly Uint8Array[]): Uint8Array {
  * The output is a single `Uint8Array`. Consumers writing to disk
  * pass it to `fs.writeFile`; consumers uploading to cloud storage
  * pass it as the request body. The `@noy-db/file` adapter wraps
- * this with a `saveBundle(path, compartment)` helper.
+ * this with a `saveBundle(path, vault)` helper.
  */
 export async function writeNoydbBundle(
-  compartment: Compartment,
+  vault: Vault,
   opts: WriteNoydbBundleOptions = {},
 ): Promise<Uint8Array> {
-  const handle = await compartment.getBundleHandle()
-  const dumpJson = await compartment.dump()
+  const handle = await vault.getBundleHandle()
+  const dumpJson = await vault.dump()
   const dumpBytes = new TextEncoder().encode(dumpJson)
 
   const { format, streamFormat } = selectCompression(opts.compression)
@@ -338,8 +338,8 @@ export function readNoydbBundleHeader(bytes: Uint8Array): NoydbBundleHeader {
 /**
  * Read a full `.noydb` bundle: validate magic + header, verify
  * integrity hash over the body bytes, decompress, and return the
- * original `compartment.dump()` JSON string ready to pass to
- * `compartment.load()`.
+ * original `vault.dump()` JSON string ready to pass to
+ * `vault.load()`.
  *
  * Throws `BundleIntegrityError` if the body's actual SHA-256 does
  * not match the value declared in the header. Distinct from a
@@ -348,7 +348,7 @@ export function readNoydbBundleHeader(bytes: Uint8Array): NoydbBundleHeader {
  *
  * Note: this function does NOT take a passphrase. The dump JSON
  * inside the body still contains encrypted records — restoring
- * the compartment requires `compartment.load(dumpJson, passphrase)`
+ * the vault requires `vault.load(dumpJson, passphrase)`
  * after this call. Splitting the layers keeps the bundle module
  * free of crypto concerns and lets the same code feed format
  * inspectors that never decrypt anything.

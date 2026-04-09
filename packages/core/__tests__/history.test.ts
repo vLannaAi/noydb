@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import type { NoydbStore, EncryptedEnvelope, CompartmentSnapshot } from '../src/types.js'
+import type { NoydbStore, EncryptedEnvelope, VaultSnapshot } from '../src/types.js'
 import { ConflictError } from '../src/errors.js'
 import { createNoydb } from '../src/noydb.js'
 import type { Noydb } from '../src/noydb.js'
@@ -21,7 +21,7 @@ function persistentMemory(): NoydbStore {
     async delete(c, col, id) { store.get(c)?.get(col)?.delete(id) },
     async list(c, col) { const coll = store.get(c)?.get(col); return coll ? [...coll.keys()] : [] },
     async loadAll(c) {
-      const comp = store.get(c); const s: CompartmentSnapshot = {}
+      const comp = store.get(c); const s: VaultSnapshot = {}
       if (comp) for (const [n, coll] of comp) { if (!n.startsWith('_')) { const r: Record<string, EncryptedEnvelope> = {}; for (const [id, e] of coll) r[id] = e; s[n] = r } }
       return s
     },
@@ -50,7 +50,7 @@ describe('audit history', () => {
 
   describe('basic tracking', () => {
     it('first put creates no history (no previous version)', async () => {
-      const comp = await db.openCompartment(COMP)
+      const comp = await db.openVault(COMP)
       const invoices = comp.collection<Invoice>('invoices')
       await invoices.put('inv-1', { amount: 1000, status: 'draft' })
 
@@ -59,7 +59,7 @@ describe('audit history', () => {
     })
 
     it('second put creates one history entry with the first version', async () => {
-      const comp = await db.openCompartment(COMP)
+      const comp = await db.openVault(COMP)
       const invoices = comp.collection<Invoice>('invoices')
       await invoices.put('inv-1', { amount: 1000, status: 'draft' })
       await invoices.put('inv-1', { amount: 2000, status: 'sent' })
@@ -71,7 +71,7 @@ describe('audit history', () => {
     })
 
     it('multiple updates create full version chain', async () => {
-      const comp = await db.openCompartment(COMP)
+      const comp = await db.openVault(COMP)
       const invoices = comp.collection<Invoice>('invoices')
       await invoices.put('inv-1', { amount: 1000, status: 'draft' })
       await invoices.put('inv-1', { amount: 2000, status: 'sent' })
@@ -90,7 +90,7 @@ describe('audit history', () => {
     })
 
     it('delete saves final version to history', async () => {
-      const comp = await db.openCompartment(COMP)
+      const comp = await db.openVault(COMP)
       const invoices = comp.collection<Invoice>('invoices')
       await invoices.put('inv-1', { amount: 1000, status: 'draft' })
       await invoices.delete('inv-1')
@@ -101,7 +101,7 @@ describe('audit history', () => {
     })
 
     it('history entries include timestamps', async () => {
-      const comp = await db.openCompartment(COMP)
+      const comp = await db.openVault(COMP)
       const invoices = comp.collection<Invoice>('invoices')
       await invoices.put('inv-1', { amount: 1000, status: 'v1' })
       await invoices.put('inv-1', { amount: 2000, status: 'v2' })
@@ -114,7 +114,7 @@ describe('audit history', () => {
 
   describe('user attribution', () => {
     it('tracks which user made the change', async () => {
-      const comp = await db.openCompartment(COMP)
+      const comp = await db.openVault(COMP)
       const invoices = comp.collection<Invoice>('invoices')
       await invoices.put('inv-1', { amount: 1000, status: 'draft' })
       await invoices.put('inv-1', { amount: 2000, status: 'updated' })
@@ -126,7 +126,7 @@ describe('audit history', () => {
 
   describe('getVersion', () => {
     it('retrieves a specific past version', async () => {
-      const comp = await db.openCompartment(COMP)
+      const comp = await db.openVault(COMP)
       const invoices = comp.collection<Invoice>('invoices')
       await invoices.put('inv-1', { amount: 1000, status: 'v1' })
       await invoices.put('inv-1', { amount: 2000, status: 'v2' })
@@ -140,7 +140,7 @@ describe('audit history', () => {
     })
 
     it('returns null for non-existent version', async () => {
-      const comp = await db.openCompartment(COMP)
+      const comp = await db.openVault(COMP)
       const invoices = comp.collection<Invoice>('invoices')
       await invoices.put('inv-1', { amount: 1000, status: 'v1' })
 
@@ -151,7 +151,7 @@ describe('audit history', () => {
 
   describe('revert', () => {
     it('restores a record to a past version (creates new version)', async () => {
-      const comp = await db.openCompartment(COMP)
+      const comp = await db.openVault(COMP)
       const invoices = comp.collection<Invoice>('invoices')
       await invoices.put('inv-1', { amount: 1000, status: 'original' })
       await invoices.put('inv-1', { amount: 2000, status: 'changed' })
@@ -170,7 +170,7 @@ describe('audit history', () => {
     })
 
     it('throws for non-existent version', async () => {
-      const comp = await db.openCompartment(COMP)
+      const comp = await db.openVault(COMP)
       const invoices = comp.collection<Invoice>('invoices')
       await invoices.put('inv-1', { amount: 1000, status: 'v1' })
 
@@ -180,7 +180,7 @@ describe('audit history', () => {
 
   describe('history filtering', () => {
     it('limit returns only N entries', async () => {
-      const comp = await db.openCompartment(COMP)
+      const comp = await db.openVault(COMP)
       const invoices = comp.collection<Invoice>('invoices')
       for (let i = 1; i <= 10; i++) {
         await invoices.put('inv-1', { amount: i * 1000, status: `v${i}` })
@@ -193,7 +193,7 @@ describe('audit history', () => {
     })
 
     it('from/to filters by timestamp', async () => {
-      const comp = await db.openCompartment(COMP)
+      const comp = await db.openVault(COMP)
       const invoices = comp.collection<Invoice>('invoices')
 
       // Create versions (timestamps are automatic)
@@ -217,7 +217,7 @@ describe('audit history', () => {
 
   describe('pruning', () => {
     it('keepVersions prunes oldest entries', async () => {
-      const comp = await db.openCompartment(COMP)
+      const comp = await db.openVault(COMP)
       const invoices = comp.collection<Invoice>('invoices')
       for (let i = 1; i <= 6; i++) {
         await invoices.put('inv-1', { amount: i * 1000, status: `v${i}` })
@@ -237,7 +237,7 @@ describe('audit history', () => {
     })
 
     it('clearHistory removes all history for a record', async () => {
-      const comp = await db.openCompartment(COMP)
+      const comp = await db.openVault(COMP)
       const invoices = comp.collection<Invoice>('invoices')
       await invoices.put('inv-1', { amount: 1000, status: 'v1' })
       await invoices.put('inv-1', { amount: 2000, status: 'v2' })
@@ -262,7 +262,7 @@ describe('audit history', () => {
         history: { enabled: true, maxVersions: 3 },
       })
 
-      const comp = await dbCapped.openCompartment(COMP)
+      const comp = await dbCapped.openVault(COMP)
       const invoices = comp.collection<Invoice>('invoices')
       for (let i = 1; i <= 8; i++) {
         await invoices.put('inv-1', { amount: i * 1000, status: `v${i}` })
@@ -283,7 +283,7 @@ describe('audit history', () => {
         history: { enabled: false },
       })
 
-      const comp = await dbNoHistory.openCompartment(COMP)
+      const comp = await dbNoHistory.openVault(COMP)
       const invoices = comp.collection<Invoice>('invoices')
       await invoices.put('inv-1', { amount: 1000, status: 'v1' })
       await invoices.put('inv-1', { amount: 2000, status: 'v2' })
@@ -303,7 +303,7 @@ describe('audit history', () => {
         history: { enabled: true },
       })
 
-      const comp = await encDb.openCompartment(COMP)
+      const comp = await encDb.openVault(COMP)
       const invoices = comp.collection<Invoice>('invoices')
       await invoices.put('inv-1', { amount: 5000, status: 'draft' })
       await invoices.put('inv-1', { amount: 7500, status: 'sent' })
@@ -319,7 +319,7 @@ describe('audit history', () => {
 
   describe('diff', () => {
     it('shows changed fields between two versions', async () => {
-      const comp = await db.openCompartment(COMP)
+      const comp = await db.openVault(COMP)
       const invoices = comp.collection<Invoice>('invoices')
       await invoices.put('inv-1', { amount: 1000, status: 'draft' })
       await invoices.put('inv-1', { amount: 2000, status: 'draft' }) // amount changed
@@ -331,7 +331,7 @@ describe('audit history', () => {
     })
 
     it('shows multiple field changes', async () => {
-      const comp = await db.openCompartment(COMP)
+      const comp = await db.openVault(COMP)
       const invoices = comp.collection<Invoice>('invoices')
       await invoices.put('inv-1', { amount: 1000, status: 'draft' })
       await invoices.put('inv-1', { amount: 5000, status: 'paid' })
@@ -347,7 +347,7 @@ describe('audit history', () => {
     })
 
     it('compares against current version when versionB omitted', async () => {
-      const comp = await db.openCompartment(COMP)
+      const comp = await db.openVault(COMP)
       const invoices = comp.collection<Invoice>('invoices')
       await invoices.put('inv-1', { amount: 1000, status: 'draft' })
       await invoices.put('inv-1', { amount: 9999, status: 'final' })
@@ -359,7 +359,7 @@ describe('audit history', () => {
     })
 
     it('returns empty array for identical versions', async () => {
-      const comp = await db.openCompartment(COMP)
+      const comp = await db.openVault(COMP)
       const invoices = comp.collection<Invoice>('invoices')
       await invoices.put('inv-1', { amount: 1000, status: 'same' })
       await invoices.put('inv-1', { amount: 1000, status: 'same' }) // same content
@@ -369,7 +369,7 @@ describe('audit history', () => {
     })
 
     it('detects added and removed fields', async () => {
-      const comp = await db.openCompartment(COMP)
+      const comp = await db.openVault(COMP)
       const items = comp.collection<Record<string, unknown>>('items')
       await items.put('item-1', { name: 'old', color: 'red' })
       await items.put('item-1', { name: 'new', size: 'large' })
@@ -387,7 +387,7 @@ describe('audit history', () => {
     })
 
     it('handles nested object diffs', async () => {
-      const comp = await db.openCompartment(COMP)
+      const comp = await db.openVault(COMP)
       const items = comp.collection<Record<string, unknown>>('items')
       await items.put('item-1', { meta: { city: 'Bangkok', zip: '10100' } })
       await items.put('item-1', { meta: { city: 'Chiang Mai', zip: '10100' } })
@@ -402,7 +402,7 @@ describe('audit history', () => {
 
   describe('multi-record isolation', () => {
     it('history is per-record, not mixed between records', async () => {
-      const comp = await db.openCompartment(COMP)
+      const comp = await db.openVault(COMP)
       const invoices = comp.collection<Invoice>('invoices')
       await invoices.put('inv-A', { amount: 100, status: 'a1' })
       await invoices.put('inv-A', { amount: 200, status: 'a2' })

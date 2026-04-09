@@ -40,24 +40,24 @@ function matchesPrefix(id: string, collection: string, recordId?: string): boole
 /** Save a history entry (a complete encrypted envelope snapshot). */
 export async function saveHistory(
   adapter: NoydbStore,
-  compartment: string,
+  vault: string,
   collection: string,
   recordId: string,
   envelope: EncryptedEnvelope,
 ): Promise<void> {
   const id = historyId(collection, recordId, envelope._v)
-  await adapter.put(compartment, HISTORY_COLLECTION, id, envelope)
+  await adapter.put(vault, HISTORY_COLLECTION, id, envelope)
 }
 
 /** Get history entries for a record, sorted newest-first. */
 export async function getHistory(
   adapter: NoydbStore,
-  compartment: string,
+  vault: string,
   collection: string,
   recordId: string,
   options?: HistoryOptions,
 ): Promise<EncryptedEnvelope[]> {
-  const allIds = await adapter.list(compartment, HISTORY_COLLECTION)
+  const allIds = await adapter.list(vault, HISTORY_COLLECTION)
   const matchingIds = allIds
     .filter(id => matchesPrefix(id, collection, recordId))
     .sort()
@@ -66,7 +66,7 @@ export async function getHistory(
   const entries: EncryptedEnvelope[] = []
 
   for (const id of matchingIds) {
-    const envelope = await adapter.get(compartment, HISTORY_COLLECTION, id)
+    const envelope = await adapter.get(vault, HISTORY_COLLECTION, id)
     if (!envelope) continue
 
     // Apply time filters
@@ -84,24 +84,24 @@ export async function getHistory(
 /** Get a specific version's envelope from history. */
 export async function getVersionEnvelope(
   adapter: NoydbStore,
-  compartment: string,
+  vault: string,
   collection: string,
   recordId: string,
   version: number,
 ): Promise<EncryptedEnvelope | null> {
   const id = historyId(collection, recordId, version)
-  return adapter.get(compartment, HISTORY_COLLECTION, id)
+  return adapter.get(vault, HISTORY_COLLECTION, id)
 }
 
 /** Prune history entries. Returns the number of entries deleted. */
 export async function pruneHistory(
   adapter: NoydbStore,
-  compartment: string,
+  vault: string,
   collection: string,
   recordId: string | undefined,
   options: PruneOptions,
 ): Promise<number> {
-  const allIds = await adapter.list(compartment, HISTORY_COLLECTION)
+  const allIds = await adapter.list(vault, HISTORY_COLLECTION)
   const matchingIds = allIds
     .filter(id => recordId ? matchesPrefix(id, collection, recordId) : matchesPrefix(id, collection))
     .sort()
@@ -120,7 +120,7 @@ export async function pruneHistory(
     // Delete entries older than the specified date
     for (const id of matchingIds) {
       if (toDelete.includes(id)) continue
-      const envelope = await adapter.get(compartment, HISTORY_COLLECTION, id)
+      const envelope = await adapter.get(vault, HISTORY_COLLECTION, id)
       if (envelope && envelope._ts < options.beforeDate) {
         toDelete.push(id)
       }
@@ -131,20 +131,20 @@ export async function pruneHistory(
   const uniqueDeletes = [...new Set(toDelete)]
 
   for (const id of uniqueDeletes) {
-    await adapter.delete(compartment, HISTORY_COLLECTION, id)
+    await adapter.delete(vault, HISTORY_COLLECTION, id)
   }
 
   return uniqueDeletes.length
 }
 
-/** Clear all history for a compartment, optionally scoped to a collection or record. */
+/** Clear all history for a vault, optionally scoped to a collection or record. */
 export async function clearHistory(
   adapter: NoydbStore,
-  compartment: string,
+  vault: string,
   collection?: string,
   recordId?: string,
 ): Promise<number> {
-  const allIds = await adapter.list(compartment, HISTORY_COLLECTION)
+  const allIds = await adapter.list(vault, HISTORY_COLLECTION)
   let toDelete: string[]
 
   if (collection && recordId) {
@@ -156,7 +156,7 @@ export async function clearHistory(
   }
 
   for (const id of toDelete) {
-    await adapter.delete(compartment, HISTORY_COLLECTION, id)
+    await adapter.delete(vault, HISTORY_COLLECTION, id)
   }
 
   return toDelete.length

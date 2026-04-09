@@ -21,7 +21,7 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest'
-import type { NoydbStore, EncryptedEnvelope, CompartmentSnapshot, ExportChunk } from '../src/types.js'
+import type { NoydbStore, EncryptedEnvelope, VaultSnapshot, ExportChunk } from '../src/types.js'
 import { ConflictError } from '../src/errors.js'
 import { createNoydb } from '../src/noydb.js'
 import type { Noydb } from '../src/noydb.js'
@@ -45,7 +45,7 @@ function memory(): NoydbStore {
     async delete(c, col, id) { store.get(c)?.get(col)?.delete(id) },
     async list(c, col) { const coll = store.get(c)?.get(col); return coll ? [...coll.keys()] : [] },
     async loadAll(c) {
-      const comp = store.get(c); const s: CompartmentSnapshot = {}
+      const comp = store.get(c); const s: VaultSnapshot = {}
       if (comp) for (const [n, coll] of comp) {
         if (!n.startsWith('_')) {
           const r: Record<string, EncryptedEnvelope> = {}
@@ -78,7 +78,7 @@ describe('exportStream() + exportJSON() — #72', () => {
     ownerDb = await createNoydb({ store: adapter, user: 'owner-01', secret: 'owner-pass' })
 
     // Seed three collections so we can assert ACL scoping later.
-    const comp = await ownerDb.openCompartment(COMP)
+    const comp = await ownerDb.openVault(COMP)
     await comp.collection<Client>('clients').put('c-1', { name: 'Globex' })
     await comp.collection<Invoice>('invoices', { refs: { clientId: ref('clients', 'strict') } })
       .put('inv-1', { amount: 100, client: 'c-1' })
@@ -89,7 +89,7 @@ describe('exportStream() + exportJSON() — #72', () => {
   describe('empty compartment', () => {
     it('yields zero chunks', async () => {
       const db = await createNoydb({ store: memory(), user: 'owner-01', secret: 'p' })
-      const empty = await db.openCompartment('empty-co')
+      const empty = await db.openVault('empty-co')
       const chunks: ExportChunk[] = []
       for await (const chunk of empty.exportStream()) chunks.push(chunk)
       expect(chunks).toHaveLength(0)
@@ -98,7 +98,7 @@ describe('exportStream() + exportJSON() — #72', () => {
 
   describe('as owner', () => {
     it('yields one chunk per collection, sorted by name', async () => {
-      const comp = await ownerDb.openCompartment(COMP)
+      const comp = await ownerDb.openVault(COMP)
       const chunks: ExportChunk[] = []
       for await (const chunk of comp.exportStream()) chunks.push(chunk)
 
@@ -106,7 +106,7 @@ describe('exportStream() + exportJSON() — #72', () => {
     })
 
     it('yields decrypted records in collection-granularity mode', async () => {
-      const comp = await ownerDb.openCompartment(COMP)
+      const comp = await ownerDb.openVault(COMP)
       const chunks: ExportChunk[] = []
       for await (const chunk of comp.exportStream()) chunks.push(chunk)
 
@@ -116,7 +116,7 @@ describe('exportStream() + exportJSON() — #72', () => {
     })
 
     it('surfaces refs metadata on the chunk', async () => {
-      const comp = await ownerDb.openCompartment(COMP)
+      const comp = await ownerDb.openVault(COMP)
       // Re-open invoices with refs so the registry is populated —
       // the refs are registered at collection() construction time.
       comp.collection<Invoice>('invoices', { refs: { clientId: ref('clients', 'strict') } })
@@ -132,7 +132,7 @@ describe('exportStream() + exportJSON() — #72', () => {
     })
 
     it('does not include internal collections (_ledger, _keyring)', async () => {
-      const comp = await ownerDb.openCompartment(COMP)
+      const comp = await ownerDb.openVault(COMP)
       const chunks: ExportChunk[] = []
       for await (const chunk of comp.exportStream()) chunks.push(chunk)
 
@@ -144,7 +144,7 @@ describe('exportStream() + exportJSON() — #72', () => {
 
   describe('granularity: record', () => {
     it('yields one chunk per record with length-1 records array', async () => {
-      const comp = await ownerDb.openCompartment(COMP)
+      const comp = await ownerDb.openVault(COMP)
       const chunks: ExportChunk[] = []
       for await (const chunk of comp.exportStream({ granularity: 'record' })) chunks.push(chunk)
 
@@ -156,7 +156,7 @@ describe('exportStream() + exportJSON() — #72', () => {
     })
 
     it('repeats schema + refs metadata on every per-record chunk', async () => {
-      const comp = await ownerDb.openCompartment(COMP)
+      const comp = await ownerDb.openVault(COMP)
       comp.collection<Invoice>('invoices', { refs: { clientId: ref('clients', 'strict') } })
 
       const invoiceChunks: ExportChunk[] = []
@@ -175,7 +175,7 @@ describe('exportStream() + exportJSON() — #72', () => {
 
   describe('withLedgerHead', () => {
     it('omits ledgerHead by default', async () => {
-      const comp = await ownerDb.openCompartment(COMP)
+      const comp = await ownerDb.openVault(COMP)
       const chunks: ExportChunk[] = []
       for await (const chunk of comp.exportStream()) chunks.push(chunk)
       for (const chunk of chunks) {
@@ -184,7 +184,7 @@ describe('exportStream() + exportJSON() — #72', () => {
     })
 
     it('includes ledgerHead on every chunk when opted in', async () => {
-      const comp = await ownerDb.openCompartment(COMP)
+      const comp = await ownerDb.openVault(COMP)
       const chunks: ExportChunk[] = []
       for await (const chunk of comp.exportStream({ withLedgerHead: true })) chunks.push(chunk)
 
@@ -193,7 +193,7 @@ describe('exportStream() + exportJSON() — #72', () => {
       expect(firstHead).toBeDefined()
       expect(firstHead!.hash).toMatch(/^[0-9a-f]{64}$/)
 
-      // Every chunk carries the same head — one ledger per compartment.
+      // Every chunk carries the same head — one ledger per vault.
       for (const chunk of chunks) {
         expect(chunk.ledgerHead).toEqual(firstHead)
       }
@@ -210,7 +210,7 @@ describe('exportStream() + exportJSON() — #72', () => {
         permissions: { invoices: 'rw' },
       })
       const opDb = await createNoydb({ store: adapter, user: 'op-01', secret: 'op-pass' })
-      const comp = await opDb.openCompartment(COMP)
+      const comp = await opDb.openVault(COMP)
 
       const chunks: ExportChunk[] = []
       for await (const chunk of comp.exportStream()) chunks.push(chunk)
@@ -226,7 +226,7 @@ describe('exportStream() + exportJSON() — #72', () => {
         passphrase: 'v-pass',
       })
       const viewerDb = await createNoydb({ store: adapter, user: 'viewer-01', secret: 'v-pass' })
-      const comp = await viewerDb.openCompartment(COMP)
+      const comp = await viewerDb.openVault(COMP)
 
       const chunks: ExportChunk[] = []
       for await (const chunk of comp.exportStream()) chunks.push(chunk)
@@ -243,7 +243,7 @@ describe('exportStream() + exportJSON() — #72', () => {
         permissions: { invoices: 'ro' },
       })
       const clientDb = await createNoydb({ store: adapter, user: 'client-01', secret: 'c-pass' })
-      const comp = await clientDb.openCompartment(COMP)
+      const comp = await clientDb.openVault(COMP)
 
       const chunks: ExportChunk[] = []
       for await (const chunk of comp.exportStream()) chunks.push(chunk)
@@ -254,7 +254,7 @@ describe('exportStream() + exportJSON() — #72', () => {
 
   describe('exportJSON()', () => {
     it('produces a stable on-disk shape', async () => {
-      const comp = await ownerDb.openCompartment(COMP)
+      const comp = await ownerDb.openVault(COMP)
       const json = await comp.exportJSON()
       const parsed = JSON.parse(json) as {
         _noydb_export: number
@@ -273,7 +273,7 @@ describe('exportStream() + exportJSON() — #72', () => {
     })
 
     it('includes ledgerHead when requested', async () => {
-      const comp = await ownerDb.openCompartment(COMP)
+      const comp = await ownerDb.openVault(COMP)
       const json = await comp.exportJSON({ withLedgerHead: true })
       const parsed = JSON.parse(json) as { ledgerHead?: { hash: string } }
       expect(parsed.ledgerHead).toBeDefined()
@@ -281,7 +281,7 @@ describe('exportStream() + exportJSON() — #72', () => {
     })
 
     it('round-trips the record content verbatim', async () => {
-      const comp = await ownerDb.openCompartment(COMP)
+      const comp = await ownerDb.openVault(COMP)
       const json = await comp.exportJSON()
       const parsed = JSON.parse(json) as {
         collections: Record<string, { records: Invoice[] }>
@@ -300,7 +300,7 @@ describe('exportStream() + exportJSON() — #72', () => {
         permissions: { payments: 'ro' },
       })
       const opDb = await createNoydb({ store: adapter, user: 'op-02', secret: 'op-pass' })
-      const comp = await opDb.openCompartment(COMP)
+      const comp = await opDb.openVault(COMP)
 
       const parsed = JSON.parse(await comp.exportJSON()) as {
         collections: Record<string, unknown>

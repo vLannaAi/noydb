@@ -130,8 +130,8 @@ export interface OidcEnrollment {
   readonly providerName: string
   /** OIDC subject claim (`sub`) of the enrolled user. */
   readonly sub: string
-  /** The compartment this enrollment unlocks. */
-  readonly compartment: string
+  /** The vault this enrollment unlocks. */
+  readonly vault: string
   /** ISO timestamp of enrollment. */
   readonly enrolledAt: string
   /**
@@ -189,7 +189,7 @@ function saveDeviceSecret(sub: string, secret: Uint8Array, storage?: Storage): v
 async function deriveDeviceHalf(
   deviceSecret: Uint8Array,
   sub: string,
-  compartment: string,
+  vault: string,
   keyLengthBytes: number,
 ): Promise<Uint8Array> {
   const subtle = globalThis.crypto.subtle
@@ -199,7 +199,7 @@ async function deriveDeviceHalf(
       name: 'HKDF',
       hash: 'SHA-256',
       salt: new TextEncoder().encode(sub),
-      info: new TextEncoder().encode(`noydb-oidc-device-v1:${compartment}`),
+      info: new TextEncoder().encode(`noydb-oidc-device-v1:${vault}`),
     },
     ikm,
     keyLengthBytes * 8,
@@ -311,14 +311,14 @@ async function getServerHalf(
  * `deviceKeyId` later.
  *
  * @param keyring - The currently unlocked keyring.
- * @param compartment - The compartment to enroll for.
+ * @param vault - The vault to enroll for.
  * @param config - OIDC provider + key-connector configuration.
  * @param idToken - A valid OIDC ID token from the completed OIDC flow.
  * @param options - Optional storage override.
  */
 export async function enrollOidc(
   keyring: UnlockedKeyring,
-  compartment: string,
+  vault: string,
   config: OidcProviderConfig,
   idToken: string,
   options: EnrollOidcOptions = {},
@@ -356,7 +356,7 @@ export async function enrollOidc(
   const padded = new Uint8Array(payloadBytes.length + padLen)
   padded.set(payloadBytes)
 
-  const deviceHalf = await deriveDeviceHalf(deviceSecret, claims.sub, compartment, padded.length)
+  const deviceHalf = await deriveDeviceHalf(deviceSecret, claims.sub, vault, padded.length)
   const serverHalf = xorBytes(padded, deviceHalf)
 
   // Encrypt serverHalf with the ID token using HKDF(idToken) as the key
@@ -380,7 +380,7 @@ export async function enrollOidc(
     _noydb_oidc: 1,
     providerName: config.name,
     sub: claims.sub,
-    compartment,
+    vault,
     enrolledAt: new Date().toISOString(),
     deviceKeyId,
     enrollmentCount: 1,
@@ -388,7 +388,7 @@ export async function enrollOidc(
 }
 
 /**
- * Unlock a compartment using OIDC (client-side portion).
+ * Unlock a vault using OIDC (client-side portion).
  *
  * Fetches the server half from the key-connector server, derives the device
  * half from the local device secret, XORs them to reconstruct the keyring
@@ -409,7 +409,7 @@ export async function unlockOidc(
     throw new OidcTokenError('ID token is expired. Complete a fresh OIDC flow before unlocking.')
   }
 
-  const { sub, compartment } = enrollment
+  const { sub, vault } = enrollment
 
   // Load the device secret
   const deviceSecret = getDeviceSecret(sub, options.storage)
@@ -431,7 +431,7 @@ export async function unlockOidc(
   )
 
   // Reconstruct the padded payload
-  const deviceHalf = await deriveDeviceHalf(deviceSecret, sub, compartment, serverHalf.length)
+  const deviceHalf = await deriveDeviceHalf(deviceSecret, sub, vault, serverHalf.length)
   const padded = xorBytes(serverHalf, deviceHalf)
 
   // Parse the payload (strip padding: find the last non-null byte + 1)

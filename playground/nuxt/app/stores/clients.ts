@@ -1,6 +1,6 @@
 /**
  * Clients store — second Pinia store proving multi-store isolation
- * within the same compartment.
+ * within the same vault.
  */
 
 // defineNoydbStore is auto-imported by @noy-db/nuxt
@@ -13,5 +13,5 @@ export interface Client {
 }
 
 export const useClients = defineNoydbStore<Client>('clients', {
-  compartment: 'demo-co',
+  vault: 'demo-co',
 })

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { createNoydb } from '../src/noydb.js'
 import type { Noydb } from '../src/noydb.js'
-import type { NoydbStore, EncryptedEnvelope, CompartmentSnapshot } from '../src/types.js'
+import type { NoydbStore, EncryptedEnvelope, VaultSnapshot } from '../src/types.js'
 import { ConflictError } from '../src/errors.js'
 
 /** Inline memory adapter to avoid circular workspace dependency. */
@@ -25,7 +25,7 @@ function memory(): NoydbStore {
     async delete(c, col, id) { store.get(c)?.get(col)?.delete(id) },
     async list(c, col) { const coll = store.get(c)?.get(col); return coll ? [...coll.keys()] : [] },
     async loadAll(c) {
-      const comp = store.get(c); const s: CompartmentSnapshot = {}
+      const comp = store.get(c); const s: VaultSnapshot = {}
       if (comp) for (const [n, coll] of comp) { if (!n.startsWith('_')) { const r: Record<string, EncryptedEnvelope> = {}; for (const [id, e] of coll) r[id] = e; s[n] = r } }
       return s
     },
@@ -54,12 +54,12 @@ describe('integration: full lifecycle', () => {
     })
 
     it('creates instance and opens compartment', async () => {
-      const company = await db.openCompartment('C101')
+      const company = await db.openVault('C101')
       expect(company).toBeDefined()
     })
 
     it('put + get round-trips with encryption', async () => {
-      const company = await db.openCompartment('C101')
+      const company = await db.openVault('C101')
       const invoices = company.collection<Invoice>('invoices')
 
       await invoices.put('inv-001', {
@@ -77,7 +77,7 @@ describe('integration: full lifecycle', () => {
     })
 
     it('list returns all records', async () => {
-      const company = await db.openCompartment('C101')
+      const company = await db.openVault('C101')
       const invoices = company.collection<Invoice>('invoices')
 
       await invoices.put('inv-001', { amount: 1000, status: 'draft', client: 'A' })
@@ -89,7 +89,7 @@ describe('integration: full lifecycle', () => {
     })
 
     it('query filters records', async () => {
-      const company = await db.openCompartment('C101')
+      const company = await db.openVault('C101')
       const invoices = company.collection<Invoice>('invoices')
 
       await invoices.put('inv-001', { amount: 1000, status: 'draft', client: 'A' })
@@ -104,7 +104,7 @@ describe('integration: full lifecycle', () => {
     })
 
     it('delete removes a record', async () => {
-      const company = await db.openCompartment('C101')
+      const company = await db.openVault('C101')
       const invoices = company.collection<Invoice>('invoices')
 
       await invoices.put('inv-001', { amount: 1000, status: 'draft', client: 'A' })
@@ -115,7 +115,7 @@ describe('integration: full lifecycle', () => {
     })
 
     it('count returns correct number', async () => {
-      const company = await db.openCompartment('C101')
+      const company = await db.openVault('C101')
       const invoices = company.collection<Invoice>('invoices')
 
       await invoices.put('inv-001', { amount: 1000, status: 'draft', client: 'A' })
@@ -125,7 +125,7 @@ describe('integration: full lifecycle', () => {
     })
 
     it('get non-existent returns null', async () => {
-      const company = await db.openCompartment('C101')
+      const company = await db.openVault('C101')
       const invoices = company.collection<Invoice>('invoices')
       expect(await invoices.get('nonexistent')).toBeNull()
     })
@@ -134,7 +134,7 @@ describe('integration: full lifecycle', () => {
       const events: string[] = []
       db.on('change', (e) => events.push(`${e.action}:${e.id}`))
 
-      const company = await db.openCompartment('C101')
+      const company = await db.openVault('C101')
       const invoices = company.collection<Invoice>('invoices')
 
       await invoices.put('inv-001', { amount: 1000, status: 'draft', client: 'A' })
@@ -144,7 +144,7 @@ describe('integration: full lifecycle', () => {
     })
 
     it('dump produces valid backup JSON', async () => {
-      const company = await db.openCompartment('C101')
+      const company = await db.openVault('C101')
       const invoices = company.collection<Invoice>('invoices')
 
       await invoices.put('inv-001', { amount: 5000, status: 'draft', client: 'ABC' })
@@ -161,7 +161,7 @@ describe('integration: full lifecycle', () => {
 
     it('dump and load round-trips in unencrypted mode', async () => {
       const plainDb = await createNoydb({ store: memory(), user: 'dev', encrypt: false })
-      const comp = await plainDb.openCompartment('TEST')
+      const comp = await plainDb.openVault('TEST')
       const invoices = comp.collection<Invoice>('invoices')
 
       await invoices.put('inv-001', { amount: 5000, status: 'draft', client: 'ABC' })
@@ -169,9 +169,9 @@ describe('integration: full lifecycle', () => {
 
       const backup = await comp.dump()
 
-      // Restore into a new compartment on a fresh instance
+      // Restore into a new vault on a fresh instance
       const plainDb2 = await createNoydb({ store: memory(), user: 'dev', encrypt: false })
-      const comp2 = await plainDb2.openCompartment('TEST')
+      const comp2 = await plainDb2.openVault('TEST')
       await comp2.load(backup)
 
       const invoices2 = comp2.collection<Invoice>('invoices')
@@ -181,8 +181,8 @@ describe('integration: full lifecycle', () => {
 
     it('close clears state', async () => {
       db.close()
-      // After close, creating a compartment should fail gracefully
-      await expect(db.openCompartment('C101')).rejects.toThrow()
+      // After close, creating a vault should fail gracefully
+      await expect(db.openVault('C101')).rejects.toThrow()
     })
   })
 
@@ -196,7 +196,7 @@ describe('integration: full lifecycle', () => {
     })
 
     it('put + get works without encryption', async () => {
-      const company = await db.openCompartment('C101')
+      const company = await db.openVault('C101')
       const invoices = company.collection<Invoice>('invoices')
 
       await invoices.put('inv-001', { amount: 5000, status: 'draft', client: 'Test' })

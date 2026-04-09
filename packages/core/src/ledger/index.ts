@@ -10,7 +10,7 @@
  *
  * The LedgerStore class itself is exported so test code and advanced
  * users can construct one directly, but the recommended entry point is
- * `compartment.ledger()` which takes care of wiring the DEK resolver
+ * `vault.ledger()` which takes care of wiring the DEK resolver
  * and actor id from the active keyring.
  */
 

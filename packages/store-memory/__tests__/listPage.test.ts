@@ -35,7 +35,7 @@ describe('@noy-db/memory — listPage', () => {
     while (true) {
       const opts: { cursor?: string; limit: number } = { limit: 3 }
       if (cursor !== undefined) opts.cursor = cursor
-      // Reproduce the (compartment, collection, cursor?, limit?) signature
+      // Reproduce the (vault, collection, cursor?, limit?) signature
       const page = await a.listPage!('C1', 'invoices', cursor, 3)
       for (const { id } of page.items) all.push(id)
       if (page.nextCursor === null) break

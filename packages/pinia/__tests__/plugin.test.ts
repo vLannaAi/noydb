@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { createApp } from 'vue'
 import { createPinia, defineStore, setActivePinia, type Pinia } from 'pinia'
 import { createNoydbPiniaPlugin } from '../src/plugin.js'
-import { type NoydbStore, type EncryptedEnvelope, type CompartmentSnapshot, ConflictError } from '@noy-db/core'
+import { type NoydbStore, type EncryptedEnvelope, type VaultSnapshot, ConflictError } from '@noy-db/core'
 
 /**
  * Inline memory adapter — same pattern as the integration tests in
@@ -30,7 +30,7 @@ function memory(): NoydbStore {
     async delete(c, col, id) { store.get(c)?.get(col)?.delete(id) },
     async list(c, col) { const coll = store.get(c)?.get(col); return coll ? [...coll.keys()] : [] },
     async loadAll(c) {
-      const comp = store.get(c); const s: CompartmentSnapshot = {}
+      const comp = store.get(c); const s: VaultSnapshot = {}
       if (comp) for (const [n, coll] of comp) {
         if (!n.startsWith('_')) {
           const r: Record<string, EncryptedEnvelope> = {}
@@ -107,7 +107,7 @@ describe('createNoydbPiniaPlugin — augmentation path', () => {
     makePinia()
     const useClients = defineStore('clients', {
       state: (): ClientsState => ({ list: [], selectedId: null, total: 0 }),
-      noydb: { compartment: 'C1', collection: 'clients', persist: 'list' },
+      noydb: { vault: 'C1', collection: 'clients', persist: 'list' },
     })
     const store = useClients()
     expect(store.$noydbAugmented).toBe(true)
@@ -119,7 +119,7 @@ describe('createNoydbPiniaPlugin — augmentation path', () => {
     makePinia(adapter)
     const useClients = defineStore('clients', {
       state: (): ClientsState => ({ list: [], selectedId: null, total: 0 }),
-      noydb: { compartment: 'C1', collection: 'clients', persist: 'list' },
+      noydb: { vault: 'C1', collection: 'clients', persist: 'list' },
     })
     const store = useClients()
     await store.$noydbReady
@@ -144,7 +144,7 @@ describe('createNoydbPiniaPlugin — augmentation path', () => {
     makePinia(adapter)
     const useClients1 = defineStore('clients', {
       state: (): ClientsState => ({ list: [], selectedId: null, total: 0 }),
-      noydb: { compartment: 'C1', collection: 'clients', persist: 'list' },
+      noydb: { vault: 'C1', collection: 'clients', persist: 'list' },
     })
     const s1 = useClients1()
     await s1.$noydbReady
@@ -156,7 +156,7 @@ describe('createNoydbPiniaPlugin — augmentation path', () => {
     makePinia(adapter)
     const useClients2 = defineStore('clients', {
       state: (): ClientsState => ({ list: [], selectedId: null, total: 0 }),
-      noydb: { compartment: 'C1', collection: 'clients', persist: 'list' },
+      noydb: { vault: 'C1', collection: 'clients', persist: 'list' },
     })
     const s2 = useClients2()
     await s2.$noydbReady
@@ -171,7 +171,7 @@ describe('createNoydbPiniaPlugin — augmentation path', () => {
     makePinia(adapter)
     const useClients = defineStore('clients', {
       state: (): ClientsState => ({ list: [], selectedId: null, total: 0 }),
-      noydb: { compartment: 'C1', collection: 'clients', persist: 'list' },
+      noydb: { vault: 'C1', collection: 'clients', persist: 'list' },
     })
     const store = useClients()
     await store.$noydbReady
@@ -183,7 +183,7 @@ describe('createNoydbPiniaPlugin — augmentation path', () => {
     makePinia(adapter)
     const useClients2 = defineStore('clients', {
       state: (): ClientsState => ({ list: [], selectedId: null, total: 0 }),
-      noydb: { compartment: 'C1', collection: 'clients', persist: 'list' },
+      noydb: { vault: 'C1', collection: 'clients', persist: 'list' },
     })
     const s2 = useClients2()
     await s2.$noydbReady
@@ -198,7 +198,7 @@ describe('createNoydbPiniaPlugin — augmentation path', () => {
     const useClients = defineStore('clients', {
       state: (): ClientsState => ({ list: [], selectedId: null, total: 0 }),
       noydb: {
-        compartment: 'C1',
+        vault: 'C1',
         collection: 'clients',
         persist: ['list', 'total'],
       },
@@ -213,7 +213,7 @@ describe('createNoydbPiniaPlugin — augmentation path', () => {
     const useClients2 = defineStore('clients', {
       state: (): ClientsState => ({ list: [], selectedId: null, total: 0 }),
       noydb: {
-        compartment: 'C1',
+        vault: 'C1',
         collection: 'clients',
         persist: ['list', 'total'],
       },
@@ -230,7 +230,7 @@ describe('createNoydbPiniaPlugin — augmentation path', () => {
     makePinia(adapter)
     const useClients = defineStore('clients', {
       state: (): ClientsState => ({ list: [], selectedId: null, total: 0 }),
-      noydb: { compartment: 'C1', collection: 'clients', persist: '*' },
+      noydb: { vault: 'C1', collection: 'clients', persist: '*' },
     })
     const store = useClients()
     await store.$noydbReady
@@ -241,7 +241,7 @@ describe('createNoydbPiniaPlugin — augmentation path', () => {
     makePinia(adapter)
     const useClients2 = defineStore('clients', {
       state: (): ClientsState => ({ list: [], selectedId: null, total: 0 }),
-      noydb: { compartment: 'C1', collection: 'clients', persist: '*' },
+      noydb: { vault: 'C1', collection: 'clients', persist: '*' },
     })
     const s2 = useClients2()
     await s2.$noydbReady
@@ -266,11 +266,11 @@ describe('createNoydbPiniaPlugin — augmentation path', () => {
 
     const useA = defineStore('a', {
       state: () => ({ x: 0 }),
-      noydb: { compartment: 'C1', collection: 'a', persist: 'x' },
+      noydb: { vault: 'C1', collection: 'a', persist: 'x' },
     })
     const useB = defineStore('b', {
       state: () => ({ y: 0 }),
-      noydb: { compartment: 'C1', collection: 'b', persist: 'y' },
+      noydb: { vault: 'C1', collection: 'b', persist: 'y' },
     })
 
     const a = useA()
@@ -285,11 +285,11 @@ describe('createNoydbPiniaPlugin — augmentation path', () => {
     makePinia(adapter)
     const useA = defineStore('a', {
       state: () => ({ list: [] as string[] }),
-      noydb: { compartment: 'C1', collection: 'data', persist: 'list' },
+      noydb: { vault: 'C1', collection: 'data', persist: 'list' },
     })
     const useB = defineStore('b', {
       state: () => ({ list: [] as string[] }),
-      noydb: { compartment: 'C2', collection: 'data', persist: 'list' },
+      noydb: { vault: 'C2', collection: 'data', persist: 'list' },
     })
 
     const a = useA()
@@ -303,7 +303,7 @@ describe('createNoydbPiniaPlugin — augmentation path', () => {
     expect(a.list).toEqual(['alpha'])
     expect(b.list).toEqual(['bravo'])
 
-    // Verify on disk: each compartment has its own state doc.
+    // Verify on disk: each vault has its own state doc.
     const envA = await adapter.get('C1', 'data', '__state__')
     const envB = await adapter.get('C2', 'data', '__state__')
     expect(envA).not.toBeNull()
@@ -316,7 +316,7 @@ describe('createNoydbPiniaPlugin — augmentation path', () => {
     makePinia(adapter)
     const useStore = defineStore('full', {
       state: (): ClientsState => ({ list: [], selectedId: null, total: 0 }),
-      noydb: { compartment: 'C1', collection: 'full' }, // no persist key
+      noydb: { vault: 'C1', collection: 'full' }, // no persist key
     })
     const store = useStore()
     await store.$noydbReady
@@ -327,7 +327,7 @@ describe('createNoydbPiniaPlugin — augmentation path', () => {
     makePinia(adapter)
     const useStore2 = defineStore('full', {
       state: (): ClientsState => ({ list: [], selectedId: null, total: 0 }),
-      noydb: { compartment: 'C1', collection: 'full' },
+      noydb: { vault: 'C1', collection: 'full' },
     })
     const s2 = useStore2()
     await s2.$noydbReady
@@ -343,7 +343,7 @@ describe('createNoydbPiniaPlugin — augmentation path', () => {
     makePinia(adapter)
     const useV1 = defineStore('v', {
       state: () => ({ value: 'ok' }),
-      noydb: { compartment: 'C1', collection: 'v', persist: 'value' },
+      noydb: { vault: 'C1', collection: 'v', persist: 'value' },
     })
     const s1 = useV1()
     await s1.$noydbReady
@@ -365,7 +365,7 @@ describe('createNoydbPiniaPlugin — augmentation path', () => {
     const useV2 = defineStore('v', {
       state: () => ({ value: 'initial' }),
       noydb: {
-        compartment: 'C1',
+        vault: 'C1',
         collection: 'v',
         persist: 'value',
         schema: strictSchema,
@@ -414,7 +414,7 @@ describe('createNoydbPiniaPlugin — augmentation path', () => {
     makePinia(brokenAdapter)
     const useStore = defineStore('s', {
       state: () => ({ x: 'initial' }),
-      noydb: { compartment: 'C1', collection: 's', persist: 'x' },
+      noydb: { vault: 'C1', collection: 's', persist: 'x' },
     })
     const store = useStore()
     await store.$noydbReady
@@ -435,7 +435,7 @@ describe('createNoydbPiniaPlugin — augmentation path', () => {
         tree: { branches: [] },
         meta: { version: 1 },
       }),
-      noydb: { compartment: 'C1', collection: 'tree', persist: '*' },
+      noydb: { vault: 'C1', collection: 'tree', persist: '*' },
     })
     const store = useTree()
     await store.$noydbReady
@@ -452,7 +452,7 @@ describe('createNoydbPiniaPlugin — augmentation path', () => {
         tree: { branches: [] },
         meta: { version: 1 },
       }),
-      noydb: { compartment: 'C1', collection: 'tree', persist: '*' },
+      noydb: { vault: 'C1', collection: 'tree', persist: '*' },
     })
     const s2 = useTree2()
     await s2.$noydbReady

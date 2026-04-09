@@ -27,7 +27,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { z } from 'zod'
 import { createNoydb } from '../src/noydb.js'
 import type { Noydb } from '../src/noydb.js'
-import type { NoydbStore, EncryptedEnvelope, CompartmentSnapshot } from '../src/types.js'
+import type { NoydbStore, EncryptedEnvelope, VaultSnapshot } from '../src/types.js'
 import { ConflictError, SchemaValidationError } from '../src/errors.js'
 import type { StandardSchemaV1, InferOutput } from '../src/schema.js'
 
@@ -54,7 +54,7 @@ function memory(): NoydbStore {
     async delete(c, col, id) { store.get(c)?.get(col)?.delete(id) },
     async list(c, col) { const coll = store.get(c)?.get(col); return coll ? [...coll.keys()] : [] },
     async loadAll(c) {
-      const comp = store.get(c); const s: CompartmentSnapshot = {}
+      const comp = store.get(c); const s: VaultSnapshot = {}
       if (comp) for (const [n, coll] of comp) {
         if (!n.startsWith('_')) {
           const r: Record<string, EncryptedEnvelope> = {}
@@ -115,7 +115,7 @@ describe('schema validation — #42', () => {
   })
 
   it('accepts a valid record through put()', async () => {
-    const company = await db.openCompartment('demo-co')
+    const company = await db.openVault('demo-co')
     const invoices = company.collection<Invoice>('invoices', {
       schema: InvoiceSchema,
     })
@@ -137,7 +137,7 @@ describe('schema validation — #42', () => {
   })
 
   it('rejects a record with a missing required field', async () => {
-    const company = await db.openCompartment('demo-co')
+    const company = await db.openVault('demo-co')
     const invoices = company.collection<Invoice>('invoices', {
       schema: InvoiceSchema,
     })
@@ -153,7 +153,7 @@ describe('schema validation — #42', () => {
   })
 
   it('rejects a record with a field of the wrong type', async () => {
-    const company = await db.openCompartment('demo-co')
+    const company = await db.openVault('demo-co')
     const invoices = company.collection<Invoice>('invoices', {
       schema: InvoiceSchema,
     })
@@ -176,7 +176,7 @@ describe('schema validation — #42', () => {
   })
 
   it('does not persist a record that fails validation', async () => {
-    const company = await db.openCompartment('demo-co')
+    const company = await db.openVault('demo-co')
     const invoices = company.collection<Invoice>('invoices', {
       schema: InvoiceSchema,
     })
@@ -214,7 +214,7 @@ describe('schema validation — #42', () => {
 
     type Coerced = z.infer<typeof Coerced>
 
-    const company = await db.openCompartment('demo-co')
+    const company = await db.openVault('demo-co')
     const invoices = company.collection<Coerced>('invoices', {
       schema: Coerced,
     })
@@ -235,7 +235,7 @@ describe('schema validation — #42', () => {
   })
 
   it('query() returns validated records', async () => {
-    const company = await db.openCompartment('demo-co')
+    const company = await db.openVault('demo-co')
     const invoices = company.collection<Invoice>('invoices', {
       schema: InvoiceSchema,
     })
@@ -254,7 +254,7 @@ describe('schema validation — #42', () => {
   })
 
   it('list() returns validated records', async () => {
-    const company = await db.openCompartment('demo-co')
+    const company = await db.openVault('demo-co')
     const invoices = company.collection<Invoice>('invoices', {
       schema: InvoiceSchema,
     })
@@ -286,7 +286,7 @@ describe('schema validation — #42', () => {
       user: 'alice',
       secret: 'test-passphrase-1234',
     })
-    const looseCompany = await looseDb.openCompartment('demo-co')
+    const looseCompany = await looseDb.openVault('demo-co')
     const loose = looseCompany.collection<{ id: string; note: string }>('invoices')
     await loose.put('inv-legacy', { id: 'inv-legacy', note: 'old shape' })
 
@@ -295,7 +295,7 @@ describe('schema validation — #42', () => {
       user: 'alice',
       secret: 'test-passphrase-1234',
     })
-    const strictCompany = await strictDb.openCompartment('demo-co')
+    const strictCompany = await strictDb.openVault('demo-co')
     const strict = strictCompany.collection<Invoice>('invoices', {
       schema: InvoiceSchema,
     })
@@ -312,7 +312,7 @@ describe('schema validation — #42', () => {
   })
 
   it('history reads skip schema validation', async () => {
-    const company = await db.openCompartment('demo-co')
+    const company = await db.openVault('demo-co')
     const invoices = company.collection<Invoice>('invoices', {
       schema: InvoiceSchema,
       historyConfig: { enabled: true },
@@ -342,7 +342,7 @@ describe('schema validation — #42', () => {
   })
 
   it('schema-less collections work unchanged (backwards compat)', async () => {
-    const company = await db.openCompartment('demo-co')
+    const company = await db.openVault('demo-co')
     // No schema — should accept anything.
     const bag = company.collection<{ anything: unknown }>('bag')
     await bag.put('x', { anything: { deeply: 'nested' } })
@@ -364,7 +364,7 @@ describe('schema validation — #42', () => {
         { message: 'name is forbidden' },
       )
 
-    const company = await db.openCompartment('demo-co')
+    const company = await db.openVault('demo-co')
     const col = company.collection<{ id: string; name: string }>(
       'async',
       { schema: AsyncSchema },
@@ -379,7 +379,7 @@ describe('schema validation — #42', () => {
   })
 
   it('preserves the Zod issue list on thrown errors for UI use', async () => {
-    const company = await db.openCompartment('demo-co')
+    const company = await db.openVault('demo-co')
     const invoices = company.collection<Invoice>('invoices', {
       schema: InvoiceSchema,
     })

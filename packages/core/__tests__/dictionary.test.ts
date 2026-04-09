@@ -9,13 +9,13 @@
  *   - `<field>Label` virtual field on reads
  *   - DictKeyMissingError on rename/delete of unknown key
  *   - ACL: write permission check (operator attempting admin-only write)
- *   - Compartment-default locale via openCompartment({ locale })
+ *   - Vault-default locale via openVault({ locale })
  */
 
 import { describe, it, expect, beforeEach } from 'vitest'
 import { createNoydb } from '../src/noydb.js'
 import type { Noydb } from '../src/noydb.js'
-import type { NoydbStore, EncryptedEnvelope, CompartmentSnapshot } from '../src/types.js'
+import type { NoydbStore, EncryptedEnvelope, VaultSnapshot } from '../src/types.js'
 import { ConflictError } from '../src/errors.js'
 import {
   ReservedCollectionNameError,
@@ -47,7 +47,7 @@ function memory(): NoydbStore {
     async delete(c, col, id) { store.get(c)?.get(col)?.delete(id) },
     async list(c, col) { const coll = store.get(c)?.get(col); return coll ? [...coll.keys()] : [] },
     async loadAll(c) {
-      const comp = store.get(c); const s: CompartmentSnapshot = {}
+      const comp = store.get(c); const s: VaultSnapshot = {}
       if (comp) for (const [n, coll] of comp) {
         if (!n.startsWith('_')) {
           const r: Record<string, EncryptedEnvelope> = {}
@@ -89,7 +89,7 @@ describe('DictionaryHandle — CRUD (#81)', () => {
   })
 
   it('put and get a single entry', async () => {
-    const company = await db.openCompartment('co1')
+    const company = await db.openVault('co1')
     const dict = company.dictionary('status')
 
     await dict.put('paid', { en: 'Paid', th: 'ชำระแล้ว' })
@@ -99,7 +99,7 @@ describe('DictionaryHandle — CRUD (#81)', () => {
   })
 
   it('get returns null for missing key', async () => {
-    const company = await db.openCompartment('co1')
+    const company = await db.openVault('co1')
     const dict = company.dictionary('status')
 
     const labels = await dict.get('nonexistent')
@@ -107,7 +107,7 @@ describe('DictionaryHandle — CRUD (#81)', () => {
   })
 
   it('putAll writes multiple entries', async () => {
-    const company = await db.openCompartment('co1')
+    const company = await db.openVault('co1')
     const dict = company.dictionary('status')
 
     await dict.putAll({
@@ -123,7 +123,7 @@ describe('DictionaryHandle — CRUD (#81)', () => {
   })
 
   it('list returns all entries with labels', async () => {
-    const company = await db.openCompartment('co1')
+    const company = await db.openVault('co1')
     const dict = company.dictionary('status')
 
     await dict.putAll({
@@ -137,7 +137,7 @@ describe('DictionaryHandle — CRUD (#81)', () => {
   })
 
   it('put overwrites an existing entry', async () => {
-    const company = await db.openCompartment('co1')
+    const company = await db.openVault('co1')
     const dict = company.dictionary('status')
 
     await dict.put('paid', { en: 'Paid', th: 'ชำระแล้ว' })
@@ -148,7 +148,7 @@ describe('DictionaryHandle — CRUD (#81)', () => {
   })
 
   it('delete removes an entry', async () => {
-    const company = await db.openCompartment('co1')
+    const company = await db.openVault('co1')
     const dict = company.dictionary('status')
 
     await dict.put('paid', { en: 'Paid', th: 'ชำระแล้ว' })
@@ -159,14 +159,14 @@ describe('DictionaryHandle — CRUD (#81)', () => {
   })
 
   it('delete throws DictKeyMissingError for unknown key', async () => {
-    const company = await db.openCompartment('co1')
+    const company = await db.openVault('co1')
     const dict = company.dictionary('status')
 
     await expect(dict.delete('nonexistent')).rejects.toThrow(DictKeyMissingError)
   })
 
   it('resolveLabel returns the label for a locale', async () => {
-    const company = await db.openCompartment('co1')
+    const company = await db.openVault('co1')
     const dict = company.dictionary('status')
 
     await dict.put('paid', { en: 'Paid', th: 'ชำระแล้ว' })
@@ -176,7 +176,7 @@ describe('DictionaryHandle — CRUD (#81)', () => {
   })
 
   it('resolveLabel falls back to fallback locale', async () => {
-    const company = await db.openCompartment('co1')
+    const company = await db.openVault('co1')
     const dict = company.dictionary('status')
 
     await dict.put('paid', { en: 'Paid' })
@@ -186,7 +186,7 @@ describe('DictionaryHandle — CRUD (#81)', () => {
   })
 
   it('resolveLabel returns undefined for missing key', async () => {
-    const company = await db.openCompartment('co1')
+    const company = await db.openVault('co1')
     const dict = company.dictionary('status')
 
     const label = await dict.resolveLabel('nonexistent', 'en')
@@ -206,7 +206,7 @@ describe('DictionaryHandle.rename() (#81)', () => {
   })
 
   it('renames a key and updates referencing records', async () => {
-    const company = await db.openCompartment('co1')
+    const company = await db.openVault('co1')
 
     await company.dictionary('status').putAll({
       paid: { en: 'Paid', th: 'ชำระแล้ว' },
@@ -238,7 +238,7 @@ describe('DictionaryHandle.rename() (#81)', () => {
   })
 
   it('throws DictKeyMissingError when renaming a non-existent key', async () => {
-    const company = await db.openCompartment('co1')
+    const company = await db.openVault('co1')
 
     await expect(
       company.dictionary('status').rename('nonexistent', 'new'),
@@ -258,7 +258,7 @@ describe('Reserved _dict_* name policy (#81)', () => {
   })
 
   it('throws ReservedCollectionNameError for _dict_* names', async () => {
-    const company = await db.openCompartment('co1')
+    const company = await db.openVault('co1')
 
     expect(() => company.collection('_dict_status')).toThrow(ReservedCollectionNameError)
     expect(() => company.collection('_dict_')).toThrow(ReservedCollectionNameError)
@@ -268,7 +268,7 @@ describe('Reserved _dict_* name policy (#81)', () => {
   it('allows regular underscore-prefixed internal names (not _dict_)', async () => {
     // _ledger, _keyring etc. have their own guards; just confirm our
     // guard is narrow and only blocks _dict_* names.
-    const company = await db.openCompartment('co1')
+    const company = await db.openVault('co1')
     // Should not throw ReservedCollectionNameError specifically for non-dict names
     expect(() => company.collection('statuses')).not.toThrow(ReservedCollectionNameError)
   })
@@ -286,7 +286,7 @@ describe('dictKey — per-call locale reads (#81)', () => {
   })
 
   it('get() with locale adds <field>Label virtual field', async () => {
-    const company = await db.openCompartment('co1')
+    const company = await db.openVault('co1')
 
     await company.dictionary('status').putAll({
       paid: { en: 'Paid', th: 'ชำระแล้ว' },
@@ -305,7 +305,7 @@ describe('dictKey — per-call locale reads (#81)', () => {
   })
 
   it('get() with EN locale uses English label', async () => {
-    const company = await db.openCompartment('co1')
+    const company = await db.openVault('co1')
 
     await company.dictionary('status').putAll({
       paid: { en: 'Paid', th: 'ชำระแล้ว' },
@@ -323,7 +323,7 @@ describe('dictKey — per-call locale reads (#81)', () => {
   })
 
   it('list() with locale adds labels to all records', async () => {
-    const company = await db.openCompartment('co1')
+    const company = await db.openVault('co1')
 
     await company.dictionary('status').putAll({
       draft: { en: 'Draft', th: 'ฉบับร่าง' },
@@ -346,7 +346,7 @@ describe('dictKey — per-call locale reads (#81)', () => {
   })
 
   it('get() without locale does NOT add label', async () => {
-    const company = await db.openCompartment('co1')
+    const company = await db.openVault('co1')
 
     await company.dictionary('status').putAll({
       paid: { en: 'Paid', th: 'ชำระแล้ว' },
@@ -364,8 +364,8 @@ describe('dictKey — per-call locale reads (#81)', () => {
     expect(result?.statusLabel).toBeUndefined()
   })
 
-  it('compartment-default locale (openCompartment with locale)', async () => {
-    const company = await db.openCompartment('co1', { locale: 'th' })
+  it('compartment-default locale (openVault with locale)', async () => {
+    const company = await db.openVault('co1', { locale: 'th' })
 
     await company.dictionary('status').putAll({
       paid: { en: 'Paid', th: 'ชำระแล้ว' },
@@ -378,13 +378,13 @@ describe('dictKey — per-call locale reads (#81)', () => {
 
     await invoices.put('inv-1', { id: 'inv-1', status: 'paid' })
 
-    // No explicit locale on get() — uses compartment default
+    // No explicit locale on get() — uses vault default
     const result = await invoices.get('inv-1') as Invoice & { statusLabel?: string }
     expect(result?.statusLabel).toBe('ชำระแล้ว')
   })
 
-  it('per-call locale overrides compartment default', async () => {
-    const company = await db.openCompartment('co1', { locale: 'th' })
+  it('per-call locale overrides vault default', async () => {
+    const company = await db.openVault('co1', { locale: 'th' })
 
     await company.dictionary('status').putAll({
       paid: { en: 'Paid', th: 'ชำระแล้ว' },
@@ -413,8 +413,8 @@ describe('dictKey ACL — write permissions (#81)', () => {
       secret: 'test-passphrase-dict-1234',
     })
 
-    const ownerCo = await ownerDb.openCompartment('company')
-    // First create the compartment (init keyring for owner)
+    const ownerCo = await ownerDb.openVault('company')
+    // First create the vault (init keyring for owner)
     ownerCo.collection('init')
 
     // Grant client access
@@ -425,13 +425,13 @@ describe('dictKey ACL — write permissions (#81)', () => {
       passphrase: 'client-passphrase-dict-1234',
     })
 
-    // Client opens the same compartment
+    // Client opens the same vault
     const clientDb = await createNoydb({
       store: adp,
       user: 'client',
       secret: 'client-passphrase-dict-1234',
     })
-    const clientCo = await clientDb.openCompartment('company')
+    const clientCo = await clientDb.openVault('company')
     const clientDict = clientCo.dictionary('status')
 
     await expect(clientDict.put('paid', { en: 'Paid' })).rejects.toThrow(
@@ -447,7 +447,7 @@ describe('dictKey ACL — write permissions (#81)', () => {
       secret: 'test-passphrase-dict-1234',
     })
 
-    const ownerCo = await ownerDb.openCompartment('company')
+    const ownerCo = await ownerDb.openVault('company')
     ownerCo.collection('init')
 
     await ownerDb.grant('company', {
@@ -463,7 +463,7 @@ describe('dictKey ACL — write permissions (#81)', () => {
       user: 'op',
       secret: 'op-passphrase-dict-1234',
     })
-    const opCo = await opDb.openCompartment('company')
+    const opCo = await opDb.openVault('company')
     const opDict = opCo.dictionary('status', { writableBy: 'operator' })
 
     // Should not throw

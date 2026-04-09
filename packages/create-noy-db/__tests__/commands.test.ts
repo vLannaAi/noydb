@@ -84,13 +84,13 @@ describe('addCollection', () => {
     expect(page).toContain('payments.items')
   })
 
-  it('honors the compartment option', async () => {
-    await addCollection({ name: 'foo', cwd: tmp, compartment: 'tenant-42' })
+  it('honors the vault option', async () => {
+    await addCollection({ name: 'foo', cwd: tmp, vault: 'tenant-42' })
     const store = await fs.readFile(
       path.join(tmp, 'app', 'stores', 'foo.ts'),
       'utf8',
     )
-    expect(store).toContain(`compartment: 'tenant-42'`)
+    expect(store).toContain(`vault: 'tenant-42'`)
   })
 
   it('refuses to overwrite an existing store file', async () => {

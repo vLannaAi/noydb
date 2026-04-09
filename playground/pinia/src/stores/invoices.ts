@@ -19,5 +19,5 @@ export interface Invoice {
  * the global binding installed in `main.ts`.
  */
 export const useInvoices = defineNoydbStore<Invoice>('invoices', {
-  compartment: 'demo',
+  vault: 'demo',
 })

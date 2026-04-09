@@ -131,7 +131,7 @@ describe('enableDevUnlock + loadDevUnlock round-trip', () => {
     expect(loaded!.deks.has('clients')).toBe(true)
   })
 
-  it('scopes storage key to compartment + userId', async () => {
+  it('scopes storage key to vault + userId', async () => {
     const k1 = await makeKeyring({ userId: 'alice', role: 'owner' })
     const k2 = await makeKeyring({ userId: 'bob', role: 'viewer' })
     vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -201,7 +201,7 @@ describe('clearDevUnlock', () => {
     expect(() => clearDevUnlock('company-a', 'alice')).not.toThrow()
   })
 
-  it('only removes the specified compartment+userId pair', async () => {
+  it('only removes the specified vault+userId pair', async () => {
     const k1 = await makeKeyring({ userId: 'alice' })
     const k2 = await makeKeyring({ userId: 'bob' })
     vi.spyOn(console, 'warn').mockImplementation(() => {})

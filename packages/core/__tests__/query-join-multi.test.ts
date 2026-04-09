@@ -12,7 +12,7 @@ import { createNoydb, type Noydb } from '../src/noydb.js'
 import type {
   NoydbStore,
   EncryptedEnvelope,
-  CompartmentSnapshot,
+  VaultSnapshot,
 } from '../src/types.js'
 import { ConflictError, JoinTooLargeError } from '../src/errors.js'
 import { resetJoinWarnings } from '../src/query/index.js'
@@ -44,7 +44,7 @@ function memory(): NoydbStore {
     },
     async loadAll(c) {
       const comp = store.get(c)
-      const snapshot: CompartmentSnapshot = {}
+      const snapshot: VaultSnapshot = {}
       if (comp) for (const [n, coll] of comp) {
         if (!n.startsWith('_')) {
           const r: Record<string, EncryptedEnvelope> = {}
@@ -104,7 +104,7 @@ describe('Query.join() multi-FK chaining — v0.6 #75', () => {
   // ─── 2-join chain: two independent FKs on the left ──────────────
 
   it('.join().join() populates both alias keys from independent FKs', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const clients = c.collection<Client>('clients')
     const categories = c.collection<Category>('categories')
     const invoices = c.collection<Invoice>('invoices', {
@@ -139,7 +139,7 @@ describe('Query.join() multi-FK chaining — v0.6 #75', () => {
   })
 
   it('2-join chain across multiple left rows with mixed FK populations', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const clients = c.collection<Client>('clients')
     const categories = c.collection<Category>('categories')
     const invoices = c.collection<Invoice>('invoices', {
@@ -176,7 +176,7 @@ describe('Query.join() multi-FK chaining — v0.6 #75', () => {
   // ─── 3-join chain ────────────────────────────────────────────────
 
   it('3-join chain: invoice → client → territory via repeated joins', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const territories = c.collection<Territory>('territories')
     const clients = c.collection<Client>('clients', {
       refs: { territoryId: ref('territories') },
@@ -219,7 +219,7 @@ describe('Query.join() multi-FK chaining — v0.6 #75', () => {
   // ─── Mixed planner strategies on the same query ─────────────────
 
   it('mixed strategies: one nested-loop + one explicit hash in the same chain', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const clients = c.collection<Client>('clients')
     const categories = c.collection<Category>('categories')
     const invoices = c.collection<Invoice>('invoices', {
@@ -251,7 +251,7 @@ describe('Query.join() multi-FK chaining — v0.6 #75', () => {
   // ─── Mixed ref modes — independent per leg ──────────────────────
 
   it('mixed ref modes: first join strict, second join warn, both fire independently', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const clients = c.collection<Client>('clients')
     const categories = c.collection<Category>('categories')
     const invoices = c.collection<Invoice>('invoices', {
@@ -296,7 +296,7 @@ describe('Query.join() multi-FK chaining — v0.6 #75', () => {
   // ─── Per-leg left-side ceiling check (#75 acceptance #3) ────────
 
   it('later leg with tighter maxRows catches left-side overflow independently', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const clients = c.collection<Client>('clients')
     const categories = c.collection<Category>('categories')
     const invoices = c.collection<Invoice>('invoices', {
@@ -339,7 +339,7 @@ describe('Query.join() multi-FK chaining — v0.6 #75', () => {
   })
 
   it('first leg maxRows applies to the first join, not later legs — equi-join keeps left cardinality constant', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const clients = c.collection<Client>('clients')
     const categories = c.collection<Category>('categories')
     const invoices = c.collection<Invoice>('invoices', {
@@ -374,7 +374,7 @@ describe('Query.join() multi-FK chaining — v0.6 #75', () => {
   // ─── Plan serialization for debugging ───────────────────────────
 
   it('toPlan() surfaces all join legs with their partitionScope seams (#87 constraint #1)', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const clients = c.collection<Client>('clients')
     const categories = c.collection<Category>('categories')
     const invoices = c.collection<Invoice>('invoices', {

@@ -2,14 +2,14 @@
  * Foreign-key reference tests — #45, v0.4.
  *
  * Covers:
- *   - `ref()` helper: default mode, explicit mode, cross-compartment
+ *   - `ref()` helper: default mode, explicit mode, cross-vault
  *     rejection, internal-collection-name rejection
  *   - strict mode on put: allows valid ref, rejects missing target
  *   - strict mode on delete: rejects delete if referencing records exist
  *   - warn mode: allows both operations, checkIntegrity surfaces orphans
  *   - cascade mode: delete of target propagates to referencing records
  *   - cascade cycle: mutually-cascading collections terminate
- *   - checkIntegrity on a clean compartment returns no violations
+ *   - checkIntegrity on a clean vault returns no violations
  *   - checkIntegrity aggregates violations across multiple collections
  *   - ref atomicity: a failed strict put leaves no trace on disk
  *     (no ledger entry, no history entry, no cache write)
@@ -20,7 +20,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { createNoydb } from '../src/noydb.js'
 import type { Noydb } from '../src/noydb.js'
-import type { NoydbStore, EncryptedEnvelope, CompartmentSnapshot } from '../src/types.js'
+import type { NoydbStore, EncryptedEnvelope, VaultSnapshot } from '../src/types.js'
 import { ConflictError } from '../src/errors.js'
 import {
   ref,
@@ -50,7 +50,7 @@ function memory(): NoydbStore {
     async delete(c, col, id) { store.get(c)?.get(col)?.delete(id) },
     async list(c, col) { const coll = store.get(c)?.get(col); return coll ? [...coll.keys()] : [] },
     async loadAll(c) {
-      const comp = store.get(c); const s: CompartmentSnapshot = {}
+      const comp = store.get(c); const s: VaultSnapshot = {}
       if (comp) for (const [n, coll] of comp) {
         if (!n.startsWith('_')) {
           const r: Record<string, EncryptedEnvelope> = {}
@@ -105,8 +105,8 @@ describe('ref() helper', () => {
     expect(ref('clients', 'strict').mode).toBe('strict')
   })
 
-  it('rejects cross-compartment targets with RefScopeError', () => {
-    expect(() => ref('other-compartment/clients')).toThrow(RefScopeError)
+  it('rejects cross-vault targets with RefScopeError', () => {
+    expect(() => ref('other-vault/clients')).toThrow(RefScopeError)
   })
 
   it('rejects empty target names', () => {
@@ -169,7 +169,7 @@ describe('strict mode on put — #45', () => {
   })
 
   it('allows put when the referenced target exists', async () => {
-    const company = await db.openCompartment('demo-co')
+    const company = await db.openVault('demo-co')
     const clients = company.collection<Client>('clients')
     const invoices = company.collection<Invoice>('invoices', {
       refs: { clientId: ref('clients') },
@@ -187,7 +187,7 @@ describe('strict mode on put — #45', () => {
   })
 
   it('rejects put with RefIntegrityError when the target is missing', async () => {
-    const company = await db.openCompartment('demo-co')
+    const company = await db.openVault('demo-co')
     company.collection<Client>('clients')
     const invoices = company.collection<Invoice>('invoices', {
       refs: { clientId: ref('clients') },
@@ -211,7 +211,7 @@ describe('strict mode on put — #45', () => {
   })
 
   it('allows null/undefined ref values', async () => {
-    const company = await db.openCompartment('demo-co')
+    const company = await db.openVault('demo-co')
     company.collection<Client>('clients')
     const invoices = company.collection<Invoice>('invoices', {
       refs: { clientId: ref('clients') },
@@ -227,7 +227,7 @@ describe('strict mode on put — #45', () => {
   })
 
   it('rejected puts leave no trace on disk, history, or ledger', async () => {
-    const company = await db.openCompartment('demo-co')
+    const company = await db.openVault('demo-co')
     company.collection<Client>('clients')
     const invoices = company.collection<Invoice>('invoices', {
       refs: { clientId: ref('clients') },
@@ -264,7 +264,7 @@ describe('strict mode on delete — #45', () => {
   })
 
   it('rejects delete of a target that has strict references', async () => {
-    const company = await db.openCompartment('demo-co')
+    const company = await db.openVault('demo-co')
     const clients = company.collection<Client>('clients')
     const invoices = company.collection<Invoice>('invoices', {
       refs: { clientId: ref('clients', 'strict') },
@@ -284,7 +284,7 @@ describe('strict mode on delete — #45', () => {
   })
 
   it('allows delete when no references exist', async () => {
-    const company = await db.openCompartment('demo-co')
+    const company = await db.openVault('demo-co')
     const clients = company.collection<Client>('clients')
     company.collection<Invoice>('invoices', {
       refs: { clientId: ref('clients', 'strict') },
@@ -310,7 +310,7 @@ describe('warn mode — #45', () => {
   })
 
   it('allows put with missing target', async () => {
-    const company = await db.openCompartment('demo-co')
+    const company = await db.openVault('demo-co')
     company.collection<Client>('clients')
     const invoices = company.collection<Invoice>('invoices', {
       refs: { clientId: ref('clients', 'warn') },
@@ -325,7 +325,7 @@ describe('warn mode — #45', () => {
   })
 
   it('allows delete of target with referencing records', async () => {
-    const company = await db.openCompartment('demo-co')
+    const company = await db.openVault('demo-co')
     const clients = company.collection<Client>('clients')
     const invoices = company.collection<Invoice>('invoices', {
       refs: { clientId: ref('clients', 'warn') },
@@ -357,7 +357,7 @@ describe('cascade mode — #45', () => {
   })
 
   it('propagates delete from target to referencing records', async () => {
-    const company = await db.openCompartment('demo-co')
+    const company = await db.openVault('demo-co')
     const clients = company.collection<Client>('clients')
     const invoices = company.collection<Invoice>('invoices', {
       refs: { clientId: ref('clients', 'cascade') },
@@ -383,7 +383,7 @@ describe('cascade mode — #45', () => {
   })
 
   it('breaks cycles on mutual cascade (does not infinite-loop)', async () => {
-    const company = await db.openCompartment('demo-co')
+    const company = await db.openVault('demo-co')
     // Two collections that reference each other with cascade.
     // A.bId → B cascade, B.aId → A cascade.
     const a = company.collection<{ id: string; bId: string | null }>('a', {
@@ -420,7 +420,7 @@ describe('checkIntegrity — #45', () => {
   })
 
   it('returns no violations on a clean compartment', async () => {
-    const company = await db.openCompartment('demo-co')
+    const company = await db.openVault('demo-co')
     const clients = company.collection<Client>('clients')
     const invoices = company.collection<Invoice>('invoices', {
       refs: { clientId: ref('clients', 'warn') },
@@ -436,7 +436,7 @@ describe('checkIntegrity — #45', () => {
   })
 
   it('reports orphaned warn-mode references', async () => {
-    const company = await db.openCompartment('demo-co')
+    const company = await db.openVault('demo-co')
     company.collection<Client>('clients')
     const invoices = company.collection<Invoice>('invoices', {
       refs: { clientId: ref('clients', 'warn') },
@@ -459,7 +459,7 @@ describe('checkIntegrity — #45', () => {
   })
 
   it('aggregates violations across multiple collections', async () => {
-    const company = await db.openCompartment('demo-co')
+    const company = await db.openVault('demo-co')
     company.collection<Client>('clients')
     company.collection<{ id: string; name: string }>('categories')
     interface Item { id: string; clientId: string | null; categoryId: string | null }

@@ -1,7 +1,7 @@
 /**
  * `.noydb` container format — byte layout, header schema, validators.
  *
- * v0.6 #100. Wraps a `compartment.dump()` JSON string in a thin
+ * v0.6 #100. Wraps a `vault.dump()` JSON string in a thin
  * binary container with a magic-byte prefix, a minimum-disclosure
  * unencrypted header, and a compressed body.
  *
@@ -24,11 +24,11 @@
  *   - 1 byte compression algorithm
  *   - 4 bytes header length (uint32 big-endian)
  *
- * **Why a binary container** at all? `compartment.dump()` already
+ * **Why a binary container** at all? `vault.dump()` already
  * produces a JSON string with encrypted records inside. Wrapping it
  * again seems redundant — but the wrap is what makes the file safe
  * to drop into cloud storage (Drive, Dropbox, iCloud) without
- * leaking the compartment name and exporter identity through the
+ * leaking the vault name and exporter identity through the
  * cloud's metadata API. The minimum-disclosure header is the only
  * thing visible without downloading and decompressing the body.
  * The dump JSON inside the body still contains the original
@@ -39,7 +39,7 @@
  * **Why minimum disclosure** in the header? Because consumers will
  * inevitably store these in services where the filename, file size,
  * and any unencrypted metadata are indexed for search. A field like
- * `compartment: "Acme Corp"` would let an attacker (or a curious
+ * `vault: "Acme Corp"` would let an attacker (or a curious
  * cloud admin) enumerate which compartments exist and who exported
  * them, even with zero access to the encrypted body. The header
  * carries only what's needed to identify the file as a NOYDB
@@ -93,7 +93,7 @@ export type CompressionAlgo = 0 | 1 | 2
  * see the file-level doc comment for the rationale.
  *
  * Forbidden in particular:
- *   - `compartment` / `_compartment` — would leak the tenant name
+ *   - `vault` / `_compartment` — would leak the tenant name
  *   - `exporter` / `_exported_by` — would leak user identity
  *   - `timestamp` / `_exported_at` — would leak activity timing
  *   - `kdfParams` / salt fields — would leak crypto config that
@@ -104,8 +104,8 @@ export interface NoydbBundleHeader {
   /** Bundle format version — bumped on layout changes. */
   readonly formatVersion: number
   /**
-   * Opaque ULID identifier — generated once per compartment and
-   * stable across re-exports of the same compartment. Does not
+   * Opaque ULID identifier — generated once per vault and
+   * stable across re-exports of the same vault. Does not
    * leak any information about contents (the timestamp prefix is
    * just monotonicity for sortability, not exporter activity —
    * see `bundle/ulid.ts` for the design notes).

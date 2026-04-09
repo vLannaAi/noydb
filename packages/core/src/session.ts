@@ -1,7 +1,7 @@
 /**
  * Session tokens — v0.7 #109
  *
- * After a compartment is unlocked (via passphrase, WebAuthn, OIDC, or magic-
+ * After a vault is unlocked (via passphrase, WebAuthn, OIDC, or magic-
  * link), the caller can call `createSession()` to get a session token that
  * allows re-establishing the KEK for the session lifetime without re-running
  * PBKDF2 or any interactive auth challenge.
@@ -19,7 +19,7 @@
  *
  *   2. The **session token** — a JSON object that carries the KEK wrapped
  *      with the session key (AES-256-GCM, fresh IV per session), plus
- *      unencrypted session metadata (sessionId, userId, compartment, role,
+ *      unencrypted session metadata (sessionId, userId, vault, role,
  *      expiresAt). The token can be serialized to JSON and stored in
  *      sessionStorage or passed across callsites within the same tab, but
  *      it is useless without the session key.
@@ -63,7 +63,7 @@ export interface SessionToken {
   /** Unique session identifier (ULID). Use this as the handle for resolve/revoke. */
   readonly sessionId: string
   readonly userId: string
-  readonly compartment: string
+  readonly vault: string
   readonly role: Role
   /** ISO timestamp — resolveSession() rejects this token after this time. */
   readonly expiresAt: string
@@ -106,12 +106,12 @@ export interface CreateSessionOptions {
  * re-wrapped with the session key.
  *
  * @param keyring - An already-unlocked keyring whose `kek` is available.
- * @param compartment - The compartment name this session is scoped to.
+ * @param vault - The vault name this session is scoped to.
  * @param options - Optional session configuration.
  */
 export async function createSession(
   keyring: UnlockedKeyring,
-  compartment: string,
+  vault: string,
   options: CreateSessionOptions = {},
 ): Promise<CreateSessionResult> {
   const ttlMs = options.ttlMs ?? DEFAULT_TTL_MS
@@ -172,7 +172,7 @@ export async function createSession(
     _noydb_session: 1,
     sessionId,
     userId: keyring.userId,
-    compartment,
+    vault,
     role: keyring.role,
     expiresAt,
     wrappedKek: bufferToBase64(encrypted),

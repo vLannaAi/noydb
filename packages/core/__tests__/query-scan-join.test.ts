@@ -19,7 +19,7 @@ import { createNoydb, type Noydb } from '../src/noydb.js'
 import type {
   NoydbStore,
   EncryptedEnvelope,
-  CompartmentSnapshot,
+  VaultSnapshot,
   ListPageResult,
 } from '../src/types.js'
 import { ConflictError, DanglingReferenceError } from '../src/errors.js'
@@ -48,7 +48,7 @@ function memory(): NoydbStore {
     async delete(c, col, id) { store.get(c)?.get(col)?.delete(id) },
     async list(c, col) { const coll = store.get(c)?.get(col); return coll ? [...coll.keys()] : [] },
     async loadAll(c) {
-      const comp = store.get(c); const s: CompartmentSnapshot = {}
+      const comp = store.get(c); const s: VaultSnapshot = {}
       if (comp) for (const [n, coll] of comp) {
         if (!n.startsWith('_')) {
           const r: Record<string, EncryptedEnvelope> = {}
@@ -123,7 +123,7 @@ async function seedCompartment(
   clients: import('../src/collection.js').Collection<Client>
 }> {
   const mode = opts.refMode ?? 'strict'
-  const c = await db.openCompartment('TEST')
+  const c = await db.openVault('TEST')
   const clients = c.collection<Client>('clients')
   const invoices = c.collection<Invoice>('invoices', {
     refs: { clientId: ref('clients', mode) },
@@ -225,7 +225,7 @@ describe('ScanBuilder > strict mode throws DanglingReferenceError mid-stream', (
   // Strict-mode integration is awkward to set up against a real
   // Collection — write-time strict refs reject the dangling put, and
   // re-opening a Collection with a different ref mode is a no-op
-  // because the compartment caches the original instance. So we
+  // because the vault caches the original instance. So we
   // exercise the strict-mode read path at the ScanBuilder unit
   // level with a synthetic JoinContext, the same approach the
   // eager Query.join() tests use for this case.
@@ -281,7 +281,7 @@ describe('Collection.scan().join() > ref-mode dispatch on dangling refs', () => 
   it('warn mode attaches null and emits a one-shot warning', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     try {
-      const c = await db.openCompartment('TEST')
+      const c = await db.openVault('TEST')
       const clients = c.collection<Client>('clients')
       const invoices = c.collection<Invoice>('invoices', {
         refs: { clientId: ref('clients', 'warn') },
@@ -315,7 +315,7 @@ describe('Collection.scan().join() > ref-mode dispatch on dangling refs', () => 
   it('cascade mode attaches null silently', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     try {
-      const c = await db.openCompartment('TEST')
+      const c = await db.openVault('TEST')
       const clients = c.collection<Client>('clients')
       const invoices = c.collection<Invoice>('invoices', {
         refs: { clientId: ref('clients', 'cascade') },
@@ -338,7 +338,7 @@ describe('Collection.scan().join() > ref-mode dispatch on dangling refs', () => 
   })
 
   it('null FK value attaches null regardless of mode', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const clients = c.collection<Client>('clients')
     const invoices = c.collection<Invoice>('invoices', {
       refs: { clientId: ref('clients', 'strict') },
@@ -374,7 +374,7 @@ describe('Collection.scan().join().join() > multi-FK chaining', () => {
   })
 
   it('chains two .join() calls and attaches both right-side records', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const clients = c.collection<Client>('clients')
     const categories = c.collection<Category>('categories')
     const invoices = c.collection<InvoiceWithCat>('invoices', {

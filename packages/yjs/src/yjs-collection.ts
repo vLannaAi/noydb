@@ -10,7 +10,7 @@
  */
 
 import * as Y from 'yjs'
-import type { Compartment } from '@noy-db/core'
+import type { Vault } from '@noy-db/core'
 import type { YFieldDescriptor } from './descriptors.js'
 
 /** A resolved snapshot of a Yjs-backed record. Field values depend on yFields descriptors. */
@@ -32,21 +32,21 @@ export interface YjsCollectionOptions<YF extends Record<string, YFieldDescriptor
  * A YjsCollection wraps a noy-db `crdt: 'yjs'` collection and exposes
  * `getYDoc(id)` and `putYDoc(id, ydoc)` instead of the raw `get`/`put` API.
  *
- * Construct via `yjsCollection(compartment, name, opts)`.
+ * Construct via `yjsCollection(vault, name, opts)`.
  */
 export class YjsCollection<YF extends Record<string, YFieldDescriptor>> {
-  private readonly coll: ReturnType<Compartment['collection']>
+  private readonly coll: ReturnType<Vault['collection']>
   private readonly yFields: YF
 
   /** @internal — use `yjsCollection()` factory instead. */
   constructor(
-    private readonly compartment: Compartment,
+    private readonly vault: Vault,
     private readonly name: string,
     opts: YjsCollectionOptions<YF>,
   ) {
     this.yFields = opts.yFields
     // Collection<string> with crdt: 'yjs' — T = string (the base64 update blob)
-    this.coll = compartment.collection<string>(name, { crdt: 'yjs' })
+    this.coll = vault.collection<string>(name, { crdt: 'yjs' })
   }
 
   /**
@@ -145,9 +145,9 @@ function base64ToUint8Array(base64: string): Uint8Array {
 // ─── Factory function ─────────────────────────────────────────────────────────
 
 /**
- * Create a `YjsCollection` for a compartment.
+ * Create a `YjsCollection` for a vault.
  *
- * @param compartment  An opened NOYDB compartment.
+ * @param vault  An opened NOYDB vault.
  * @param name         Collection name (must not start with `_`).
  * @param opts         Field descriptors (`yFields`) and optional collection settings.
  *
@@ -165,9 +165,9 @@ function base64ToUint8Array(base64: string): Uint8Array {
  * ```
  */
 export function yjsCollection<YF extends Record<string, YFieldDescriptor>>(
-  compartment: Compartment,
+  vault: Vault,
   name: string,
   opts: YjsCollectionOptions<YF>,
 ): YjsCollection<YF> {
-  return new YjsCollection(compartment, name, opts)
+  return new YjsCollection(vault, name, opts)
 }

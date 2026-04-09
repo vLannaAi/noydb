@@ -10,15 +10,15 @@ import type {
   PullOptions,
   SyncStatus,
   Role,
-  AccessibleCompartment,
-  ListAccessibleCompartmentsOptions,
+  AccessibleVault,
+  ListAccessibleVaultsOptions,
   QueryAcrossOptions,
   QueryAcrossResult,
   ReAuthOperation,
   TranslatorAuditEntry,
 } from './types.js'
 import { ValidationError, NoAccessError, InvalidKeyError, StoreCapabilityError } from './errors.js'
-import { Compartment } from './compartment.js'
+import { Vault } from './vault.js'
 import { NoydbEventEmitter } from './events.js'
 import {
   loadKeyring,
@@ -37,7 +37,7 @@ import { createEnforcer, validateSessionPolicy } from './session-policy.js'
 import type { PolicyEnforcer } from './session-policy.js'
 
 /**
- * Privilege rank used by `listAccessibleCompartments({ minRole })` to
+ * Privilege rank used by `listAccessibleVaults({ minRole })` to
  * filter the result. Higher number = more privileged. Owner is at the
  * top; client is at the bottom. Viewer outranks client because viewer
  * has read-all access while client has only explicit-collection read
@@ -69,12 +69,12 @@ function createPlaintextKeyring(userId: string): UnlockedKeyring {
 export class Noydb {
   private readonly options: NoydbOptions
   private readonly emitter = new NoydbEventEmitter()
-  private readonly compartmentCache = new Map<string, Compartment>()
+  private readonly vaultCache = new Map<string, Vault>()
   private readonly keyringCache = new Map<string, UnlockedKeyring>()
   private readonly syncEngines = new Map<string, SyncEngine>()
   private closed = false
   private sessionTimer: ReturnType<typeof setTimeout> | null = null
-  /** Per-compartment policy enforcers (v0.7 #114). */
+  /** Per-vault policy enforcers (v0.7 #114). */
   private readonly policyEnforcers = new Map<string, PolicyEnforcer>()
 
   // ─── plaintextTranslator state (v0.8 #83) ─────────────────────────
@@ -108,37 +108,37 @@ export class Noydb {
   }
 
   /**
-   * Attach a policy enforcer for a compartment (v0.7 #114).
-   * Called internally when a session is started for a compartment; the
+   * Attach a policy enforcer for a vault (v0.7 #114).
+   * Called internally when a session is started for a vault; the
    * enforcer handles idle/absolute timeouts and background-lock behavior.
    */
-  private attachPolicyEnforcer(compartment: string, sessionId: string): void {
+  private attachPolicyEnforcer(vault: string, sessionId: string): void {
     const policy = this.options.sessionPolicy
     if (!policy) return
 
-    // Tear down any previous enforcer for this compartment
-    this.policyEnforcers.get(compartment)?.destroy()
+    // Tear down any previous enforcer for this vault
+    this.policyEnforcers.get(vault)?.destroy()
 
     const enforcer = createEnforcer({
       policy,
       sessionId,
       onRevoke: (_reason) => {
-        this.keyringCache.delete(compartment)
-        this.compartmentCache.delete(compartment)
-        this.policyEnforcers.delete(compartment)
+        this.keyringCache.delete(vault)
+        this.vaultCache.delete(vault)
+        this.policyEnforcers.delete(vault)
       },
     })
-    this.policyEnforcers.set(compartment, enforcer)
+    this.policyEnforcers.set(vault, enforcer)
   }
 
   /**
-   * Touch the policy enforcer for a compartment (records activity, resets
+   * Touch the policy enforcer for a vault (records activity, resets
    * idle timer). Also touches the legacy session timer. No-op if no enforcer.
    */
-  private touchPolicy(compartment?: string): void {
+  private touchPolicy(vault?: string): void {
     this.resetSessionTimer()
-    if (compartment) {
-      this.policyEnforcers.get(compartment)?.touch()
+    if (vault) {
+      this.policyEnforcers.get(vault)?.touch()
     }
   }
 
@@ -146,29 +146,29 @@ export class Noydb {
    * Check that a policy-guarded operation is permitted.
    * Throws `SessionPolicyError` if re-auth is required.
    */
-  private checkPolicyOperation(compartment: string, op: ReAuthOperation): void {
-    this.policyEnforcers.get(compartment)?.checkOperation(op)
+  private checkPolicyOperation(vault: string, op: ReAuthOperation): void {
+    this.policyEnforcers.get(vault)?.checkOperation(op)
   }
 
   /**
-   * Open a compartment by name.
+   * Open a vault by name.
    *
-   * @param name    Compartment identifier.
+   * @param name    Vault identifier.
    * @param opts    Optional settings for this session.
    * @param opts.locale  Default locale for i18n/dictKey field resolution
    *                     (v0.8 #81 #82). Set here to avoid passing `{ locale }`
    *                     on every individual `get()`/`list()` call.
    */
-  async openCompartment(
+  async openVault(
     name: string,
     opts?: { locale?: string },
-  ): Promise<Compartment> {
+  ): Promise<Vault> {
     if (this.closed) throw new ValidationError('Instance is closed')
     this.touchPolicy(name)
 
-    let comp = this.compartmentCache.get(name)
+    let comp = this.vaultCache.get(name)
     if (comp) {
-      // Update locale on existing cached compartment if specified
+      // Update locale on existing cached vault if specified
       if (opts?.locale !== undefined) {
         comp.setLocale(opts.locale)
       }
@@ -183,14 +183,14 @@ export class Noydb {
       syncEngine = new SyncEngine({
         local: this.options.store,
         remote: this.options.sync,
-        compartment: name,
+        vault: name,
         strategy: this.options.conflict ?? 'version',
         emitter: this.emitter,
       })
       this.syncEngines.set(name, syncEngine)
     }
 
-    comp = new Compartment({
+    comp = new Vault({
       adapter: this.options.store,
       name,
       keyring,
@@ -210,7 +210,7 @@ export class Noydb {
         ? (text, from, to, field, collection) =>
             this.invokeTranslator(text, from, to, field, collection)
         : undefined,
-      // Refresh callback used by Compartment.load() to re-derive
+      // Refresh callback used by Vault.load() to re-derive
       // the in-memory keyring from a freshly-loaded keyring file.
       // Encrypted compartments need this so post-load decrypts work
       // against the loaded session's wrapped DEKs; plaintext
@@ -220,7 +220,7 @@ export class Noydb {
           ? async () => {
               // Drop the cached keyring so the next loadKeyring
               // call reads fresh from the adapter, then update the
-              // cache so subsequent openCompartment calls see the
+              // cache so subsequent openVault calls see the
               // refreshed keyring too.
               this.keyringCache.delete(name)
               const refreshed = await loadKeyring(
@@ -234,19 +234,19 @@ export class Noydb {
             }
           : undefined,
     })
-    this.compartmentCache.set(name, comp)
+    this.vaultCache.set(name, comp)
     return comp
   }
 
-  /** Synchronous compartment access (must call openCompartment first, or auto-opens). */
-  compartment(name: string): Compartment {
-    const cached = this.compartmentCache.get(name)
+  /** Synchronous vault access (must call openVault first, or auto-opens). */
+  vault(name: string): Vault {
+    const cached = this.vaultCache.get(name)
     if (cached) return cached
 
     // For backwards compat: if not opened yet, create with cached keyring or plaintext
     if (this.options.encrypt === false) {
       const keyring = createPlaintextKeyring(this.options.user)
-      const comp = new Compartment({
+      const comp = new Vault({
         adapter: this.options.store,
         name,
         keyring,
@@ -254,18 +254,18 @@ export class Noydb {
         emitter: this.emitter,
         historyConfig: this.options.history,
       })
-      this.compartmentCache.set(name, comp)
+      this.vaultCache.set(name, comp)
       return comp
     }
 
     const keyring = this.keyringCache.get(name)
     if (!keyring) {
       throw new ValidationError(
-        `Compartment "${name}" not opened. Use await db.openCompartment("${name}") first.`,
+        `Vault "${name}" not opened. Use await db.openVault("${name}") first.`,
       )
     }
 
-    const comp = new Compartment({
+    const comp = new Vault({
       adapter: this.options.store,
       name,
       keyring,
@@ -273,26 +273,26 @@ export class Noydb {
       historyConfig: this.options.history,
       emitter: this.emitter,
     })
-    this.compartmentCache.set(name, comp)
+    this.vaultCache.set(name, comp)
     return comp
   }
 
-  /** Grant access to a user for a compartment. */
-  async grant(compartment: string, options: GrantOptions): Promise<void> {
-    this.checkPolicyOperation(compartment, 'grant')
-    const keyring = await this.getKeyring(compartment)
-    await keyringGrant(this.options.store, compartment, keyring, options)
+  /** Grant access to a user for a vault. */
+  async grant(vault: string, options: GrantOptions): Promise<void> {
+    this.checkPolicyOperation(vault, 'grant')
+    const keyring = await this.getKeyring(vault)
+    await keyringGrant(this.options.store, vault, keyring, options)
   }
 
-  /** Revoke a user's access to a compartment. */
-  async revoke(compartment: string, options: RevokeOptions): Promise<void> {
-    this.checkPolicyOperation(compartment, 'revoke')
-    const keyring = await this.getKeyring(compartment)
-    await keyringRevoke(this.options.store, compartment, keyring, options)
+  /** Revoke a user's access to a vault. */
+  async revoke(vault: string, options: RevokeOptions): Promise<void> {
+    this.checkPolicyOperation(vault, 'revoke')
+    const keyring = await this.getKeyring(vault)
+    await keyringRevoke(this.options.store, vault, keyring, options)
   }
 
   /**
-   * Rotate the DEKs for the given collections in a compartment.
+   * Rotate the DEKs for the given collections in a vault.
    *
    * Generates fresh DEKs, re-encrypts every record in each collection,
    * and re-wraps the new DEKs into every remaining user's keyring. The
@@ -309,25 +309,25 @@ export class Noydb {
    * module) so CLI and admin tooling can trigger rotation without
    * reaching into internals. See `noy-db rotate` for the CLI wrapper.
    */
-  async rotate(compartment: string, collections: string[]): Promise<void> {
-    this.checkPolicyOperation(compartment, 'rotate')
-    const keyring = await this.getKeyring(compartment)
-    await keyringRotate(this.options.store, compartment, keyring, collections)
+  async rotate(vault: string, collections: string[]): Promise<void> {
+    this.checkPolicyOperation(vault, 'rotate')
+    const keyring = await this.getKeyring(vault)
+    await keyringRotate(this.options.store, vault, keyring, collections)
     // Refresh the cached keyring so subsequent operations see the
     // freshly-rotated DEKs. Without this, `ensureCollectionDEK` on
     // the next Collection access would still hold the old ones.
-    this.keyringCache.set(compartment, keyring)
+    this.keyringCache.set(vault, keyring)
   }
 
-  /** List all users with access to a compartment. */
-  async listUsers(compartment: string): Promise<UserInfo[]> {
-    return keyringListUsers(this.options.store, compartment)
+  /** List all users with access to a vault. */
+  async listUsers(vault: string): Promise<UserInfo[]> {
+    return keyringListUsers(this.options.store, vault)
   }
 
-  // ─── Cross-compartment queries (v0.5 #63) ──────────────────────
+  // ─── Cross-vault queries (v0.5 #63) ──────────────────────
 
   /**
-   * Enumerate every compartment the calling principal can unwrap,
+   * Enumerate every vault the calling principal can unwrap,
    * optionally filtered by minimum role.
    *
    * The walk is a two-step pipeline: first ask the adapter for the
@@ -338,36 +338,36 @@ export class Noydb {
    * silently dropped from the result — the existence of those
    * compartments is **not** confirmed in the return value.
    *
-   * Requires the optional `NoydbStore.listCompartments()` capability.
+   * Requires the optional `NoydbStore.listVaults()` capability.
    * Throws `StoreCapabilityError` against stores that don't
    * implement it (today: store-dynamo, store-s3, store-browser). For those backends the
    * consumer should either pass an explicit candidate list to
-   * `queryAcross()` directly, or maintain a compartment index out of
+   * `queryAcross()` directly, or maintain a vault index out of
    * band.
    *
    * **Privacy note.** This method's return value never reveals the
-   * existence of a compartment the caller cannot unwrap. The adapter
+   * existence of a vault the caller cannot unwrap. The adapter
    * sees the enumeration call (it has to — it owns the storage), but
-   * downstream consumers of `listAccessibleCompartments()` only see
+   * downstream consumers of `listAccessibleVaults()` only see
    * the filtered list. That's the boundary the existence-leak
    * guarantee draws.
    *
-   * **Known v0.4 edge case.** A compartment whose keyring file
+   * **Known v0.4 edge case.** A vault whose keyring file
    * happens to have an empty wrapped-DEKs map (because the owner
    * granted access before any collection was created) will pass the
    * `loadKeyring` probe with *any* passphrase — there are no DEKs to
    * unwrap, so the integrity-checked unwrap that normally rejects
    * wrong passphrases never runs. The result is that an unrelated
-   * principal who happens to know the user-id and the compartment
-   * name can show up in `listAccessibleCompartments()` as having
-   * access to that empty compartment. They cannot read any actual
+   * principal who happens to know the user-id and the vault
+   * name can show up in `listAccessibleVaults()` as having
+   * access to that empty vault. They cannot read any actual
    * data (their DEK set is empty), so this is a metadata leak
-   * (compartment name + user-id), not a content leak. Hardening this
+   * (vault name + user-id), not a content leak. Hardening this
    * via a passphrase canary in the keyring file is tracked as a
    * v0.6+ follow-up.
    *
    * **Cost.** O(compartments × keyring-load) — one `loadKeyring`
-   * attempt per compartment in the universe. Each attempt does one
+   * attempt per vault in the universe. Each attempt does one
    * adapter `get` + one PBKDF2 derivation + N AES-KW unwraps. For
    * dozens of compartments this is fine; for thousands the consumer
    * should cache the result and refresh on grant/revoke events. A
@@ -378,52 +378,52 @@ export class Noydb {
    * @example
    * ```ts
    * // All compartments I can unwrap
-   * const all = await db.listAccessibleCompartments()
+   * const all = await db.listAccessibleVaults()
    *
    * // Only compartments where I'm at least admin
-   * const admin = await db.listAccessibleCompartments({ minRole: 'admin' })
+   * const admin = await db.listAccessibleVaults({ minRole: 'admin' })
    *
    * // Only compartments I own
-   * const owned = await db.listAccessibleCompartments({ minRole: 'owner' })
+   * const owned = await db.listAccessibleVaults({ minRole: 'owner' })
    * ```
    */
-  async listAccessibleCompartments(
-    options: ListAccessibleCompartmentsOptions = {},
-  ): Promise<AccessibleCompartment[]> {
+  async listAccessibleVaults(
+    options: ListAccessibleVaultsOptions = {},
+  ): Promise<AccessibleVault[]> {
     if (this.closed) throw new ValidationError('Instance is closed')
     this.resetSessionTimer()
 
     const adapter = this.options.store
-    if (typeof adapter.listCompartments !== 'function') {
+    if (typeof adapter.listVaults !== 'function') {
       throw new StoreCapabilityError(
-        'listCompartments',
-        'Noydb.listAccessibleCompartments()',
+        'listVaults',
+        'Noydb.listAccessibleVaults()',
         adapter.name,
       )
     }
 
     if (this.options.encrypt === false) {
-      // Plaintext mode: no keyrings exist; every compartment the
+      // Plaintext mode: no keyrings exist; every vault the
       // adapter knows about is "accessible" trivially as owner.
-      const all = await adapter.listCompartments()
+      const all = await adapter.listVaults()
       return all.map((id) => ({ id, role: 'owner' as Role }))
     }
 
     if (!this.options.secret) {
       throw new ValidationError(
-        'Noydb.listAccessibleCompartments(): a secret (passphrase) is required ' +
+        'Noydb.listAccessibleVaults(): a secret (passphrase) is required ' +
           'when encryption is enabled.',
       )
     }
 
     const minRank = ROLE_RANK[options.minRole ?? 'client']
-    const universe = await adapter.listCompartments()
-    const accessible: AccessibleCompartment[] = []
+    const universe = await adapter.listVaults()
+    const accessible: AccessibleVault[] = []
 
-    for (const compartment of universe) {
+    for (const vault of universe) {
       // Probe with loadKeyring directly (NOT getKeyring, which would
       // auto-create a fresh owner keyring on miss — that would
-      // silently grant access to every empty compartment in the
+      // silently grant access to every empty vault in the
       // universe and is exactly the wrong shape for an enumeration
       // API). The two expected failure modes — no keyring file, or
       // wrong passphrase — are caught and silently dropped so the
@@ -432,49 +432,49 @@ export class Noydb {
       try {
         keyring = await loadKeyring(
           adapter,
-          compartment,
+          vault,
           this.options.user,
           this.options.secret,
         )
       } catch (err) {
         if (err instanceof NoAccessError || err instanceof InvalidKeyError) {
-          continue // silent: caller has no key material for this compartment
+          continue // silent: caller has no key material for this vault
         }
         throw err // unexpected error — surface it
       }
 
       if (ROLE_RANK[keyring.role] < minRank) continue
-      accessible.push({ id: compartment, role: keyring.role })
+      accessible.push({ id: vault, role: keyring.role })
 
       // Opportunistically prime the keyring cache so a subsequent
-      // openCompartment() doesn't have to re-derive the KEK. The cost
-      // is one Map.set per compartment we already paid to unwrap.
-      this.keyringCache.set(compartment, keyring)
+      // openVault() doesn't have to re-derive the KEK. The cost
+      // is one Map.set per vault we already paid to unwrap.
+      this.keyringCache.set(vault, keyring)
     }
 
     return accessible
   }
 
   /**
-   * Run a per-compartment callback against a list of compartments and
+   * Run a per-vault callback against a list of compartments and
    * collect the results.
    *
    * Pure orchestration — there is no new crypto, no new sync, no new
-   * authorization layer. Each compartment is opened via the existing
-   * `openCompartment()` path (which honors the cache primed by
-   * `listAccessibleCompartments`), the callback runs against the
-   * resulting `Compartment` instance, and the result (or thrown
-   * error) is captured into the per-compartment slot.
+   * authorization layer. Each vault is opened via the existing
+   * `openVault()` path (which honors the cache primed by
+   * `listAccessibleVaults`), the callback runs against the
+   * resulting `Vault` instance, and the result (or thrown
+   * error) is captured into the per-vault slot.
    *
-   * **Per-compartment errors do not abort the fan-out.** If one
-   * compartment's callback throws, that compartment's slot carries
+   * **Per-vault errors do not abort the fan-out.** If one
+   * vault's callback throws, that vault's slot carries
    * the error and the remaining compartments still run. The caller
    * decides how to handle the partition between success and failure.
    * This is the right shape for cross-tenant reports where one
    * tenant's outage shouldn't hide the other tenants' data.
    *
    * **Concurrency** is opt-in via `options.concurrency`. The default
-   * is `1` (sequential) — conservative because per-compartment
+   * is `1` (sequential) — conservative because per-vault
    * callbacks typically do their own I/O and an unbounded fan-out
    * can exhaust adapter connections (DynamoDB throughput, S3 socket
    * limits, browser fetch concurrency). Bump to 4-8 for cloud-backed
@@ -483,7 +483,7 @@ export class Noydb {
    * @example
    * ```ts
    * // Cross-tenant invoice totals as a flat list
-   * const accessible = await db.listAccessibleCompartments({ minRole: 'admin' })
+   * const accessible = await db.listAccessibleVaults({ minRole: 'admin' })
    * const results = await db.queryAcross(
    *   accessible.map((c) => c.id),
    *   async (comp) => {
@@ -493,9 +493,9 @@ export class Noydb {
    *   },
    *   { concurrency: 4 },
    * )
-   * // results: Array<{ compartment, result?: Invoice[], error?: Error }>
+   * // results: Array<{ vault, result?: Invoice[], error?: Error }>
    *
-   * // Compose with exportStream() — cross-compartment plaintext export
+   * // Compose with exportStream() — cross-vault plaintext export
    * const exports = await db.queryAcross(accessible.map((c) => c.id), async (comp) => {
    *   const out: unknown[] = []
    *   for await (const chunk of comp.exportStream()) out.push(chunk)
@@ -504,18 +504,18 @@ export class Noydb {
    * ```
    */
   async queryAcross<T>(
-    compartmentIds: string[],
-    fn: (compartment: Compartment) => Promise<T>,
+    vaultIds: string[],
+    fn: (vault: Vault) => Promise<T>,
     options: QueryAcrossOptions = {},
   ): Promise<QueryAcrossResult<T>[]> {
     if (this.closed) throw new ValidationError('Instance is closed')
     this.resetSessionTimer()
 
     const concurrency = Math.max(1, options.concurrency ?? 1)
-    const results: QueryAcrossResult<T>[] = new Array(compartmentIds.length)
+    const results: QueryAcrossResult<T>[] = new Array(vaultIds.length)
 
     // Tiny inline p-limit. Maintains a sliding window of `concurrency`
-    // in-flight promises and schedules the next compartment as each
+    // in-flight promises and schedules the next vault as each
     // one settles. No external dep. Index-keyed result array so the
     // output preserves caller-supplied order even when concurrency
     // > 1 lets later compartments finish before earlier ones.
@@ -523,17 +523,17 @@ export class Noydb {
     const inFlight: Set<Promise<void>> = new Set()
 
     const launch = (): Promise<void> | null => {
-      if (nextIndex >= compartmentIds.length) return null
+      if (nextIndex >= vaultIds.length) return null
       const idx = nextIndex++
-      const compartmentId = compartmentIds[idx]!
+      const vaultId = vaultIds[idx]!
       const task = (async () => {
         try {
-          const comp = await this.openCompartment(compartmentId)
+          const comp = await this.openVault(vaultId)
           const result = await fn(comp)
-          results[idx] = { compartment: compartmentId, result }
+          results[idx] = { vault: vaultId, result }
         } catch (err) {
           results[idx] = {
-            compartment: compartmentId,
+            vault: vaultId,
             error: err instanceof Error ? err : new Error(String(err)),
           }
         }
@@ -558,7 +558,7 @@ export class Noydb {
     // pulling in p-limit / async-pool / etc.
     while (inFlight.size > 0) {
       await Promise.race(inFlight)
-      while (inFlight.size < concurrency && nextIndex < compartmentIds.length) {
+      while (inFlight.size < concurrency && nextIndex < vaultIds.length) {
         if (launch() === null) break
       }
     }
@@ -566,67 +566,67 @@ export class Noydb {
     return results
   }
 
-  /** Change the current user's passphrase for a compartment. */
-  async changeSecret(compartment: string, newPassphrase: string): Promise<void> {
-    this.checkPolicyOperation(compartment, 'changeSecret')
-    const keyring = await this.getKeyring(compartment)
+  /** Change the current user's passphrase for a vault. */
+  async changeSecret(vault: string, newPassphrase: string): Promise<void> {
+    this.checkPolicyOperation(vault, 'changeSecret')
+    const keyring = await this.getKeyring(vault)
     const updated = await keyringChangeSecret(
       this.options.store,
-      compartment,
+      vault,
       keyring,
       newPassphrase,
     )
-    this.keyringCache.set(compartment, updated)
+    this.keyringCache.set(vault, updated)
   }
 
   // ─── Sync ──────────────────────────────────────────────────────
 
-  /** Push local changes to remote for a compartment. */
-  async push(compartment: string, options?: PushOptions): Promise<PushResult> {
-    const engine = this.getSyncEngine(compartment)
+  /** Push local changes to remote for a vault. */
+  async push(vault: string, options?: PushOptions): Promise<PushResult> {
+    const engine = this.getSyncEngine(vault)
     return engine.push(options)
   }
 
-  /** Pull remote changes to local for a compartment. */
-  async pull(compartment: string, options?: PullOptions): Promise<PullResult> {
-    const engine = this.getSyncEngine(compartment)
+  /** Pull remote changes to local for a vault. */
+  async pull(vault: string, options?: PullOptions): Promise<PullResult> {
+    const engine = this.getSyncEngine(vault)
     return engine.pull(options)
   }
 
   /** Bidirectional sync: pull then push. */
-  async sync(compartment: string, options?: { push?: PushOptions; pull?: PullOptions }): Promise<{ pull: PullResult; push: PushResult }> {
-    const engine = this.getSyncEngine(compartment)
+  async sync(vault: string, options?: { push?: PushOptions; pull?: PullOptions }): Promise<{ pull: PullResult; push: PushResult }> {
+    const engine = this.getSyncEngine(vault)
     return engine.sync(options)
   }
 
   /**
-   * Create a sync transaction for the given compartment (v0.9 #135).
-   * The compartment must already be open via `openCompartment()`.
+   * Create a sync transaction for the given vault (v0.9 #135).
+   * The vault must already be open via `openVault()`.
    * Call `tx.put()` / `tx.delete()` to stage changes, then `tx.commit()`
    * to write all locally and push atomically to remote.
    */
-  transaction(compartment: string): SyncTransaction {
-    const comp = this.compartmentCache.get(compartment)
+  transaction(vault: string): SyncTransaction {
+    const comp = this.vaultCache.get(vault)
     if (!comp) {
       throw new ValidationError(
-        `Compartment "${compartment}" is not open. Call openCompartment() first.`,
+        `Vault "${vault}" is not open. Call openVault() first.`,
       )
     }
-    const engine = this.getSyncEngine(compartment)
+    const engine = this.getSyncEngine(vault)
     return new SyncTransaction(comp, engine)
   }
 
-  /** Get sync status for a compartment. */
-  syncStatus(compartment: string): SyncStatus {
-    const engine = this.syncEngines.get(compartment)
+  /** Get sync status for a vault. */
+  syncStatus(vault: string): SyncStatus {
+    const engine = this.syncEngines.get(vault)
     if (!engine) {
       return { dirty: 0, lastPush: null, lastPull: null, online: true }
     }
     return engine.status()
   }
 
-  private getSyncEngine(compartment: string): SyncEngine {
-    const engine = this.syncEngines.get(compartment)
+  private getSyncEngine(vault: string): SyncEngine {
+    const engine = this.syncEngines.get(vault)
     if (!engine) {
       throw new ValidationError('No sync adapter configured. Pass a `sync` adapter to createNoydb().')
     }
@@ -662,7 +662,7 @@ export class Noydb {
     }
     this.syncEngines.clear()
     this.keyringCache.clear()
-    this.compartmentCache.clear()
+    this.vaultCache.clear()
     this.emitter.removeAllListeners()
     // Clear translator state — same lifetime as KEK/DEKs (v0.8 #83)
     this.translatorCache.clear()
@@ -684,7 +684,7 @@ export class Noydb {
   /**
    * Invoke the configured `plaintextTranslator` (or serve from cache).
    * Records one `TranslatorAuditEntry` per call regardless of cache hit.
-   * Called by `Compartment` during `put()` for `autoTranslate: true` fields.
+   * Called by `Vault` during `put()` for `autoTranslate: true` fields.
    *
    * @internal — not part of the public API surface
    */
@@ -727,13 +727,13 @@ export class Noydb {
     return result
   }
 
-  /** Get or load the keyring for a compartment. */
-  private async getKeyring(compartment: string): Promise<UnlockedKeyring> {
+  /** Get or load the keyring for a vault. */
+  private async getKeyring(vault: string): Promise<UnlockedKeyring> {
     if (this.options.encrypt === false) {
       return createPlaintextKeyring(this.options.user)
     }
 
-    const cached = this.keyringCache.get(compartment)
+    const cached = this.keyringCache.get(vault)
     if (cached) return cached
 
     if (!this.options.secret) {
@@ -742,18 +742,18 @@ export class Noydb {
 
     let keyring: UnlockedKeyring
     try {
-      keyring = await loadKeyring(this.options.store, compartment, this.options.user, this.options.secret)
+      keyring = await loadKeyring(this.options.store, vault, this.options.user, this.options.secret)
     } catch (err) {
       // Only create a new keyring if no keyring exists (NoAccessError).
       // If the keyring exists but the passphrase is wrong (InvalidKeyError), propagate the error.
       if (err instanceof NoAccessError) {
-        keyring = await createOwnerKeyring(this.options.store, compartment, this.options.user, this.options.secret)
+        keyring = await createOwnerKeyring(this.options.store, vault, this.options.user, this.options.secret)
       } else {
         throw err
       }
     }
 
-    this.keyringCache.set(compartment, keyring)
+    this.keyringCache.set(vault, keyring)
     return keyring
   }
 }

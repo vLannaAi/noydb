@@ -6,7 +6,7 @@
  *
  * This module provides an opt-in, deliberately-named escape hatch that lets
  * developers store the keyring payload in sessionStorage or localStorage so
- * the compartment auto-unlocks on every page load — without a passphrase,
+ * the vault auto-unlocks on every page load — without a passphrase,
  * without a biometric prompt, without any OIDC flow.
  *
  * ⚠️ WARNING — this is a loaded footgun ⚠️
@@ -30,9 +30,9 @@
  *    throws. This string appears in every grep for `devUnlock` in the codebase,
  *    making it impossible to enable this feature accidentally.
  *
- * 3. **Scope is compartment + userId:** the storage key includes both the
- *    compartment name and the userId, so dev-unlock for compartment-A does
- *    NOT auto-unlock compartment-B.
+ * 3. **Scope is vault + userId:** the storage key includes both the
+ *    vault name and the userId, so dev-unlock for vault-A does
+ *    NOT auto-unlock vault-B.
  *
  * 4. **Storage scope:** default is `sessionStorage` (cleared on tab close).
  *    `localStorage` is opt-in and requires an additional
@@ -129,8 +129,8 @@ function assertDevEnvironment(): void {
 
 // ─── Storage key ──────────────────────────────────────────────────────
 
-function storageKey(compartment: string, userId: string): string {
-  return `${STORAGE_PREFIX}${compartment}:${userId}`
+function storageKey(vault: string, userId: string): string {
+  return `${STORAGE_PREFIX}${vault}:${userId}`
 }
 
 function resolveStorage(persistAcrossTabs?: boolean): Storage {
@@ -152,13 +152,13 @@ function resolveStorage(persistAcrossTabs?: boolean): Storage {
  *
  * Emits a highly visible console warning that cannot be suppressed.
  *
- * @param compartment - The compartment name.
+ * @param vault - The vault name.
  * @param userId - The user ID.
  * @param keyring - The unlocked keyring to persist.
  * @param options - Options including the required acknowledge string.
  */
 export async function enableDevUnlock(
-  compartment: string,
+  vault: string,
   userId: string,
   keyring: UnlockedKeyring,
   options: DevUnlockOptions,
@@ -190,13 +190,13 @@ export async function enableDevUnlock(
     salt: bufferToBase64(keyring.salt),
   })
 
-  storage.setItem(storageKey(compartment, userId), payload)
+  storage.setItem(storageKey(vault, userId), payload)
 
   // Visible, unsuppressable warning
   console.warn(
     '%c⚠️ NOYDB DEV UNLOCK ACTIVE ⚠️',
     'color: red; font-size: 16px; font-weight: bold',
-    `\n\nCompartment "${compartment}" user "${userId}" is stored in ` +
+    `\n\nCompartment "${vault}" user "${userId}" is stored in ` +
     `${options.persistAcrossTabs ? 'localStorage' : 'sessionStorage'} in PLAINTEXT DEKs.\n` +
     'This is ONLY safe for local development. Never use in production.\n' +
     'Call clearDevUnlock() to remove.',
@@ -206,26 +206,26 @@ export async function enableDevUnlock(
 /**
  * Load a dev-mode keyring from browser storage.
  *
- * Returns `null` if no dev-unlock state is stored for this compartment + user,
+ * Returns `null` if no dev-unlock state is stored for this vault + user,
  * or if the stored payload is malformed.
  *
  * Does NOT perform the production environment check — it's safe to CALL
  * `loadDevUnlock` in production (it will simply return `null` because no
  * dev-unlock state was ever written). The guard only fires on `enableDevUnlock`.
  *
- * @param compartment - The compartment name.
+ * @param vault - The vault name.
  * @param userId - The user ID.
  * @param options - Optional storage override.
  */
 export async function loadDevUnlock(
-  compartment: string,
+  vault: string,
   userId: string,
   options: { persistAcrossTabs?: boolean } = {},
 ): Promise<UnlockedKeyring | null> {
   if (typeof window === 'undefined') return null
 
   const storage = resolveStorage(options.persistAcrossTabs)
-  const raw = storage.getItem(storageKey(compartment, userId))
+  const raw = storage.getItem(storageKey(vault, userId))
   if (!raw) return null
 
   let parsed: {
@@ -274,26 +274,26 @@ export async function loadDevUnlock(
  * Safe to call in production (no-op if no dev state exists).
  */
 export function clearDevUnlock(
-  compartment: string,
+  vault: string,
   userId: string,
   options: { persistAcrossTabs?: boolean } = {},
 ): void {
   if (typeof window === 'undefined') return
   const storage = resolveStorage(options.persistAcrossTabs)
-  storage.removeItem(storageKey(compartment, userId))
+  storage.removeItem(storageKey(vault, userId))
 }
 
 /**
- * Check if dev-unlock state exists for this compartment + user.
+ * Check if dev-unlock state exists for this vault + user.
  *
  * Safe to call in production (returns false if nothing is stored).
  */
 export function isDevUnlockActive(
-  compartment: string,
+  vault: string,
   userId: string,
   options: { persistAcrossTabs?: boolean } = {},
 ): boolean {
   if (typeof window === 'undefined') return false
   const storage = resolveStorage(options.persistAcrossTabs)
-  return storage.getItem(storageKey(compartment, userId)) !== null
+  return storage.getItem(storageKey(vault, userId)) !== null
 }

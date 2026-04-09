@@ -43,7 +43,7 @@ async function makeDb(dataDir?: string): Promise<Noydb> {
 describe('@noy-db/file > saveBundle / loadBundle round-trip', () => {
   it('writes a `.noydb` file with the magic prefix and reads it back', async () => {
     const db = await makeDb()
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const invoices = c.collection<Invoice>('invoices')
     await invoices.put('inv-1', { id: 'inv-1', amount: 100, status: 'open' })
     await invoices.put('inv-2', { id: 'inv-2', amount: 200, status: 'paid' })
@@ -69,7 +69,7 @@ describe('@noy-db/file > saveBundle / loadBundle round-trip', () => {
 
   it('creates intermediate parent directories', async () => {
     const db = await makeDb()
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const invoices = c.collection<Invoice>('invoices')
     await invoices.put('inv-1', { id: 'inv-1', amount: 100, status: 'open' })
 
@@ -84,7 +84,7 @@ describe('@noy-db/file > saveBundle / loadBundle round-trip', () => {
 
   it('overwrites an existing file at the same path', async () => {
     const db = await makeDb()
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const invoices = c.collection<Invoice>('invoices')
     await invoices.put('inv-1', { id: 'inv-1', amount: 100, status: 'open' })
 
@@ -111,7 +111,7 @@ describe('@noy-db/file > saveBundle / loadBundle round-trip', () => {
 
   it('honors compression option (gzip vs auto)', async () => {
     const db = await makeDb()
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const invoices = c.collection<Invoice>('invoices')
     await invoices.put('inv-1', { id: 'inv-1', amount: 100, status: 'open' })
 
@@ -129,7 +129,7 @@ describe('@noy-db/file > saveBundle / loadBundle round-trip', () => {
 describe('@noy-db/file > loadBundle integrity verification', () => {
   it('throws BundleIntegrityError on a tampered bundle file', async () => {
     const db = await makeDb()
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const invoices = c.collection<Invoice>('invoices')
     await invoices.put('inv-1', { id: 'inv-1', amount: 100, status: 'open' })
 
@@ -155,18 +155,18 @@ describe('@noy-db/file > loadBundle integrity verification', () => {
 })
 
 describe('@noy-db/file > handle stability across separate noydb sessions', () => {
-  it('the same compartment on the same data dir produces the same handle', async () => {
+  it('the same vault on the same data dir produces the same handle', async () => {
     const dataDir = join(testDir, 'shared-data')
 
     const db1 = await makeDb(dataDir)
-    const c1 = await db1.openCompartment('TEST')
+    const c1 = await db1.openVault('TEST')
     const handle1 = await c1.getBundleHandle()
 
     // Fresh noydb instance over the same data directory — the
     // _meta/handle envelope persists on disk and is visible to
     // the new instance.
     const db2 = await makeDb(dataDir)
-    const c2 = await db2.openCompartment('TEST')
+    const c2 = await db2.openVault('TEST')
     const handle2 = await c2.getBundleHandle()
 
     expect(handle2).toBe(handle1)

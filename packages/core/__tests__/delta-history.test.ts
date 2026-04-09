@@ -14,7 +14,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { createNoydb } from '../src/noydb.js'
 import type { Noydb } from '../src/noydb.js'
-import type { NoydbStore, EncryptedEnvelope, CompartmentSnapshot } from '../src/types.js'
+import type { NoydbStore, EncryptedEnvelope, VaultSnapshot } from '../src/types.js'
 import { ConflictError } from '../src/errors.js'
 
 // Inline memory adapter (same as other test files).
@@ -39,7 +39,7 @@ function memory(): NoydbStore {
     async delete(c, col, id) { store.get(c)?.get(col)?.delete(id) },
     async list(c, col) { const coll = store.get(c)?.get(col); return coll ? [...coll.keys()] : [] },
     async loadAll(c) {
-      const comp = store.get(c); const s: CompartmentSnapshot = {}
+      const comp = store.get(c); const s: VaultSnapshot = {}
       if (comp) for (const [n, coll] of comp) {
         if (!n.startsWith('_')) {
           const r: Record<string, EncryptedEnvelope> = {}
@@ -89,7 +89,7 @@ describe('delta history — #44', () => {
   })
 
   it('genesis put does NOT produce a delta', async () => {
-    const company = await db.openCompartment('demo-co')
+    const company = await db.openVault('demo-co')
     const invoices = company.collection<Invoice>('invoices')
     const ledger = company.ledger()
 
@@ -106,7 +106,7 @@ describe('delta history — #44', () => {
   })
 
   it('subsequent puts produce deltas with deltaHash', async () => {
-    const company = await db.openCompartment('demo-co')
+    const company = await db.openVault('demo-co')
     const invoices = company.collection<Invoice>('invoices')
     const ledger = company.ledger()
 
@@ -120,7 +120,7 @@ describe('delta history — #44', () => {
   })
 
   it('reconstructs the previous version via walking the delta chain', async () => {
-    const company = await db.openCompartment('demo-co')
+    const company = await db.openVault('demo-co')
     const invoices = company.collection<Invoice>('invoices')
     const ledger = company.ledger()
 
@@ -148,7 +148,7 @@ describe('delta history — #44', () => {
     // the status cycle. No optional fields to worry about. This test
     // is about proving the reconstruct() walk is correct across many
     // hops, not about exercising every edge case of JSON Patch.
-    const company = await db.openCompartment('demo-co')
+    const company = await db.openVault('demo-co')
     const invoices = company.collection<Invoice>('invoices')
     const ledger = company.ledger()
 
@@ -186,7 +186,7 @@ describe('delta history — #44', () => {
     // with `notes: undefined` which `JSON.stringify` drops silently,
     // causing the reverse patch to try to `remove` a missing key.
     // Here we use explicit object literals for every state.
-    const company = await db.openCompartment('demo-co')
+    const company = await db.openVault('demo-co')
     const invoices = company.collection<Invoice>('invoices')
     const ledger = company.ledger()
 
@@ -207,7 +207,7 @@ describe('delta history — #44', () => {
   })
 
   it('delta storage is proportional to edit size, not record size', async () => {
-    const company = await db.openCompartment('demo-co')
+    const company = await db.openVault('demo-co')
     // Use a BIG record — 1 KB of padding — and edit only a tiny field.
     const bigRecord: Record<string, unknown> = {
       id: 'big',
@@ -250,7 +250,7 @@ describe('delta history — #44', () => {
     //
     // This test documents the current behavior explicitly so that
     // any future change to the contract is a red flag in the diff.
-    const company = await db.openCompartment('demo-co')
+    const company = await db.openVault('demo-co')
     const invoices = company.collection<Invoice>('invoices')
     const ledger = company.ledger()
 
@@ -272,7 +272,7 @@ describe('delta history — #44', () => {
   })
 
   it('reconstruct returns null for records never seen in the ledger', async () => {
-    const company = await db.openCompartment('demo-co')
+    const company = await db.openVault('demo-co')
     const invoices = company.collection<Invoice>('invoices')
     const ledger = company.ledger()
 
@@ -283,7 +283,7 @@ describe('delta history — #44', () => {
   })
 
   it('ledger.verify() still passes with delta entries', async () => {
-    const company = await db.openCompartment('demo-co')
+    const company = await db.openVault('demo-co')
     const invoices = company.collection<Invoice>('invoices')
     const ledger = company.ledger()
 
@@ -302,7 +302,7 @@ describe('delta history — #44', () => {
   })
 
   it('loadDelta returns null for entries without a delta', async () => {
-    const company = await db.openCompartment('demo-co')
+    const company = await db.openVault('demo-co')
     const invoices = company.collection<Invoice>('invoices')
     const ledger = company.ledger()
 
@@ -313,7 +313,7 @@ describe('delta history — #44', () => {
   })
 
   it('loadDelta returns the full patch for an entry with a delta', async () => {
-    const company = await db.openCompartment('demo-co')
+    const company = await db.openVault('demo-co')
     const invoices = company.collection<Invoice>('invoices')
     const ledger = company.ledger()
 

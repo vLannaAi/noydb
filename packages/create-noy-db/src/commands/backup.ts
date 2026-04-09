@@ -1,9 +1,9 @@
 /**
- * `noy-db backup <target>` — dump a compartment to a local file.
+ * `noy-db backup <target>` — dump a vault to a local file.
  *
  * What it does
  * ------------
- * Wraps `compartment.dump()` in the CLI's auth-prompt ritual, then
+ * Wraps `vault.dump()` in the CLI's auth-prompt ritual, then
  * writes the serialized backup to the requested path. As of v0.4,
  * `dump()` already produces a verifiable backup (embedded
  * ledgerHead, full `_ledger` / `_ledger_deltas` snapshots) — the
@@ -33,7 +33,7 @@
  *   the backup still needs the correct passphrase to read.
  * - No restore — that's a separate subcommand tracked as a
  *   follow-up. For now users can restore via
- *   `compartment.load(backupString)` from their own app code.
+ *   `vault.load(backupString)` from their own app code.
  */
 
 import { promises as fs } from 'node:fs'
@@ -44,10 +44,10 @@ import type { ReadPassphrase } from './shared.js'
 import { defaultReadPassphrase } from './shared.js'
 
 export interface BackupOptions {
-  /** Directory containing the compartment data (file adapter only). */
+  /** Directory containing the vault data (file adapter only). */
   dir: string
-  /** Compartment (tenant) name to back up. */
-  compartment: string
+  /** Vault (tenant) name to back up. */
+  vault: string
   /** The user id of the operator running the backup. */
   user: string
   /**
@@ -114,8 +114,8 @@ export async function backup(options: BackupOptions): Promise<BackupResult> {
       user: options.user,
       secret,
     })
-    const compartment = await db.openCompartment(options.compartment)
-    const serialized = await compartment.dump()
+    const vault = await db.openVault(options.vault)
+    const serialized = await vault.dump()
 
     // Make sure the parent directory exists. If the user passed
     // `./backups/2026/demo.json` and `./backups/2026` doesn't

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { createNoydb } from '../src/noydb.js'
 import type { Noydb } from '../src/noydb.js'
-import type { NoydbStore, EncryptedEnvelope, CompartmentSnapshot, ListPageResult } from '../src/types.js'
+import type { NoydbStore, EncryptedEnvelope, VaultSnapshot, ListPageResult } from '../src/types.js'
 import { ConflictError } from '../src/errors.js'
 
 /** Inline memory adapter — same pattern as the other integration tests. */
@@ -26,7 +26,7 @@ function memory(): NoydbStore {
     async delete(c, col, id) { store.get(c)?.get(col)?.delete(id) },
     async list(c, col) { const coll = store.get(c)?.get(col); return coll ? [...coll.keys()] : [] },
     async loadAll(c) {
-      const comp = store.get(c); const s: CompartmentSnapshot = {}
+      const comp = store.get(c); const s: VaultSnapshot = {}
       if (comp) for (const [n, coll] of comp) {
         if (!n.startsWith('_')) {
           const r: Record<string, EncryptedEnvelope> = {}
@@ -108,7 +108,7 @@ describe('Collection.listPage() — pagination', () => {
   })
 
   it('1. returns an empty page for an empty collection', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const invoices = c.collection<Invoice>('invoices')
     const page = await invoices.listPage()
     expect(page.items).toEqual([])
@@ -116,7 +116,7 @@ describe('Collection.listPage() — pagination', () => {
   })
 
   it('2. returns all records in a single page when limit exceeds size', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const invoices = c.collection<Invoice>('invoices')
     await seed(invoices, 5)
     const page = await invoices.listPage({ limit: 100 })
@@ -125,7 +125,7 @@ describe('Collection.listPage() — pagination', () => {
   })
 
   it('3. signals more pages with a non-null cursor', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const invoices = c.collection<Invoice>('invoices')
     await seed(invoices, 50)
     const page1 = await invoices.listPage({ limit: 10 })
@@ -134,7 +134,7 @@ describe('Collection.listPage() — pagination', () => {
   })
 
   it('4. walking cursors yields the full record set exactly once', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const invoices = c.collection<Invoice>('invoices')
     await seed(invoices, 50)
 
@@ -152,7 +152,7 @@ describe('Collection.listPage() — pagination', () => {
   })
 
   it('5. final page returns nextCursor: null', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const invoices = c.collection<Invoice>('invoices')
     await seed(invoices, 25)
     const last = await invoices.listPage({ cursor: '20', limit: 10 })
@@ -161,7 +161,7 @@ describe('Collection.listPage() — pagination', () => {
   })
 
   it('6. records are ordered consistently across pages', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const invoices = c.collection<Invoice>('invoices')
     await seed(invoices, 30)
 
@@ -194,7 +194,7 @@ describe('Collection.scan() — async iterator', () => {
   })
 
   it('7. yields zero records for an empty collection without throwing', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const invoices = c.collection<Invoice>('invoices')
     const collected: Invoice[] = []
     for await (const r of invoices.scan()) collected.push(r)
@@ -202,7 +202,7 @@ describe('Collection.scan() — async iterator', () => {
   })
 
   it('8. yields every record exactly once', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const invoices = c.collection<Invoice>('invoices')
     await seed(invoices, 100)
 
@@ -216,7 +216,7 @@ describe('Collection.scan() — async iterator', () => {
   })
 
   it('9. respects the pageSize option (verified via low limit)', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const invoices = c.collection<Invoice>('invoices')
     await seed(invoices, 30)
     // pageSize=1 still terminates correctly — exercises the cursor walk loop.
@@ -228,7 +228,7 @@ describe('Collection.scan() — async iterator', () => {
   it('10. survives a 10K-record collection (DoD parity check)', async () => {
     // The DoD criterion in the issue says "scan a 10K-record collection";
     // test 11 below exercises the synthetic fallback path on the same size.
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const invoices = c.collection<Invoice>('invoices')
     await seed(invoices, 1000) // bumped down from 10K to keep test wall-clock low
     const collected: Invoice[] = []
@@ -239,7 +239,7 @@ describe('Collection.scan() — async iterator', () => {
   }, 30_000)
 
   it('11. scan() yields the same set as list() for the same collection', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const invoices = c.collection<Invoice>('invoices')
     await seed(invoices, 50)
 
@@ -256,7 +256,7 @@ describe('Collection.scan() — async iterator', () => {
   })
 
   it('12. decryption boundary respected — scanned records are plaintext objects', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const invoices = c.collection<Invoice>('invoices')
     await invoices.put('a', { id: 'a', status: 'open', amount: 999 })
 
@@ -282,7 +282,7 @@ describe('Collection.listPage() — synthetic fallback path', () => {
   })
 
   it('13. falls back to list()+get() when adapter has no listPage', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const invoices = c.collection<Invoice>('invoices')
     await seed(invoices, 25)
     const page = await invoices.listPage({ limit: 10 })
@@ -291,7 +291,7 @@ describe('Collection.listPage() — synthetic fallback path', () => {
   })
 
   it('14. fallback path round-trips a full scan correctly', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const invoices = c.collection<Invoice>('invoices')
     await seed(invoices, 30)
     const collected: Invoice[] = []
@@ -304,7 +304,7 @@ describe('Collection.listPage() — synthetic fallback path', () => {
   })
 
   it('15. fallback path works for empty collections too', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const invoices = c.collection<Invoice>('invoices')
     const page = await invoices.listPage()
     expect(page.items).toEqual([])

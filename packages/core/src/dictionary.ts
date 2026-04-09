@@ -2,7 +2,7 @@
  * _dict_* reserved collections + dictKey schema descriptor — v0.8 #81
  *
  * Stores bounded enum-like field dictionaries as reserved encrypted
- * collections (`_dict_<name>/`) within a compartment. Each dictionary
+ * collections (`_dict_<name>/`) within a vault. Each dictionary
  * entry maps a stable key (e.g. `'paid'`) to a locale → label record
  * (e.g. `{ en: 'Paid', th: 'ชำระแล้ว' }`).
  *
@@ -12,7 +12,7 @@
  * **Why reserved collections, not a separate store?**
  * Same answer as `_sync_credentials`: the compartment's existing
  * encryption stack is exactly right. Dictionaries are encrypted under the
- * same compartment DEK, inherit ACL, ledger, and backup/restore for free.
+ * same vault DEK, inherit ACL, ledger, and backup/restore for free.
  *
  * **One collection per dictionary, not one collection with namespaces.**
  * Each `_dict_<name>/` collection holds entries `{ id: key, labels: {...} }`.
@@ -27,7 +27,7 @@
  *
  * API:
  *   `dictKey(name, keys?)` — returns a DictKeyDescriptor
- *   `compartment.dictionary(name)` — returns a DictionaryHandle
+ *   `vault.dictionary(name)` — returns a DictionaryHandle
  *   `DictionaryHandle.put/putAll/get/delete/rename/list` — CRUD
  */
 
@@ -131,7 +131,7 @@ export interface DictEntry {
 // ─── Per-dictionary options ────────────────────────────────────────────
 
 /**
- * Options for `compartment.dictionary(name, options?)`.
+ * Options for `vault.dictionary(name, options?)`.
  *
  * `writableBy` controls the minimum role for write operations (put,
  * putAll, delete, rename). Defaults to `'admin'` to match the standard
@@ -146,9 +146,9 @@ export interface DictionaryOptions {
 // ─── DictionaryHandle ──────────────────────────────────────────────────
 
 /**
- * Handle to a named dictionary within a compartment.
+ * Handle to a named dictionary within a vault.
  *
- * Obtained via `compartment.dictionary(name)`. Provides strongly-typed
+ * Obtained via `vault.dictionary(name)`. Provides strongly-typed
  * CRUD for dictionary entries, plus the `rename()` operation that is the
  * only sanctioned mass-mutation path for dictKey fields.
  *
@@ -192,7 +192,7 @@ export class DictionaryHandle<Keys extends string = string> {
     private readonly ledger: LedgerStore | undefined,
     private readonly options: DictionaryOptions,
     /**
-     * Callback provided by the Compartment to find and rewrite records
+     * Callback provided by the Vault to find and rewrite records
      * in any registered collection that has a dictKeyField pointing at
      * this dictionary, used by `rename()`.
      */
@@ -365,7 +365,7 @@ export class DictionaryHandle<Keys extends string = string> {
     if (mode === 'strict' && this.findAndUpdateReferences) {
       // Check for references by attempting a rename to a sentinel that
       // doesn't exist — we reuse the reference-finding machinery but
-      // abort before applying changes. Simpler: the compartment
+      // abort before applying changes. Simpler: the vault
       // exposes a separate checkReferences() callback. For now we rely
       // on the caller to confirm no references exist, or use warn mode.
       // A dedicated findReferences API is tracked as a follow-up.

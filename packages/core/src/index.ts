@@ -7,11 +7,11 @@ export type {
   Permission,
   Permissions,
   EncryptedEnvelope,
-  CompartmentSnapshot,
+  VaultSnapshot,
   NoydbStore,
   ListPageResult,
   KeyringFile,
-  CompartmentBackup,
+  VaultBackup,
   DirtyEntry,
   SyncMetadata,
   Conflict,
@@ -36,8 +36,8 @@ export type {
   PruneOptions,
   ExportStreamOptions,
   ExportChunk,
-  AccessibleCompartment,
-  ListAccessibleCompartmentsOptions,
+  AccessibleVault,
+  ListAccessibleVaultsOptions,
   QueryAcrossOptions,
   QueryAcrossResult,
   SessionPolicy,
@@ -160,7 +160,7 @@ export type { UnlockedKeyring } from './keyring.js'
 
 // Core classes
 export { Noydb, createNoydb } from './noydb.js'
-export { Compartment } from './compartment.js'
+export { Vault } from './vault.js'
 export { Collection } from './collection.js'
 export type { CacheOptions, CacheStats } from './collection.js'
 

@@ -397,7 +397,7 @@ export class ScanBuilder<T> implements AsyncIterable<T> {
           `ScanBuilder.join() cannot resolve target collection ` +
             `"${leg.target}" (referenced from field "${leg.field}" on ` +
             `"${this.joinContext.leftCollection}"). Make sure the target ` +
-            `collection has been opened via compartment.collection() ` +
+            `collection has been opened via vault.collection() ` +
             `at least once before iterating the scan.`,
         )
       }
@@ -486,7 +486,7 @@ export class ScanBuilder<T> implements AsyncIterable<T> {
             `"${leg.target}:${refKey}" via field "${leg.field}", but no ` +
             `such record exists. Use ref() mode 'warn' or 'cascade' if ` +
             `dangling refs are acceptable, or run ` +
-            `compartment.checkIntegrity() to find and fix the orphans.`,
+            `vault.checkIntegrity() to find and fix the orphans.`,
         })
       }
       if (refKey !== null && leg.mode === 'warn') {

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { createNoydb } from '../src/noydb.js'
 import type { Noydb } from '../src/noydb.js'
-import type { NoydbStore, EncryptedEnvelope, CompartmentSnapshot, ListPageResult } from '../src/types.js'
+import type { NoydbStore, EncryptedEnvelope, VaultSnapshot, ListPageResult } from '../src/types.js'
 import { ConflictError } from '../src/errors.js'
 
 /**
@@ -36,7 +36,7 @@ function memory(): NoydbStore & { _getCalls: number; _resetCounters(): void } {
     async delete(c, col, id) { store.get(c)?.get(col)?.delete(id) },
     async list(c, col) { const coll = store.get(c)?.get(col); return coll ? [...coll.keys()] : [] },
     async loadAll(c) {
-      const comp = store.get(c); const s: CompartmentSnapshot = {}
+      const comp = store.get(c); const s: VaultSnapshot = {}
       if (comp) for (const [n, coll] of comp) {
         if (!n.startsWith('_')) {
           const r: Record<string, EncryptedEnvelope> = {}
@@ -94,14 +94,14 @@ interface Invoice {
  * Noydb can open the collection in LAZY mode and observe records that
  * were already on disk.
  *
- * Returns the opened compartment too so test bodies don't have to call
- * `openCompartment` themselves — the compartment open triggers a keyring
+ * Returns the opened vault too so test bodies don't have to call
+ * `openVault` themselves — the vault open triggers a keyring
  * read which would otherwise pollute the get-call counter.
  */
 async function seedAdapterAndReopen(n: number): Promise<{
   db: Noydb
   store: ReturnType<typeof memory>
-  comp: Awaited<ReturnType<Noydb['openCompartment']>>
+  comp: Awaited<ReturnType<Noydb['openVault']>>
 }> {
   const adapter = memory()
 
@@ -111,7 +111,7 @@ async function seedAdapterAndReopen(n: number): Promise<{
     user: 'owner',
     secret: 'lazy-test-passphrase-2026',
   })
-  const seederComp = await seeder.openCompartment('TEST')
+  const seederComp = await seeder.openVault('TEST')
   const seederColl = seederComp.collection<Invoice>('invoices')
   for (let i = 0; i < n; i++) {
     await seederColl.put(`inv-${String(i).padStart(4, '0')}`, {
@@ -124,14 +124,14 @@ async function seedAdapterAndReopen(n: number): Promise<{
 
   // Phase 2: open a SECOND Noydb against the SAME adapter so the lazy
   // collection observes records via adapter.get() rather than via the
-  // seeder's in-memory cache. We open the compartment here so the
+  // seeder's in-memory cache. We open the vault here so the
   // keyring read happens BEFORE the counter reset.
   const db = await createNoydb({
     store: adapter,
     user: 'owner',
     secret: 'lazy-test-passphrase-2026',
   })
-  const comp = await db.openCompartment('TEST')
+  const comp = await db.openVault('TEST')
 
   adapter._resetCounters()
   return { db, adapter, comp }
@@ -140,7 +140,7 @@ async function seedAdapterAndReopen(n: number): Promise<{
 // ─── Construction-time validation ──────────────────────────────────
 
 describe('Collection — lazy mode construction', () => {
-  let comp: Awaited<ReturnType<Noydb['openCompartment']>>
+  let comp: Awaited<ReturnType<Noydb['openVault']>>
 
   beforeEach(async () => {
     const db = await createNoydb({
@@ -148,7 +148,7 @@ describe('Collection — lazy mode construction', () => {
       user: 'owner',
       secret: 'lazy-test-passphrase-2026',
     })
-    comp = await db.openCompartment('TEST')
+    comp = await db.openVault('TEST')
   })
 
   it('1. lazy mode without cache options throws', () => {
@@ -211,7 +211,7 @@ describe('Collection — lazy mode behavior', () => {
   it('8. constructor does NOT trigger any adapter reads', async () => {
     const { adapter, comp } = await seedAdapterAndReopen(100)
     comp.collection<Invoice>('invoices', { prefetch: false, cache: { maxRecords: 10 } })
-    // openCompartment may have triggered some keyring reads, but our reset
+    // openVault may have triggered some keyring reads, but our reset
     // happens AFTER that. The fresh collection itself should do zero gets.
     expect(adapter._getCalls).toBe(0)
   })

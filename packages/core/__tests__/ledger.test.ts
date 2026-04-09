@@ -15,19 +15,19 @@
  *   - LedgerStore.verify detects reordered entries
  *   - Collection.put appends a put entry to the ledger
  *   - Collection.delete appends a delete entry to the ledger
- *   - Multiple collections in the same compartment share one chain
+ *   - Multiple collections in the same vault share one chain
  *   - Cross-process: a fresh LedgerStore instance against the same
  *     adapter sees the prior writes (cache rebuild from adapter)
  *   - The chain head matches sha256(canonicalJson(last entry))
  *
  * Performance: every test uses an inline memory adapter and a single
- * compartment. Total runtime ~1.5s for 16 cases.
+ * vault. Total runtime ~1.5s for 16 cases.
  */
 
 import { describe, it, expect, beforeEach } from 'vitest'
 import { createNoydb } from '../src/noydb.js'
 import type { Noydb } from '../src/noydb.js'
-import type { NoydbStore, EncryptedEnvelope, CompartmentSnapshot } from '../src/types.js'
+import type { NoydbStore, EncryptedEnvelope, VaultSnapshot } from '../src/types.js'
 import { ConflictError } from '../src/errors.js'
 import {
   canonicalJson,
@@ -60,7 +60,7 @@ function memory(): NoydbStore {
     async delete(c, col, id) { store.get(c)?.get(col)?.delete(id) },
     async list(c, col) { const coll = store.get(c)?.get(col); return coll ? [...coll.keys()] : [] },
     async loadAll(c) {
-      const comp = store.get(c); const s: CompartmentSnapshot = {}
+      const comp = store.get(c); const s: VaultSnapshot = {}
       if (comp) for (const [n, coll] of comp) {
         if (!n.startsWith('_')) {
           const r: Record<string, EncryptedEnvelope> = {}
@@ -173,7 +173,7 @@ describe('sha256Hex + hashEntry', () => {
 
 // ─── LedgerStore + Collection integration ─────────────────────────────
 
-describe('LedgerStore via Compartment.ledger() — #43', () => {
+describe('LedgerStore via Vault.ledger() — #43', () => {
   let db: Noydb
 
   beforeEach(async () => {
@@ -185,7 +185,7 @@ describe('LedgerStore via Compartment.ledger() — #43', () => {
   })
 
   it('appends a put entry on every Collection.put', async () => {
-    const company = await db.openCompartment('demo-co')
+    const company = await db.openVault('demo-co')
     const invoices = company.collection<Invoice>('invoices')
     const ledger = company.ledger()
 
@@ -203,7 +203,7 @@ describe('LedgerStore via Compartment.ledger() — #43', () => {
   })
 
   it('appends a delete entry on Collection.delete', async () => {
-    const company = await db.openCompartment('demo-co')
+    const company = await db.openVault('demo-co')
     const invoices = company.collection<Invoice>('invoices')
     const ledger = company.ledger()
 
@@ -219,7 +219,7 @@ describe('LedgerStore via Compartment.ledger() — #43', () => {
   })
 
   it('assigns sequential indices and chained prevHash', async () => {
-    const company = await db.openCompartment('demo-co')
+    const company = await db.openVault('demo-co')
     const invoices = company.collection<Invoice>('invoices')
     const ledger = company.ledger()
 
@@ -235,7 +235,7 @@ describe('LedgerStore via Compartment.ledger() — #43', () => {
   })
 
   it('verify() returns ok:true on a clean chain', async () => {
-    const company = await db.openCompartment('demo-co')
+    const company = await db.openVault('demo-co')
     const invoices = company.collection<Invoice>('invoices')
     const ledger = company.ledger()
 
@@ -255,7 +255,7 @@ describe('LedgerStore via Compartment.ledger() — #43', () => {
   })
 
   it('head() returns the latest entry, hash, and length', async () => {
-    const company = await db.openCompartment('demo-co')
+    const company = await db.openVault('demo-co')
     const invoices = company.collection<Invoice>('invoices')
     const ledger = company.ledger()
 
@@ -272,8 +272,8 @@ describe('LedgerStore via Compartment.ledger() — #43', () => {
     expect(head2?.hash).not.toBe(head1?.hash)
   })
 
-  it('multiple collections in the same compartment share one chain', async () => {
-    const company = await db.openCompartment('demo-co')
+  it('multiple collections in the same vault share one chain', async () => {
+    const company = await db.openVault('demo-co')
     const invoices = company.collection<Invoice>('invoices')
     const clients = company.collection<{ id: string; name: string }>('clients')
     const ledger = company.ledger()
@@ -287,7 +287,7 @@ describe('LedgerStore via Compartment.ledger() — #43', () => {
     expect(entries[0]?.collection).toBe('invoices')
     expect(entries[1]?.collection).toBe('clients')
     expect(entries[2]?.collection).toBe('invoices')
-    // Indices are still sequential — the chain is compartment-wide.
+    // Indices are still sequential — the chain is vault-wide.
     expect(entries.map((e) => e.index)).toEqual([0, 1, 2])
   })
 
@@ -298,7 +298,7 @@ describe('LedgerStore via Compartment.ledger() — #43', () => {
       user: 'alice',
       secret: 'test-passphrase-1234',
     })
-    const company = await tamperDb.openCompartment('demo-co')
+    const company = await tamperDb.openVault('demo-co')
     const invoices = company.collection<Invoice>('invoices')
     const ledger = company.ledger()
 
@@ -334,7 +334,7 @@ describe('LedgerStore via Compartment.ledger() — #43', () => {
       (async () => {
         const fresh = new LedgerStore({
           adapter,
-          compartment: 'demo-co',
+          vault: 'demo-co',
           encrypted: true,
           getDEK: (cn) => company.ledger()['getDEK'].call(company.ledger(), cn),
           actor: 'alice',
@@ -360,7 +360,7 @@ describe('LedgerStore via Compartment.ledger() — #43', () => {
       user: 'alice',
       secret: 'test-passphrase-1234',
     })
-    const company = await tamperDb.openCompartment('demo-co')
+    const company = await tamperDb.openVault('demo-co')
     const invoices = company.collection<Invoice>('invoices')
     const ledger = company.ledger()
     await invoices.put('a', { id: 'a', amount: 1 })
@@ -391,7 +391,7 @@ describe('LedgerStore via Compartment.ledger() — #43', () => {
   })
 
   it('survives a 100-record stress test (perf gate)', async () => {
-    const company = await db.openCompartment('demo-co')
+    const company = await db.openVault('demo-co')
     const invoices = company.collection<Invoice>('invoices')
     const ledger = company.ledger()
 
@@ -420,7 +420,7 @@ describe('LedgerStore via Compartment.ledger() — #43', () => {
       user: 'alice',
       secret: 'test-passphrase-1234',
     })
-    const c1 = await db1.openCompartment('demo-co')
+    const c1 = await db1.openVault('demo-co')
     await c1.collection<Invoice>('invoices').put('a', { id: 'a', amount: 1 })
     await c1.collection<Invoice>('invoices').put('b', { id: 'b', amount: 2 })
 
@@ -430,7 +430,7 @@ describe('LedgerStore via Compartment.ledger() — #43', () => {
       user: 'alice',
       secret: 'test-passphrase-1234',
     })
-    const c2 = await db2.openCompartment('demo-co')
+    const c2 = await db2.openVault('demo-co')
     const ledger2 = c2.ledger()
 
     const head = await ledger2.head()
@@ -449,7 +449,7 @@ describe('LedgerStore via Compartment.ledger() — #43', () => {
     // publish to a third-party anchor (blockchain, OpenTimestamps,
     // their internal git repo) to detect any future tampering.
     // Verify it's deterministic for the same chain content.
-    const company = await db.openCompartment('demo-co')
+    const company = await db.openVault('demo-co')
     const invoices = company.collection<Invoice>('invoices')
     const ledger = company.ledger()
 

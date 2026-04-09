@@ -8,7 +8,7 @@ import { createNoydb, type Noydb } from '../src/noydb.js'
 import type {
   NoydbStore,
   EncryptedEnvelope,
-  CompartmentSnapshot,
+  VaultSnapshot,
 } from '../src/types.js'
 import { ConflictError } from '../src/errors.js'
 import { resetJoinWarnings } from '../src/query/index.js'
@@ -39,7 +39,7 @@ function memory(): NoydbStore {
     },
     async loadAll(c) {
       const comp = store.get(c)
-      const snapshot: CompartmentSnapshot = {}
+      const snapshot: VaultSnapshot = {}
       if (comp) for (const [n, coll] of comp) {
         if (!n.startsWith('_')) {
           const r: Record<string, EncryptedEnvelope> = {}
@@ -95,7 +95,7 @@ describe('Query.live() with .join() — v0.6 #74', () => {
   // ─── Initial value + tear-down basics ───────────────────────────
 
   it('initial .live() value reflects current state including joins', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const clients = c.collection<Client>('clients')
     const invoices = c.collection<Invoice>('invoices', {
       refs: { clientId: ref('clients') },
@@ -114,7 +114,7 @@ describe('Query.live() with .join() — v0.6 #74', () => {
   })
 
   it('stop() is idempotent and silences further notifications', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const clients = c.collection<Client>('clients')
     const invoices = c.collection<Invoice>('invoices', {
       refs: { clientId: ref('clients') },
@@ -140,7 +140,7 @@ describe('Query.live() with .join() — v0.6 #74', () => {
   // ─── Left-side mutations re-fire ────────────────────────────────
 
   it('insert on the left collection re-fires the live query', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const clients = c.collection<Client>('clients')
     const invoices = c.collection<Invoice>('invoices', {
       refs: { clientId: ref('clients') },
@@ -164,7 +164,7 @@ describe('Query.live() with .join() — v0.6 #74', () => {
   })
 
   it('update on the left collection re-fires with the new joined data', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const clients = c.collection<Client>('clients')
     const invoices = c.collection<Invoice>('invoices', {
       refs: { clientId: ref('clients') },
@@ -185,7 +185,7 @@ describe('Query.live() with .join() — v0.6 #74', () => {
   })
 
   it('delete on the left collection re-fires with fewer rows', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const clients = c.collection<Client>('clients')
     const invoices = c.collection<Invoice>('invoices', {
       refs: { clientId: ref('clients') },
@@ -208,7 +208,7 @@ describe('Query.live() with .join() — v0.6 #74', () => {
   // ─── Right-side mutations re-fire (the #74 core feature) ────────
 
   it('insert on the right collection updates the joined value for dependent rows', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const clients = c.collection<Client>('clients', {})
     const invoices = c.collection<Invoice>('invoices', {
       refs: { clientId: ref('clients', 'warn') },
@@ -236,7 +236,7 @@ describe('Query.live() with .join() — v0.6 #74', () => {
   })
 
   it('update on the right collection updates the joined value for dependent rows', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const clients = c.collection<Client>('clients')
     const invoices = c.collection<Invoice>('invoices', {
       refs: { clientId: ref('clients') },
@@ -259,7 +259,7 @@ describe('Query.live() with .join() — v0.6 #74', () => {
   })
 
   it('delete on the right collection in warn mode flips joined value to null', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const clients = c.collection<Client>('clients')
     const invoices = c.collection<Invoice>('invoices', {
       refs: { clientId: ref('clients', 'warn') },
@@ -295,7 +295,7 @@ describe('Query.live() with .join() — v0.6 #74', () => {
   // prevent us from constructing a dangling state.
 
   it('cascade mode: right-side delete propagates and live re-fires with fewer rows', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const clients = c.collection<Client>('clients')
     const invoices = c.collection<Invoice>('invoices', {
       refs: { clientId: ref('clients', 'cascade') },
@@ -322,7 +322,7 @@ describe('Query.live() with .join() — v0.6 #74', () => {
   // ─── Multiple subscribers + dedup of right-side targets ─────────
 
   it('subscribers receive notifications for both left and right mutations', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const clients = c.collection<Client>('clients')
     const invoices = c.collection<Invoice>('invoices', {
       refs: { clientId: ref('clients') },
@@ -350,7 +350,7 @@ describe('Query.live() with .join() — v0.6 #74', () => {
   })
 
   it('non-joined .live() works as a plain reactive query', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const invoices = c.collection<Invoice>('invoices')
     await invoices.put('inv-1', { id: 'inv-1', amount: 100, status: 'open', clientId: null })
 
@@ -369,7 +369,7 @@ describe('Query.live() with .join() — v0.6 #74', () => {
   })
 
   it('error preserves the previous value (does not flash to empty)', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const invoices = c.collection<Invoice>('invoices')
     await invoices.put('inv-1', { id: 'inv-1', amount: 100, status: 'open', clientId: null })
 

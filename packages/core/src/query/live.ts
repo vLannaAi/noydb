@@ -28,7 +28,7 @@
  * pointing at `clients`) only subscribes to that target once. We
  * dedup by target collection name, on the assumption that
  * `resolveSource(name)` returns a single subscribable source per
- * compartment + name. Compartment's `resolveSource` reads from
+ * vault + name. Vault's `resolveSource` reads from
  * `collectionCache` so this assumption holds.
  *
  * **What .live() does NOT do in v1:**

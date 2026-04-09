@@ -84,7 +84,7 @@ export class WebAuthnMultiDeviceError extends Error {
   constructor() {
     super(
       'This credential is backup-eligible (BE flag set) and may be synced across devices. ' +
-      'The compartment requires a single-device credential (requireSingleDevice: true). ' +
+      'The vault requires a single-device credential (requireSingleDevice: true). ' +
       'Please use a hardware security key (YubiKey, Titan, SoloKey) or a platform ' +
       'authenticator that does not sync credentials across devices.',
     )
@@ -114,8 +114,8 @@ export class WebAuthnPRFUnavailableError extends Error {
 export interface WebAuthnEnrollment {
   /** Enrollment format version. */
   readonly _noydb_webauthn: 1
-  /** The compartment this enrollment was created for. */
-  readonly compartment: string
+  /** The vault this enrollment was created for. */
+  readonly vault: string
   /** The user ID this enrollment belongs to. */
   readonly userId: string
   /** WebAuthn credential ID (base64). Use for allowCredentials in assertions. */
@@ -368,7 +368,7 @@ async function unwrapKeyringSummary(
  */
 export async function enrollWebAuthn(
   keyring: UnlockedKeyring,
-  compartment: string,
+  vault: string,
   options: WebAuthnEnrollOptions = {},
 ): Promise<WebAuthnEnrollment> {
   if (!isWebAuthnAvailable()) {
@@ -443,7 +443,7 @@ export async function enrollWebAuthn(
 
   return {
     _noydb_webauthn: 1,
-    compartment,
+    vault,
     userId: keyring.userId,
     credentialId: bufferToBase64(credential.rawId),
     prfUsed,
@@ -456,7 +456,7 @@ export async function enrollWebAuthn(
 }
 
 /**
- * Unlock a compartment using a previously enrolled WebAuthn credential.
+ * Unlock a vault using a previously enrolled WebAuthn credential.
  *
  * Triggers the WebAuthn assertion prompt. On success, decrypts the keyring
  * payload from the enrollment record and returns an `UnlockedKeyring`.
@@ -538,7 +538,7 @@ export function isValidEnrollment(value: unknown): value is WebAuthnEnrollment {
   const e = value as Record<string, unknown>
   return (
     e._noydb_webauthn === 1 &&
-    typeof e.compartment === 'string' &&
+    typeof e.vault === 'string' &&
     typeof e.userId === 'string' &&
     typeof e.credentialId === 'string' &&
     typeof e.wrappedPayload === 'string' &&

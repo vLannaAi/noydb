@@ -2,10 +2,10 @@
  * _sync_credentials reserved collection — v0.7 #110
  *
  * Stores per-adapter OAuth tokens (and any other long-lived sync secrets) as
- * encrypted records inside the compartment itself. Tokens are wrapped with the
+ * encrypted records inside the vault itself. Tokens are wrapped with the
  * compartment's own DEK, live on disk as ciphertext like any other record, and
  * are accessed only through the dedicated API in this module — never via
- * `compartment.collection('_sync_credentials')`.
+ * `vault.collection('_sync_credentials')`.
  *
  * Design decisions
  * ────────────────
@@ -23,10 +23,10 @@
  * dedicated API enforces those invariants.
  *
  * **Token lifecycle:**
- * - `putCredential(compartment, adapterId, token)` — store or overwrite
- * - `getCredential(compartment, adapterId)` — load and decrypt
- * - `deleteCredential(compartment, adapterId)` — remove
- * - `listCredentials(compartment)` — enumerate adapter IDs (not tokens)
+ * - `putCredential(vault, adapterId, token)` — store or overwrite
+ * - `getCredential(vault, adapterId)` — load and decrypt
+ * - `deleteCredential(vault, adapterId)` — remove
+ * - `listCredentials(vault)` — enumerate adapter IDs (not tokens)
  *
  * The `adapterId` is the record ID within the `_sync_credentials` collection.
  * It should be a stable, human-readable identifier for the adapter instance
@@ -95,18 +95,18 @@ function requireAdminAccess(keyring: UnlockedKeyring): void {
  */
 export async function putCredential(
   adapter: NoydbStore,
-  compartment: string,
+  vault: string,
   keyring: UnlockedKeyring,
   credential: SyncCredential,
 ): Promise<void> {
   requireAdminAccess(keyring)
 
-  const getDek = await ensureCollectionDEK(adapter, compartment, keyring)
+  const getDek = await ensureCollectionDEK(adapter, vault, keyring)
   const dek = await getDek(SYNC_CREDENTIALS_COLLECTION)
 
   const { iv, data } = await encrypt(JSON.stringify(credential), dek)
 
-  const existing = await adapter.get(compartment, SYNC_CREDENTIALS_COLLECTION, credential.adapterId)
+  const existing = await adapter.get(vault, SYNC_CREDENTIALS_COLLECTION, credential.adapterId)
   const version = existing ? existing._v + 1 : 1
 
   const envelope: EncryptedEnvelope = {
@@ -119,7 +119,7 @@ export async function putCredential(
   }
 
   await adapter.put(
-    compartment,
+    vault,
     SYNC_CREDENTIALS_COLLECTION,
     credential.adapterId,
     envelope,
@@ -135,16 +135,16 @@ export async function putCredential(
  */
 export async function getCredential(
   adapter: NoydbStore,
-  compartment: string,
+  vault: string,
   keyring: UnlockedKeyring,
   adapterId: string,
 ): Promise<SyncCredential | null> {
   requireAdminAccess(keyring)
 
-  const getDek = await ensureCollectionDEK(adapter, compartment, keyring)
+  const getDek = await ensureCollectionDEK(adapter, vault, keyring)
   const dek = await getDek(SYNC_CREDENTIALS_COLLECTION)
 
-  const envelope = await adapter.get(compartment, SYNC_CREDENTIALS_COLLECTION, adapterId)
+  const envelope = await adapter.get(vault, SYNC_CREDENTIALS_COLLECTION, adapterId)
   if (!envelope) return null
 
   const plaintext = await decrypt(envelope._iv, envelope._data, dek)
@@ -158,12 +158,12 @@ export async function getCredential(
  */
 export async function deleteCredential(
   adapter: NoydbStore,
-  compartment: string,
+  vault: string,
   keyring: UnlockedKeyring,
   adapterId: string,
 ): Promise<void> {
   requireAdminAccess(keyring)
-  await adapter.delete(compartment, SYNC_CREDENTIALS_COLLECTION, adapterId)
+  await adapter.delete(vault, SYNC_CREDENTIALS_COLLECTION, adapterId)
 }
 
 /**
@@ -175,11 +175,11 @@ export async function deleteCredential(
  */
 export async function listCredentials(
   adapter: NoydbStore,
-  compartment: string,
+  vault: string,
   keyring: UnlockedKeyring,
 ): Promise<string[]> {
   requireAdminAccess(keyring)
-  return adapter.list(compartment, SYNC_CREDENTIALS_COLLECTION)
+  return adapter.list(vault, SYNC_CREDENTIALS_COLLECTION)
 }
 
 /**
@@ -191,11 +191,11 @@ export async function listCredentials(
  */
 export async function credentialStatus(
   adapter: NoydbStore,
-  compartment: string,
+  vault: string,
   keyring: UnlockedKeyring,
   adapterId: string,
 ): Promise<{ exists: false } | { exists: true; expired: boolean }> {
-  const credential = await getCredential(adapter, compartment, keyring, adapterId)
+  const credential = await getCredential(adapter, vault, keyring, adapterId)
   if (!credential) return { exists: false }
 
   const expired = credential.expiresAt

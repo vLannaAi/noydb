@@ -92,7 +92,7 @@ interface InternalSource {
  *
  * The optional `joinContext` is attached when the Query is constructed
  * via `Collection.query()` (Collection passes in a context built from
- * the Compartment's join resolver). A Query constructed via `new Query`
+ * the Vault's join resolver). A Query constructed via `new Query`
  * directly — e.g. from tests with a plain-object source — has no
  * joinContext, and calling `.join()` on it throws with an actionable
  * error. See `query/join.ts` for the full design.
@@ -206,7 +206,7 @@ export class Query<T> {
   /**
    * Resolve a `ref()`-declared foreign key and attach the right-side
    * record under `opts.as`. v0.6 #73 — eager, single-FK, intra-
-   * compartment joins.
+   * vault joins.
    *
    * ```ts
    * const rows = invoices.query()
@@ -221,7 +221,7 @@ export class Query<T> {
    *     `Collection.query()`, not `new Query`).
    *   - `field` must have a matching `refs: { [field]: ref('<target>') }`
    *     declaration on the left collection.
-   *   - The target collection must be reachable via the compartment
+   *   - The target collection must be reachable via the vault
    *     (either currently open or openable on demand).
    *
    * Strategy:
@@ -257,7 +257,7 @@ export class Query<T> {
    * Without the generic, the joined field is typed as `unknown`, which
    * still works but requires a cast to access its properties.
    *
-   * Joins stay intra-compartment by construction — cross-compartment
+   * Joins stay intra-vault by construction — cross-vault
    * correlation goes through `Noydb.queryAcross` (v0.5 #63), not
    * `.join()`.
    */

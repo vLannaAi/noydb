@@ -15,7 +15,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { createNoydb } from '../src/noydb.js'
 import type { Noydb } from '../src/noydb.js'
-import type { NoydbStore, EncryptedEnvelope, CompartmentSnapshot, ListPageResult } from '../src/types.js'
+import type { NoydbStore, EncryptedEnvelope, VaultSnapshot, ListPageResult } from '../src/types.js'
 import { ConflictError } from '../src/errors.js'
 import {
   ScanBuilder,
@@ -49,7 +49,7 @@ function memory(): NoydbStore {
     async delete(c, col, id) { store.get(c)?.get(col)?.delete(id) },
     async list(c, col) { const coll = store.get(c)?.get(col); return coll ? [...coll.keys()] : [] },
     async loadAll(c) {
-      const comp = store.get(c); const s: CompartmentSnapshot = {}
+      const comp = store.get(c); const s: VaultSnapshot = {}
       if (comp) for (const [n, coll] of comp) {
         if (!n.startsWith('_')) {
           const r: Record<string, EncryptedEnvelope> = {}
@@ -280,7 +280,7 @@ describe('Collection.scan() > backward-compatible for-await iteration', () => {
   })
 
   it('for await (… of scan()) still yields every record', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const invoices = c.collection<Invoice>('invoices')
     await seed(invoices, 25)
     const collected: Invoice[] = []
@@ -301,7 +301,7 @@ describe('Collection.scan().aggregate() > real collection over memory adapter', 
   })
 
   it('reduces the full collection with one reducer', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const invoices = c.collection<Invoice>('invoices')
     await seed(invoices, 30)
     const { total } = await invoices.scan({ pageSize: 10 }).aggregate({
@@ -312,7 +312,7 @@ describe('Collection.scan().aggregate() > real collection over memory adapter', 
   })
 
   it('filters with where() during the scan stream', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const invoices = c.collection<Invoice>('invoices')
     await seed(invoices, 30)
     const { n, total } = await invoices.scan({ pageSize: 10 })
@@ -327,7 +327,7 @@ describe('Collection.scan().aggregate() > real collection over memory adapter', 
   })
 
   it('walks every page when pageSize is smaller than the collection', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const invoices = c.collection<Invoice>('invoices')
     await seed(invoices, 50)
     const { n } = await invoices.scan({ pageSize: 7 }).aggregate({ n: count() })
@@ -335,7 +335,7 @@ describe('Collection.scan().aggregate() > real collection over memory adapter', 
   })
 
   it('combines where() on a year field with sum() and avg() across pages', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const invoices = c.collection<Invoice>('invoices')
     await seed(invoices, 60) // 20 records per year 2024 / 2025 / 2026
     const result = await invoices.scan({ pageSize: 13 })
@@ -360,7 +360,7 @@ describe('Collection.scan().aggregate() > real collection over memory adapter', 
     // This test verifies correctness on a dataset large enough that
     // collecting every record into an array would be noticeable — 5k
     // records across ~50 pages. Running correctly is the memory proof.
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const invoices = c.collection<Invoice>('invoices')
     const N = 5_000
     for (let i = 0; i < N; i++) {

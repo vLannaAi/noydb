@@ -159,13 +159,13 @@ describe('isValidEnrollment', () => {
   })
 
   it('returns false when magic field is missing', () => {
-    expect(isValidEnrollment({ compartment: 'a', userId: 'b', credentialId: 'c', wrappedPayload: 'd', wrapIv: 'e' })).toBe(false)
+    expect(isValidEnrollment({ vault: 'a', userId: 'b', credentialId: 'c', wrappedPayload: 'd', wrapIv: 'e' })).toBe(false)
   })
 
   it('returns true for a well-formed enrollment', () => {
     const e: WebAuthnEnrollment = {
       _noydb_webauthn: 1,
-      compartment: 'company-a',
+      vault: 'company-a',
       userId: 'alice',
       credentialId: 'abc',
       prfUsed: true,
@@ -204,7 +204,7 @@ describe('enrollWebAuthn', () => {
     const enrollment = await enrollWebAuthn(keyring, 'company-a')
 
     expect(enrollment._noydb_webauthn).toBe(1)
-    expect(enrollment.compartment).toBe('company-a')
+    expect(enrollment.vault).toBe('company-a')
     expect(enrollment.userId).toBe('alice')
     expect(enrollment.prfUsed).toBe(true)
     expect(enrollment.beFlag).toBe(false)
@@ -331,7 +331,7 @@ describe('unlockWebAuthn error cases', () => {
   it('throws WebAuthnNotAvailableError when WebAuthn is absent', async () => {
     const fakeEnrollment: WebAuthnEnrollment = {
       _noydb_webauthn: 1,
-      compartment: 'x',
+      vault: 'x',
       userId: 'u',
       credentialId: 'abc',
       prfUsed: false,

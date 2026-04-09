@@ -1,4 +1,4 @@
-import type { NoydbStore, EncryptedEnvelope, CompartmentSnapshot } from '@noy-db/core'
+import type { NoydbStore, EncryptedEnvelope, VaultSnapshot } from '@noy-db/core'
 import { ConflictError } from '@noy-db/core'
 
 /**
@@ -7,14 +7,14 @@ import { ConflictError } from '@noy-db/core'
  * Intended for testing and development.
  */
 export function memory(): NoydbStore {
-  // compartment -> collection -> id -> envelope
+  // vault -> collection -> id -> envelope
   const store = new Map<string, Map<string, Map<string, EncryptedEnvelope>>>()
 
-  function getCollection(compartment: string, collection: string): Map<string, EncryptedEnvelope> {
-    let comp = store.get(compartment)
+  function getCollection(vault: string, collection: string): Map<string, EncryptedEnvelope> {
+    let comp = store.get(vault)
     if (!comp) {
       comp = new Map()
-      store.set(compartment, comp)
+      store.set(vault, comp)
     }
     let coll = comp.get(collection)
     if (!coll) {
@@ -27,12 +27,12 @@ export function memory(): NoydbStore {
   return {
     name: 'memory',
 
-    async get(compartment, collection, id) {
-      return store.get(compartment)?.get(collection)?.get(id) ?? null
+    async get(vault, collection, id) {
+      return store.get(vault)?.get(collection)?.get(id) ?? null
     },
 
-    async put(compartment, collection, id, envelope, expectedVersion) {
-      const coll = getCollection(compartment, collection)
+    async put(vault, collection, id, envelope, expectedVersion) {
+      const coll = getCollection(vault, collection)
       const existing = coll.get(id)
 
       if (expectedVersion !== undefined && existing) {
@@ -44,18 +44,18 @@ export function memory(): NoydbStore {
       coll.set(id, envelope)
     },
 
-    async delete(compartment, collection, id) {
-      store.get(compartment)?.get(collection)?.delete(id)
+    async delete(vault, collection, id) {
+      store.get(vault)?.get(collection)?.delete(id)
     },
 
-    async list(compartment, collection) {
-      const coll = store.get(compartment)?.get(collection)
+    async list(vault, collection) {
+      const coll = store.get(vault)?.get(collection)
       return coll ? [...coll.keys()] : []
     },
 
-    async loadAll(compartment) {
-      const comp = store.get(compartment)
-      const snapshot: CompartmentSnapshot = {}
+    async loadAll(vault) {
+      const comp = store.get(vault)
+      const snapshot: VaultSnapshot = {}
       if (comp) {
         for (const [collName, coll] of comp) {
           if (collName.startsWith('_')) continue
@@ -69,8 +69,8 @@ export function memory(): NoydbStore {
       return snapshot
     },
 
-    async saveAll(compartment, data) {
-      const comp = store.get(compartment)
+    async saveAll(vault, data) {
+      const comp = store.get(vault)
       if (comp) {
         for (const key of [...comp.keys()]) {
           if (!key.startsWith('_')) {
@@ -80,7 +80,7 @@ export function memory(): NoydbStore {
       }
 
       for (const [collName, records] of Object.entries(data)) {
-        const coll = getCollection(compartment, collName)
+        const coll = getCollection(vault, collName)
         for (const [id, envelope] of Object.entries(records)) {
           coll.set(id, envelope)
         }
@@ -92,8 +92,8 @@ export function memory(): NoydbStore {
     },
 
     /**
-     * Enumerate every top-level compartment held by this in-memory
-     * store. Used by `Noydb.listAccessibleCompartments()` (v0.5 #63)
+     * Enumerate every top-level vault held by this in-memory
+     * store. Used by `Noydb.listAccessibleVaults()` (v0.5 #63)
      * to get the universe of compartments before filtering down to
      * the ones the calling principal can unwrap.
      *
@@ -101,7 +101,7 @@ export function memory(): NoydbStore {
      * cheap. The result is intentionally unsorted; consumers that
      * want a stable order should sort themselves.
      */
-    async listCompartments() {
+    async listVaults() {
       return [...store.keys()]
     },
 
@@ -112,8 +112,8 @@ export function memory(): NoydbStore {
      *
      * The default `limit` is 100. Final page returns `nextCursor: null`.
      */
-    async listPage(compartment, collection, cursor, limit = 100) {
-      const coll = store.get(compartment)?.get(collection)
+    async listPage(vault, collection, cursor, limit = 100) {
+      const coll = store.get(vault)?.get(collection)
       if (!coll) return { items: [], nextCursor: null }
 
       // Sorted ids for stable pagination — Map preserves insertion order

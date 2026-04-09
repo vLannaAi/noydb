@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import type { NoydbStore, EncryptedEnvelope, CompartmentSnapshot } from '../src/types.js'
+import type { NoydbStore, EncryptedEnvelope, VaultSnapshot } from '../src/types.js'
 import { ConflictError } from '../src/errors.js'
 import { createNoydb } from '../src/noydb.js'
 import { i18nText } from '../src/i18n.js'
@@ -34,7 +34,7 @@ function memory(): NoydbStore {
     async delete(c, col, id) { store.get(c)?.get(col)?.delete(id) },
     async list(c, col) { const coll = store.get(c)?.get(col); return coll ? [...coll.keys()] : [] },
     async loadAll(c) {
-      const comp = store.get(c); const s: CompartmentSnapshot = {}
+      const comp = store.get(c); const s: VaultSnapshot = {}
       if (comp) for (const [n, coll] of comp) {
         if (!n.startsWith('_')) { const r: Record<string, EncryptedEnvelope> = {}; for (const [id, e] of coll) r[id] = e; s[n] = r }
       }
@@ -62,7 +62,7 @@ async function makeDb(translator?: (ctx: { text: string; from: string; to: strin
 }
 
 async function openLineItems(db: Awaited<ReturnType<typeof makeDb>>) {
-  const company = await db.openCompartment('company')
+  const company = await db.openVault('company')
   return company.collection<LineItem>('line-items', {
     i18nFields: {
       description: i18nText({ languages: ['en', 'th'], required: 'all', autoTranslate: true }),
@@ -181,7 +181,7 @@ describe('plaintextTranslator (v0.8 #83)', () => {
 
   it('translates only required missing locales for string[] required mode', async () => {
     const db = await makeDb(mockTranslator)
-    const company = await db.openCompartment('co2')
+    const company = await db.openVault('co2')
     const coll = company.collection<{ id: string; label: Record<string, string> }>('items', {
       i18nFields: {
         label: i18nText({ languages: ['en', 'th', 'zh'], required: ['en', 'th'], autoTranslate: true }),
@@ -198,7 +198,7 @@ describe('plaintextTranslator (v0.8 #83)', () => {
 
   it('fields without autoTranslate are not translated', async () => {
     const db = await makeDb(mockTranslator)
-    const company = await db.openCompartment('co3')
+    const company = await db.openVault('co3')
     const coll = company.collection<{ id: string; title: Record<string, string> }>('items', {
       i18nFields: {
         title: i18nText({ languages: ['en', 'th'], required: 'all' }), // no autoTranslate

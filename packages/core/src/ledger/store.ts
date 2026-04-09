@@ -17,7 +17,7 @@
  *
  * ## Thread / concurrency model
  *
- * For v0.4 we assume a **single writer per compartment**. Two
+ * For v0.4 we assume a **single writer per vault**. Two
  * concurrent `append()` calls would race on the "read head, write
  * head+1" cycle and could produce a broken chain. The v0.3 sync engine
  * is the primary concurrent-writer scenario, and it uses
@@ -32,15 +32,15 @@
  * succeeds; a future `verifyIntegrity()` helper can cross-check the
  * ledger against the data collections to catch the gap.
  *
- * ## Why hide the ledger from `compartment.collection()`?
+ * ## Why hide the ledger from `vault.collection()`?
  *
  * The `_ledger` name starts with `_`, matching the existing prefix
  * convention for internal collections (`_keyring`, `_sync`,
- * `_history`). The Compartment's public `collection()` method already
+ * `_history`). The Vault's public `collection()` method already
  * returns entries for any name, but `loadAll()` filters out
  * underscore-prefixed collections so backups and exports don't leak
  * ledger metadata. We keep the ledger accessible ONLY via
- * `compartment.ledger()` to enforce the hash-chain invariants — direct
+ * `vault.ledger()` to enforce the hash-chain invariants — direct
  * puts via `collection('_ledger')` would bypass the `append()` logic.
  */
 
@@ -124,19 +124,19 @@ export type VerifyResult =
     }
 
 /**
- * A LedgerStore is bound to a single compartment. Callers obtain one
- * via `compartment.ledger()` — there is no public constructor to keep
+ * A LedgerStore is bound to a single vault. Callers obtain one
+ * via `vault.ledger()` — there is no public constructor to keep
  * the hash-chain invariants in one place.
  *
  * The class holds no mutable state beyond its dependencies (adapter,
- * compartment name, DEK resolver, actor id). Every method reads the
- * adapter fresh so multiple instances against the same compartment
+ * vault name, DEK resolver, actor id). Every method reads the
+ * adapter fresh so multiple instances against the same vault
  * see each other's writes immediately (at the cost of re-parsing the
  * ledger on every head() / verify() call; acceptable at v0.4 scale).
  */
 export class LedgerStore {
   private readonly adapter: NoydbStore
-  private readonly compartment: string
+  private readonly vault: string
   private readonly encrypted: boolean
   private readonly getDEK: (collectionName: string) => Promise<CryptoKey>
   private readonly actor: string
@@ -151,7 +151,7 @@ export class LedgerStore {
    * The cache is populated on first read (`append`, `head`, `verify`)
    * and updated in-place on every successful `append`. Single-writer
    * usage (the v0.4 assumption) keeps it consistent. A second
-   * LedgerStore instance writing to the same compartment would not
+   * LedgerStore instance writing to the same vault would not
    * see the first instance's appends in its cached state — that's the
    * concurrency caveat documented at the class level.
    *
@@ -165,13 +165,13 @@ export class LedgerStore {
 
   constructor(opts: {
     adapter: NoydbStore
-    compartment: string
+    vault: string
     encrypted: boolean
     getDEK: (collectionName: string) => Promise<CryptoKey>
     actor: string
   }) {
     this.adapter = opts.adapter
-    this.compartment = opts.compartment
+    this.vault = opts.vault
     this.encrypted = opts.encrypted
     this.getDEK = opts.getDEK
     this.actor = opts.actor
@@ -220,7 +220,7 @@ export class LedgerStore {
     if (input.delta !== undefined) {
       const deltaEnvelope = await this.encryptDelta(input.delta)
       await this.adapter.put(
-        this.compartment,
+        this.vault,
         LEDGER_DELTAS_COLLECTION,
         paddedIndex(nextIndex),
         deltaEnvelope,
@@ -251,7 +251,7 @@ export class LedgerStore {
 
     const envelope = await this.encryptEntry(entry)
     await this.adapter.put(
-      this.compartment,
+      this.vault,
       LEDGER_COLLECTION,
       paddedIndex(entry.index),
       envelope,
@@ -278,7 +278,7 @@ export class LedgerStore {
    */
   async loadDelta(index: number): Promise<JsonPatch | null> {
     const envelope = await this.adapter.get(
-      this.compartment,
+      this.vault,
       LEDGER_DELTAS_COLLECTION,
       paddedIndex(index),
     )
@@ -323,14 +323,14 @@ export class LedgerStore {
    * pool would dominate at realistic chain lengths (< 100K entries).
    */
   async loadAllEntries(): Promise<LedgerEntry[]> {
-    const keys = await this.adapter.list(this.compartment, LEDGER_COLLECTION)
+    const keys = await this.adapter.list(this.vault, LEDGER_COLLECTION)
     // Sort lexicographically, which matches numeric order because
     // keys are zero-padded to 10 digits.
     keys.sort()
     const entries: LedgerEntry[] = []
     for (const key of keys) {
       const envelope = await this.adapter.get(
-        this.compartment,
+        this.vault,
         LEDGER_COLLECTION,
         key,
       )

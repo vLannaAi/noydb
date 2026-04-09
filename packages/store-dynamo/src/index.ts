@@ -1,4 +1,4 @@
-import type { NoydbStore, EncryptedEnvelope, CompartmentSnapshot } from '@noy-db/core'
+import type { NoydbStore, EncryptedEnvelope, VaultSnapshot } from '@noy-db/core'
 import { ConflictError } from '@noy-db/core'
 
 export interface DynamoOptions {
@@ -37,7 +37,7 @@ interface QueryCommandInput {
  * Create a DynamoDB adapter using single-table design.
  *
  * Table schema:
- * - pk (String, partition key): compartment name
+ * - pk (String, partition key): vault name
  * - sk (String, sort key): `{collection}#{id}` or `_keyring#{userId}` or `_sync#meta`
  * - _v (Number): record version
  * - _ts (String): timestamp
@@ -96,25 +96,25 @@ export function dynamo(options: DynamoOptions): NoydbStore {
   return {
     name: 'dynamo',
 
-    async get(compartment, collection, id) {
+    async get(vault, collection, id) {
       const client = await getClient()
       const { GetCommand } = await import('@aws-sdk/lib-dynamodb') as { GetCommand: new (input: GetCommandInput) => unknown }
 
       const result = await client.send(new GetCommand({
         TableName: table,
-        Key: { pk: compartment, sk: sk(collection, id) },
+        Key: { pk: vault, sk: sk(collection, id) },
       })) as { Item?: Record<string, unknown> }
 
       if (!result.Item) return null
       return itemToEnvelope(result.Item)
     },
 
-    async put(compartment, collection, id, envelope, expectedVersion) {
+    async put(vault, collection, id, envelope, expectedVersion) {
       const client = await getClient()
       const { PutCommand } = await import('@aws-sdk/lib-dynamodb') as { PutCommand: new (input: PutCommandInput) => unknown }
 
       const item: Record<string, unknown> = {
-        pk: compartment,
+        pk: vault,
         sk: sk(collection, id),
         _noydb: envelope._noydb,
         _v: envelope._v,
@@ -136,7 +136,7 @@ export function dynamo(options: DynamoOptions): NoydbStore {
       } catch (err: unknown) {
         if (err instanceof Error && err.name === 'ConditionalCheckFailedException') {
           // Fetch current version for error
-          const current = await this.get(compartment, collection, id)
+          const current = await this.get(vault, collection, id)
           throw new ConflictError(
             current?._v ?? 0,
             `Version conflict: expected ${expectedVersion}, found ${current?._v}`,
@@ -146,17 +146,17 @@ export function dynamo(options: DynamoOptions): NoydbStore {
       }
     },
 
-    async delete(compartment, collection, id) {
+    async delete(vault, collection, id) {
       const client = await getClient()
       const { DeleteCommand } = await import('@aws-sdk/lib-dynamodb') as { DeleteCommand: new (input: DeleteCommandInput) => unknown }
 
       await client.send(new DeleteCommand({
         TableName: table,
-        Key: { pk: compartment, sk: sk(collection, id) },
+        Key: { pk: vault, sk: sk(collection, id) },
       }))
     },
 
-    async list(compartment, collection) {
+    async list(vault, collection) {
       const client = await getClient()
       const { QueryCommand } = await import('@aws-sdk/lib-dynamodb') as { QueryCommand: new (input: QueryCommandInput) => unknown }
 
@@ -164,7 +164,7 @@ export function dynamo(options: DynamoOptions): NoydbStore {
         TableName: table,
         KeyConditionExpression: 'pk = :pk AND begins_with(sk, :prefix)',
         ExpressionAttributeValues: {
-          ':pk': compartment,
+          ':pk': vault,
           ':prefix': `${collection}#`,
         },
       })) as { Items?: Record<string, unknown>[] }
@@ -175,17 +175,17 @@ export function dynamo(options: DynamoOptions): NoydbStore {
       })
     },
 
-    async loadAll(compartment) {
+    async loadAll(vault) {
       const client = await getClient()
       const { QueryCommand } = await import('@aws-sdk/lib-dynamodb') as { QueryCommand: new (input: QueryCommandInput) => unknown }
 
       const result = await client.send(new QueryCommand({
         TableName: table,
         KeyConditionExpression: 'pk = :pk',
-        ExpressionAttributeValues: { ':pk': compartment },
+        ExpressionAttributeValues: { ':pk': vault },
       })) as { Items?: Record<string, unknown>[] }
 
-      const snapshot: CompartmentSnapshot = {}
+      const snapshot: VaultSnapshot = {}
 
       for (const item of result.Items ?? []) {
         const sortKey = item['sk'] as string
@@ -202,11 +202,11 @@ export function dynamo(options: DynamoOptions): NoydbStore {
       return snapshot
     },
 
-    async saveAll(compartment, data) {
+    async saveAll(vault, data) {
       // Use individual puts (DynamoDB batch write has limitations with conditions)
       for (const [collName, records] of Object.entries(data)) {
         for (const [id, envelope] of Object.entries(records)) {
-          await this.put(compartment, collName, id, envelope)
+          await this.put(vault, collName, id, envelope)
         }
       }
     },
@@ -235,7 +235,7 @@ export function dynamo(options: DynamoOptions): NoydbStore {
      * Each page is a single Query call against the partition key, so the
      * read cost is `pageSize ÷ 4 KB` RCUs (eventually consistent) per page.
      */
-    async listPage(compartment, collection, cursor, limit = 100) {
+    async listPage(vault, collection, cursor, limit = 100) {
       const client = await getClient()
       const { QueryCommand } = await import('@aws-sdk/lib-dynamodb') as { QueryCommand: new (input: QueryCommandInput) => unknown }
 
@@ -243,7 +243,7 @@ export function dynamo(options: DynamoOptions): NoydbStore {
         TableName: table,
         KeyConditionExpression: 'pk = :pk AND begins_with(sk, :prefix)',
         ExpressionAttributeValues: {
-          ':pk': compartment,
+          ':pk': vault,
           ':prefix': `${collection}#`,
         },
         Limit: limit,

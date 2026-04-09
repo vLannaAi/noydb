@@ -8,8 +8,8 @@
  *   add <collection>                       Scaffold store + page files
  *   add user <id> <role> [--collections…]  Grant a new user access
  *   verify                                 In-memory integrity check
- *   rotate --compartment … --user …        Rotate DEKs for a compartment
- *   backup <target> --compartment … …      Dump a compartment to a file
+ *   rotate --vault … --user …        Rotate DEKs for a vault
+ *   backup <target> --vault … …      Dump a vault to a file
  *   help                                   Show usage
  *
  * Future subcommands (deferred to a follow-up):
@@ -17,7 +17,7 @@
  *                       a design decision on how seed scripts auth)
  *   backup s3://...     S3 targets (would bundle @aws-sdk; lives in
  *                       an optional companion package instead)
- *   restore <file>      Load a dumped backup into a compartment
+ *   restore <file>      Load a dumped backup into a vault
  *
  * ## Dispatcher design
  *
@@ -29,7 +29,7 @@
  *
  * ## Passphrase handling invariants
  *
- * Every subcommand that unlocks a compartment goes through the
+ * Every subcommand that unlocks a vault goes through the
  * shared `defaultReadPassphrase` helper (see `commands/shared.ts`).
  * That helper:
  *
@@ -56,26 +56,26 @@ const HELP = `Usage: noy-db <command> [args]
 
 Commands:
   add <collection>                             Scaffold a new collection store + page
-  add user <userId> <role> [options]           Grant a new user access to a compartment
+  add user <userId> <role> [options]           Grant a new user access to a vault
   verify                                       In-memory crypto integrity check
-  rotate [options]                             Rotate DEKs for a compartment
-  backup <target> [options]                    Dump a compartment to a file
+  rotate [options]                             Rotate DEKs for a vault
+  backup <target> [options]                    Dump a vault to a file
   help                                         Show this message
 
 Common options for rotate / add user / backup:
   --dir <path>               Data directory (file adapter). Default: ./data
-  --compartment <name>       Compartment (tenant) name. Required.
-  --user <id>                Your user id in the compartment. Required.
+  --vault <name>       Vault (tenant) name. Required.
+  --user <id>                Your user id in the vault. Required.
   --collections <list>       Comma-separated collection list. Format:
                                rotate:  invoices,clients
                                add user: invoices:rw,clients:ro (operator/client only)
 
 Examples:
   noy-db add invoices
-  noy-db add user accountant-ann operator --dir ./data --compartment demo-co --user owner-alice --collections invoices:rw,clients:ro
+  noy-db add user accountant-ann operator --dir ./data --vault demo-co --user owner-alice --collections invoices:rw,clients:ro
   noy-db verify
-  noy-db rotate --dir ./data --compartment demo-co --user owner-alice
-  noy-db backup ./backups/demo-co-2026-04-07.json --dir ./data --compartment demo-co --user owner-alice
+  noy-db rotate --dir ./data --vault demo-co --user owner-alice
+  noy-db backup ./backups/demo-co-2026-04-07.json --dir ./data --vault demo-co --user owner-alice
 
 Run from the root of a project that already has a noy-db file
 adapter directory in place. For new projects, use
@@ -168,7 +168,7 @@ async function runAddUser(args: string[]): Promise<void> {
   if (!userId || !roleInput) {
     process.stderr.write(
       `${pc.red('error:')} \`noy-db add user\` requires <userId> <role>\n\n` +
-        `Example: noy-db add user ann operator --dir ./data --compartment demo-co --user owner-alice --collections invoices:rw\n`,
+        `Example: noy-db add user ann operator --dir ./data --vault demo-co --user owner-alice --collections invoices:rw\n`,
     )
     process.exit(2)
   }
@@ -184,14 +184,14 @@ async function runAddUser(args: string[]): Promise<void> {
 
   const flags = parseFlags(args.slice(2))
   const dir = flags.dir ?? './data'
-  const compartment = requireFlag(flags, 'compartment')
+  const vault = requireFlag(flags, 'vault')
   const callerUser = requireFlag(flags, 'user')
 
   const permissions = parsePermissions(flags['collections'])
 
   const opts: AddUserOptions = {
     dir,
-    compartment,
+    vault,
     callerUser,
     newUserId: userId,
     role,
@@ -202,7 +202,7 @@ async function runAddUser(args: string[]): Promise<void> {
   try {
     const result = await addUser(opts)
     process.stdout.write(
-      `${pc.green('✔')} Granted ${pc.bold(result.role)} access to ${pc.cyan(result.userId)} in compartment ${pc.cyan(compartment)}.\n`,
+      `${pc.green('✔')} Granted ${pc.bold(result.role)} access to ${pc.cyan(result.userId)} in vault ${pc.cyan(vault)}.\n`,
     )
   } catch (err) {
     process.stderr.write(`${pc.red('error:')} ${(err as Error).message}\n`)
@@ -215,17 +215,17 @@ async function runAddUser(args: string[]): Promise<void> {
 async function runRotate(args: string[]): Promise<void> {
   const flags = parseFlags(args)
   const dir = flags.dir ?? './data'
-  const compartment = requireFlag(flags, 'compartment')
+  const vault = requireFlag(flags, 'vault')
   const user = requireFlag(flags, 'user')
 
-  const opts: RotateOptions = { dir, compartment, user }
+  const opts: RotateOptions = { dir, vault, user }
   const collections = parseCollectionList(flags['collections'])
   if (collections) opts.collections = collections
 
   try {
     const result = await rotate(opts)
     process.stdout.write(
-      `${pc.green('✔')} Rotated ${pc.bold(String(result.rotated.length))} collection(s) in ${pc.cyan(compartment)}:\n`,
+      `${pc.green('✔')} Rotated ${pc.bold(String(result.rotated.length))} collection(s) in ${pc.cyan(vault)}:\n`,
     )
     for (const name of result.rotated) {
       process.stdout.write(`  ${pc.dim('→')} ${name}\n`)
@@ -243,18 +243,18 @@ async function runBackup(args: string[]): Promise<void> {
   if (!target) {
     process.stderr.write(
       `${pc.red('error:')} \`noy-db backup\` requires a target path\n\n` +
-        `Example: noy-db backup ./backups/demo.json --dir ./data --compartment demo-co --user owner-alice\n`,
+        `Example: noy-db backup ./backups/demo.json --dir ./data --vault demo-co --user owner-alice\n`,
     )
     process.exit(2)
   }
 
   const flags = parseFlags(args.slice(1))
   const dir = flags.dir ?? './data'
-  const compartment = requireFlag(flags, 'compartment')
+  const vault = requireFlag(flags, 'vault')
   const user = requireFlag(flags, 'user')
 
   try {
-    const result = await backup({ dir, compartment, user, target })
+    const result = await backup({ dir, vault, user, target })
     process.stdout.write(
       `${pc.green('✔')} Wrote backup: ${pc.cyan(result.path)} ${pc.dim(`(${result.bytes} bytes)`)}\n`,
     )

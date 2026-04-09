@@ -3,7 +3,7 @@ import { createNoydb, type Noydb } from '../src/noydb.js'
 import type {
   NoydbStore,
   EncryptedEnvelope,
-  CompartmentSnapshot,
+  VaultSnapshot,
 } from '../src/types.js'
 import {
   ConflictError,
@@ -40,7 +40,7 @@ function memory(): NoydbStore {
     },
     async loadAll(c) {
       const comp = store.get(c)
-      const snapshot: CompartmentSnapshot = {}
+      const snapshot: VaultSnapshot = {}
       if (comp) for (const [n, coll] of comp) {
         if (!n.startsWith('_')) {
           const r: Record<string, EncryptedEnvelope> = {}
@@ -82,7 +82,7 @@ interface Invoice {
 }
 
 /**
- * Seed a compartment with three clients and a handful of invoices that
+ * Seed a vault with three clients and a handful of invoices that
  * reference them. `clientId` defaults to `strict` ref mode — tests that
  * need warn/cascade override the ref explicitly.
  */
@@ -90,11 +90,11 @@ async function seedCompartment(
   db: Noydb,
   opts: { refMode?: 'strict' | 'warn' | 'cascade' } = {},
 ): Promise<{
-  invoices: Awaited<ReturnType<Awaited<ReturnType<Noydb['openCompartment']>>['collection']>>
-  clients: Awaited<ReturnType<Awaited<ReturnType<Noydb['openCompartment']>>['collection']>>
+  invoices: Awaited<ReturnType<Awaited<ReturnType<Noydb['openVault']>>['collection']>>
+  clients: Awaited<ReturnType<Awaited<ReturnType<Noydb['openVault']>>['collection']>>
 }> {
   const mode = opts.refMode ?? 'strict'
-  const c = await db.openCompartment('TEST')
+  const c = await db.openVault('TEST')
   const clients = c.collection<Client>('clients')
   const invoices = c.collection<Invoice>('invoices', {
     refs: { clientId: ref('clients', mode) },
@@ -136,7 +136,7 @@ describe('Query.join() — v0.6 #73 eager single-FK joins', () => {
   // ─── Happy path ───────────────────────────────────────────────────
 
   it('attaches the right-side record under the given alias', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const clients = c.collection<Client>('clients')
     const invoices = c.collection<Invoice>('invoices', {
       refs: { clientId: ref('clients') },
@@ -156,7 +156,7 @@ describe('Query.join() — v0.6 #73 eager single-FK joins', () => {
 
   it('combines .where() + .join() across multiple rows', async () => {
     await seedCompartment(db)
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const invoices = c.collection<Invoice>('invoices', {
       refs: { clientId: ref('clients') },
     })
@@ -173,7 +173,7 @@ describe('Query.join() — v0.6 #73 eager single-FK joins', () => {
 
   it('.orderBy() + .limit() + .join() compose correctly — sort runs before join', async () => {
     await seedCompartment(db)
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const invoices = c.collection<Invoice>('invoices', {
       refs: { clientId: ref('clients') },
     })
@@ -192,7 +192,7 @@ describe('Query.join() — v0.6 #73 eager single-FK joins', () => {
 
   it('join preserves all left-side fields without mutating the original', async () => {
     await seedCompartment(db)
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const invoices = c.collection<Invoice>('invoices', {
       refs: { clientId: ref('clients') },
     })
@@ -212,7 +212,7 @@ describe('Query.join() — v0.6 #73 eager single-FK joins', () => {
 
   it('.first() applies joins', async () => {
     await seedCompartment(db)
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const invoices = c.collection<Invoice>('invoices', {
       refs: { clientId: ref('clients') },
     })
@@ -228,7 +228,7 @@ describe('Query.join() — v0.6 #73 eager single-FK joins', () => {
 
   it('.count() ignores joins — projection-only semantics', async () => {
     await seedCompartment(db)
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const invoices = c.collection<Invoice>('invoices', {
       refs: { clientId: ref('clients') },
     })
@@ -247,7 +247,7 @@ describe('Query.join() — v0.6 #73 eager single-FK joins', () => {
 
   it('nested-loop strategy is selected by default when lookupById is available', async () => {
     await seedCompartment(db)
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const invoices = c.collection<Invoice>('invoices', {
       refs: { clientId: ref('clients') },
     })
@@ -264,7 +264,7 @@ describe('Query.join() — v0.6 #73 eager single-FK joins', () => {
 
   it('explicit hash strategy produces the same result as nested-loop', async () => {
     await seedCompartment(db)
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const invoices = c.collection<Invoice>('invoices', {
       refs: { clientId: ref('clients') },
     })
@@ -285,7 +285,7 @@ describe('Query.join() — v0.6 #73 eager single-FK joins', () => {
   // ─── Row ceiling (JoinTooLargeError) ─────────────────────────────
 
   it('throws JoinTooLargeError when the right side exceeds the ceiling', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const clients = c.collection<Client>('clients')
     const invoices = c.collection<Invoice>('invoices', {
       refs: { clientId: ref('clients') },
@@ -317,7 +317,7 @@ describe('Query.join() — v0.6 #73 eager single-FK joins', () => {
   })
 
   it('throws JoinTooLargeError when the left side exceeds the ceiling', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const clients = c.collection<Client>('clients')
     const invoices = c.collection<Invoice>('invoices', {
       refs: { clientId: ref('clients') },
@@ -346,7 +346,7 @@ describe('Query.join() — v0.6 #73 eager single-FK joins', () => {
   // ─── Ref-mode behaviors on dangling refs ─────────────────────────
 
   it('strict mode throws DanglingReferenceError on missing target', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const clients = c.collection<Client>('clients')
     const invoices = c.collection<Invoice>('invoices', {
       refs: { clientId: ref('clients', 'warn') },  // warn mode lets the put through
@@ -358,17 +358,17 @@ describe('Query.join() — v0.6 #73 eager single-FK joins', () => {
     // Reopen with strict mode for the join. The ref mode the JOIN
     // sees comes from the compartment's current ref registry, which
     // is the warn-mode declaration we registered first. Instead, we
-    // re-declare using a fresh compartment to verify strict semantics.
-    // Simpler path: re-seed a new compartment.
+    // re-declare using a fresh vault to verify strict semantics.
+    // Simpler path: re-seed a new vault.
   })
 
   it('strict mode (default): DanglingReferenceError on read with a missing ref target', async () => {
-    // Fresh compartment with strict refs — bypass the put-time
+    // Fresh vault with strict refs — bypass the put-time
     // strict check by writing directly via the adapter... actually
     // simpler: use warn mode to plant the dangling ref, then prove
     // strict-mode joins THROW by constructing a second, independent
-    // compartment with strict refs and the same dangling data.
-    const c = await db.openCompartment('TEST')
+    // vault with strict refs and the same dangling data.
+    const c = await db.openVault('TEST')
     const clients = c.collection<Client>('clients')
     const invoices = c.collection<Invoice>('invoices', {
       refs: { clientId: ref('clients', 'warn') },
@@ -391,7 +391,7 @@ describe('Query.join() — v0.6 #73 eager single-FK joins', () => {
   })
 
   it('warn mode attaches null and emits a one-shot warning per unique dangling ref', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const clients = c.collection<Client>('clients')
     const invoices = c.collection<Invoice>('invoices', {
       refs: { clientId: ref('clients', 'warn') },
@@ -423,7 +423,7 @@ describe('Query.join() — v0.6 #73 eager single-FK joins', () => {
   })
 
   it('cascade mode attaches null silently (no warnings)', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const clients = c.collection<Client>('clients')
     const invoices = c.collection<Invoice>('invoices', {
       refs: { clientId: ref('clients', 'cascade') },
@@ -448,7 +448,7 @@ describe('Query.join() — v0.6 #73 eager single-FK joins', () => {
   })
 
   it('null FK is not a dangling ref — attaches null regardless of mode', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const clients = c.collection<Client>('clients')
     const invoices = c.collection<Invoice>('invoices', {
       refs: { clientId: ref('clients') }, // strict
@@ -474,7 +474,7 @@ describe('Query.join() — v0.6 #73 eager single-FK joins', () => {
   // ─── Plan-time validation ────────────────────────────────────────
 
   it('throws at plan time when the field has no ref() declaration', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const invoices = c.collection<Invoice>('invoices') // no refs declared
     await invoices.put('inv-1', { id: 'inv-1', amount: 100, status: 'open', clientId: 'cli-A' })
 
@@ -498,7 +498,7 @@ describe('Query.join() — v0.6 #73 eager single-FK joins', () => {
 
   it('every JoinLeg in the plan carries partitionScope: "all" (v0.6 #87 constraint #1)', async () => {
     await seedCompartment(db)
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const invoices = c.collection<Invoice>('invoices', {
       refs: { clientId: ref('clients') },
     })
@@ -515,7 +515,7 @@ describe('Query.join() — v0.6 #73 eager single-FK joins', () => {
   // ─── Subscribe pattern (v0.6 limitation — left-side only) ───────
 
   it('subscribe() re-fires on left-side changes and re-applies joins', async () => {
-    const c = await db.openCompartment('TEST')
+    const c = await db.openVault('TEST')
     const clients = c.collection<Client>('clients')
     const invoices = c.collection<Invoice>('invoices', {
       refs: { clientId: ref('clients') },

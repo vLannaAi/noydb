@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import type { NoydbStore, EncryptedEnvelope, CompartmentSnapshot } from '../src/types.js'
+import type { NoydbStore, EncryptedEnvelope, VaultSnapshot } from '../src/types.js'
 import { ConflictError } from '../src/errors.js'
 import { createNoydb } from '../src/noydb.js'
 
@@ -22,7 +22,7 @@ function inlineMemory(opts: { supportsListSince?: boolean } = {}): NoydbStore {
     async delete(c, col, id) { store.get(c)?.get(col)?.delete(id) },
     async list(c, col) { const coll = store.get(c)?.get(col); return coll ? [...coll.keys()] : [] },
     async loadAll(c) {
-      const comp = store.get(c); const s: CompartmentSnapshot = {}
+      const comp = store.get(c); const s: VaultSnapshot = {}
       if (comp) for (const [n, coll] of comp) { if (!n.startsWith('_')) { const r: Record<string, EncryptedEnvelope> = {}; for (const [id, e] of coll) r[id] = e; s[n] = r } }
       return s
     },
@@ -53,7 +53,7 @@ describe('partial sync (v0.9 #133)', () => {
       const remote = inlineMemory()
 
       const db = await createNoydb({ store: local, sync: remote, user: 'u', encrypt: false })
-      const comp = await db.openCompartment(COMP)
+      const comp = await db.openVault(COMP)
       const invoices = comp.collection<Invoice>('invoices')
       const payments = comp.collection<Invoice>('payments')
 
@@ -80,7 +80,7 @@ describe('partial sync (v0.9 #133)', () => {
       const remote = inlineMemory()
 
       const db = await createNoydb({ store: local, sync: remote, user: 'u', encrypt: false })
-      const comp = await db.openCompartment(COMP)
+      const comp = await db.openVault(COMP)
       await comp.collection<Invoice>('invoices').put('inv-1', { amount: 100, status: 'a' })
       await comp.collection<Invoice>('payments').put('pay-1', { amount: 50, status: 'b' })
 
@@ -94,7 +94,7 @@ describe('partial sync (v0.9 #133)', () => {
       const remote = inlineMemory()
 
       const db = await createNoydb({ store: local, sync: remote, user: 'u', encrypt: false })
-      const comp = await db.openCompartment(COMP)
+      const comp = await db.openVault(COMP)
       await comp.collection<Invoice>('invoices').put('inv-1', { amount: 100, status: 'a' })
 
       const result = await db.push(COMP, { collections: ['payments'] })
@@ -112,12 +112,12 @@ describe('partial sync (v0.9 #133)', () => {
       const dbA = await createNoydb({ store: localA, sync: remote, user: 'a', encrypt: false })
       const dbB = await createNoydb({ store: localB, sync: remote, user: 'b', encrypt: false })
 
-      const compA = await dbA.openCompartment(COMP)
+      const compA = await dbA.openVault(COMP)
       await compA.collection<Invoice>('invoices').put('inv-1', { amount: 100, status: 'x' })
       await compA.collection<Invoice>('payments').put('pay-1', { amount: 50, status: 'y' })
       await dbA.push(COMP)
 
-      await dbB.openCompartment(COMP)
+      await dbB.openVault(COMP)
       const result = await dbB.pull(COMP, { collections: ['invoices'] })
 
       expect(result.pulled).toBe(1)
@@ -141,7 +141,7 @@ describe('partial sync (v0.9 #133)', () => {
       })
 
       const db = await createNoydb({ store: local, sync: remote, user: 'u', encrypt: false })
-      await db.openCompartment(COMP)
+      await db.openVault(COMP)
       const result = await db.pull(COMP, { modifiedSince: cutoff })
 
       // Only inv-new (_ts after cutoff) should be pulled
@@ -165,7 +165,7 @@ describe('partial sync (v0.9 #133)', () => {
       })
 
       const db = await createNoydb({ store: local, sync: remote, user: 'u', encrypt: false })
-      await db.openCompartment(COMP)
+      await db.openVault(COMP)
       // Filter to invoices only + modifiedSince
       const result = await db.pull(COMP, { collections: ['invoices'], modifiedSince: cutoff })
 
@@ -182,7 +182,7 @@ describe('partial sync (v0.9 #133)', () => {
       const remote = inlineMemory()
 
       const dbA = await createNoydb({ store: localA, sync: remote, user: 'a', encrypt: false })
-      const compA = await dbA.openCompartment(COMP)
+      const compA = await dbA.openVault(COMP)
       await compA.collection<Invoice>('invoices').put('inv-1', { amount: 1, status: 'a' })
       await compA.collection<Invoice>('payments').put('pay-1', { amount: 2, status: 'b' })
 

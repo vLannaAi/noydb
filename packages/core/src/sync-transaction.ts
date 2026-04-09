@@ -1,6 +1,6 @@
 import type { SyncTransactionResult } from './types.js'
 import type { SyncEngine } from './sync.js'
-import type { Compartment } from './compartment.js'
+import type { Vault } from './vault.js'
 
 interface TxOp {
   readonly type: 'put' | 'delete'
@@ -20,12 +20,12 @@ interface TxOp {
  * Obtain via `db.transaction(compartmentName)`.
  */
 export class SyncTransaction {
-  private readonly comp: Compartment
+  private readonly comp: Vault
   private readonly engine: SyncEngine
   private readonly ops: TxOp[] = []
 
   /** @internal — constructed by `Noydb.transaction()` */
-  constructor(comp: Compartment, engine: SyncEngine) {
+  constructor(comp: Vault, engine: SyncEngine) {
     this.comp = comp
     this.engine = engine
   }

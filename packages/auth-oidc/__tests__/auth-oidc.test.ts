@@ -251,7 +251,7 @@ describe('enrollOidc', () => {
 
     expect(enrollment._noydb_oidc).toBe(1)
     expect(enrollment.sub).toBe('enroll-sub-456')
-    expect(enrollment.compartment).toBe('company-a')
+    expect(enrollment.vault).toBe('company-a')
     expect(enrollment.providerName).toBe('TestProvider')
     expect(typeof enrollment.deviceKeyId).toBe('string')
     expect(typeof enrollment.enrolledAt).toBe('string')
@@ -325,7 +325,7 @@ describe('enrollOidc + unlockOidc round-trip', () => {
         _noydb_oidc: 1 as const,
         providerName: 'TestProvider',
         sub,
-        compartment: 'company-a',
+        vault: 'company-a',
         enrolledAt: new Date().toISOString(),
         deviceKeyId: 'ignored',
         enrollmentCount: 1,
@@ -349,7 +349,7 @@ describe('unlockOidc error cases', () => {
       _noydb_oidc: 1 as const,
       providerName: 'TestProvider',
       sub,
-      compartment: 'company-a',
+      vault: 'company-a',
       enrolledAt: new Date().toISOString(),
       deviceKeyId: 'd',
       enrollmentCount: 1,
@@ -364,7 +364,7 @@ describe('unlockOidc error cases', () => {
       _noydb_oidc: 1 as const,
       providerName: 'TestProvider',
       sub: 'no-device-secret',
-      compartment: 'company-a',
+      vault: 'company-a',
       enrolledAt: new Date().toISOString(),
       deviceKeyId: 'd',
       enrollmentCount: 1,
@@ -391,7 +391,7 @@ describe('unlockOidc error cases', () => {
       _noydb_oidc: 1 as const,
       providerName: 'TestProvider',
       sub,
-      compartment: 'company-a',
+      vault: 'company-a',
       enrolledAt: new Date().toISOString(),
       deviceKeyId: 'd',
       enrollmentCount: 1,

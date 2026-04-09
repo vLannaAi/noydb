@@ -25,7 +25,7 @@
  *
  *   - **warn** — both operations succeed unconditionally. Broken
  *     references surface only through
- *     `compartment.checkIntegrity()`, which walks every collection
+ *     `vault.checkIntegrity()`, which walks every collection
  *     and reports orphans. Use when you want soft validation for
  *     imports from messy sources.
  *
@@ -34,9 +34,9 @@
  *     and broken via an in-progress set, so mutual cascades
  *     terminate instead of recursing forever.
  *
- * Cross-compartment refs are explicitly rejected: if the target
+ * Cross-vault refs are explicitly rejected: if the target
  * name contains a `/`, `ref()` throws `RefScopeError`. Cross-
- * compartment refs need an auth story (multi-keyring reads) that
+ * vault refs need an auth story (multi-keyring reads) that
  * v0.4 doesn't ship — tracked for v0.5.
  */
 
@@ -96,7 +96,7 @@ export class RefIntegrityError extends NoydbError {
 
 /**
  * Thrown when `ref()` is called with a target name that looks like
- * a cross-compartment reference (contains a `/`). Separate error
+ * a cross-vault reference (contains a `/`). Separate error
  * class because the fix is different: RefIntegrityError means "data
  * is wrong"; RefScopeError means "the ref declaration is wrong".
  */
@@ -104,9 +104,9 @@ export class RefScopeError extends NoydbError {
   constructor(target: string) {
     super(
       'REF_SCOPE',
-      `Cross-compartment references are not supported in v0.4 — got target "${target}". ` +
+      `Cross-vault references are not supported in v0.4 — got target "${target}". ` +
         `Use a simple collection name (e.g. "clients"), not a path. ` +
-        `Cross-compartment refs are tracked for a future release.`,
+        `Cross-vault refs are tracked for a future release.`,
     )
     this.name = 'RefScopeError'
   }
@@ -133,12 +133,12 @@ export function ref(target: string, mode: RefMode = 'strict'): RefDescriptor {
 }
 
 /**
- * Per-compartment registry of reference declarations.
+ * Per-vault registry of reference declarations.
  *
  * The registry is populated by `Collection` constructors (which pass
- * their `refs` option through the Compartment) and consulted by the
- * Compartment on every `put` / `delete` and by `checkIntegrity`. A
- * single instance lives on the Compartment for its lifetime; there's
+ * their `refs` option through the Vault) and consulted by the
+ * Vault on every `put` / `delete` and by `checkIntegrity`. A
+ * single instance lives on the Vault for its lifetime; there's
  * no global state.
  *
  * The data structure is two parallel maps:
@@ -230,7 +230,7 @@ export class RefRegistry {
 }
 
 /**
- * Shape of a single violation reported by `compartment.checkIntegrity()`.
+ * Shape of a single violation reported by `vault.checkIntegrity()`.
  *
  * `refId` is the value we saw in the referencing field — it's the
  * ID we expected to find in `refTo`, but didn't. Left as `unknown`

@@ -24,8 +24,8 @@ export interface PresenceHandleOpts {
   adapter: NoydbStore
   /** Remote (sync) adapter — preferred for broadcasting presence if available. */
   syncAdapter?: NoydbStore
-  /** Compartment name — used as part of the channel and storage key. */
-  compartment: string
+  /** Vault name — used as part of the channel and storage key. */
+  vault: string
   /** Collection name — used as HKDF `info` and channel suffix. */
   collectionName: string
   /** Calling user's ID, embedded unencrypted in storage records. */
@@ -55,7 +55,7 @@ interface StoragePresenceRecord {
 export class PresenceHandle<P> {
   private readonly adapter: NoydbStore
   private readonly syncAdapter: NoydbStore | undefined
-  private readonly compartment: string
+  private readonly vault: string
   private readonly collectionName: string
   private readonly userId: string
   private readonly encrypted: boolean
@@ -74,16 +74,16 @@ export class PresenceHandle<P> {
   constructor(opts: PresenceHandleOpts) {
     this.adapter = opts.adapter
     this.syncAdapter = opts.syncAdapter
-    this.compartment = opts.compartment
+    this.vault = opts.vault
     this.collectionName = opts.collectionName
     this.userId = opts.userId
     this.encrypted = opts.encrypted
     this.getDEK = opts.getDEK
     this.staleMs = opts.staleMs ?? 30_000
     this.pollIntervalMs = opts.pollIntervalMs ?? 5_000
-    // Channel used by pub/sub adapters — compartment-scoped so two collections
-    // in the same compartment don't bleed into each other's presence channels.
-    this.channel = `${opts.compartment}:${opts.collectionName}:presence`
+    // Channel used by pub/sub adapters — vault-scoped so two collections
+    // in the same vault don't bleed into each other's presence channels.
+    this.channel = `${opts.vault}:${opts.collectionName}:presence`
     // Reserved collection name for the storage-poll fallback.
     this.storageCollection = `_presence_${opts.collectionName}`
   }
@@ -262,7 +262,7 @@ export class PresenceHandle<P> {
     }
     try {
       await storeAdapter.put(
-        this.compartment,
+        this.vault,
         this.storageCollection,
         this.userId,
         envelope,
@@ -277,13 +277,13 @@ export class PresenceHandle<P> {
 
     try {
       const storeAdapter = this.syncAdapter ?? this.adapter
-      const ids = await storeAdapter.list(this.compartment, this.storageCollection)
+      const ids = await storeAdapter.list(this.vault, this.storageCollection)
       const cutoff = new Date(Date.now() - this.staleMs).toISOString()
       const peers: PresencePeer<P>[] = []
 
       for (const id of ids) {
         if (id === this.userId) continue // skip ourselves
-        const envelope = await storeAdapter.get(this.compartment, this.storageCollection, id)
+        const envelope = await storeAdapter.get(this.vault, this.storageCollection, id)
         if (!envelope) continue
 
         const record = JSON.parse(envelope._data) as StoragePresenceRecord

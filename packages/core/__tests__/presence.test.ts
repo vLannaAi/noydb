@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import type { NoydbStore, EncryptedEnvelope, CompartmentSnapshot } from '../src/types.js'
+import type { NoydbStore, EncryptedEnvelope, VaultSnapshot } from '../src/types.js'
 import { ConflictError } from '../src/errors.js'
 import { createNoydb } from '../src/noydb.js'
 
@@ -28,7 +28,7 @@ function inlineMemory(opts: { pubsub?: boolean } = {}): NoydbStore & {
     async delete(c, col, id) { store.get(c)?.get(col)?.delete(id) },
     async list(c, col) { const coll = store.get(c)?.get(col); return coll ? [...coll.keys()] : [] },
     async loadAll(c) {
-      const comp = store.get(c); const s: CompartmentSnapshot = {}
+      const comp = store.get(c); const s: VaultSnapshot = {}
       if (comp) for (const [n, coll] of comp) { const r: Record<string, EncryptedEnvelope> = {}; for (const [id, e] of coll) r[id] = e; s[n] = r }
       return s
     },
@@ -66,7 +66,7 @@ describe('presence (v0.9 #134)', () => {
   describe('presence() API', () => {
     it('collection.presence() returns a PresenceHandle', async () => {
       const db = await createNoydb({ store: inlineMemory(), user: 'u', encrypt: false })
-      const comp = await db.openCompartment(COMP)
+      const comp = await db.openVault(COMP)
       const invoices = comp.collection('invoices')
       const handle = invoices.presence()
       expect(handle).toBeDefined()
@@ -78,7 +78,7 @@ describe('presence (v0.9 #134)', () => {
 
     it('update() does not throw without pub/sub adapter', async () => {
       const db = await createNoydb({ store: inlineMemory(), user: 'u', encrypt: false })
-      const comp = await db.openCompartment(COMP)
+      const comp = await db.openVault(COMP)
       const invoices = comp.collection('invoices')
       const handle = invoices.presence<CursorPayload>()
       await expect(handle.update({ path: 'invoices/inv-1', action: 'editing' })).resolves.toBeUndefined()
@@ -87,7 +87,7 @@ describe('presence (v0.9 #134)', () => {
 
     it('subscribe() returns an unsubscribe function', async () => {
       const db = await createNoydb({ store: inlineMemory(), user: 'u', encrypt: false })
-      const comp = await db.openCompartment(COMP)
+      const comp = await db.openVault(COMP)
       const handle = comp.collection('invoices').presence<CursorPayload>({ pollIntervalMs: 100 })
       const unsub = handle.subscribe(() => {})
       expect(typeof unsub).toBe('function')
@@ -103,8 +103,8 @@ describe('presence (v0.9 #134)', () => {
       const dbA = await createNoydb({ store: inlineMemory(), sync: sharedAdapter, user: 'a', encrypt: false })
       const dbB = await createNoydb({ store: inlineMemory(), sync: sharedAdapter, user: 'b', encrypt: false })
 
-      const compA = await dbA.openCompartment(COMP)
-      const compB = await dbB.openCompartment(COMP)
+      const compA = await dbA.openVault(COMP)
+      const compB = await dbB.openVault(COMP)
 
       const handleA = compA.collection<never>('invoices').presence<CursorPayload>()
       const handleB = compB.collection<never>('invoices').presence<CursorPayload>()
@@ -129,7 +129,7 @@ describe('presence (v0.9 #134)', () => {
     it('unsubscribe removes listener from channel', async () => {
       const sharedAdapter = inlineMemory({ pubsub: true })
       const db = await createNoydb({ store: inlineMemory(), sync: sharedAdapter, user: 'u', encrypt: false })
-      const comp = await db.openCompartment(COMP)
+      const comp = await db.openVault(COMP)
       const handle = comp.collection('invoices').presence()
 
       const calls: number[] = []
@@ -154,7 +154,7 @@ describe('presence (v0.9 #134)', () => {
         user: 'u',
         encrypt: false,
       })
-      const comp = await db.openCompartment(COMP)
+      const comp = await db.openVault(COMP)
       const handle = comp.collection('invoices').presence<CursorPayload>()
 
       await handle.update({ path: 'invoices/inv-1', action: 'viewing' })
@@ -171,8 +171,8 @@ describe('presence (v0.9 #134)', () => {
       const dbA = await createNoydb({ store: inlineMemory(), sync: syncAdapter, user: 'a', encrypt: false })
       const dbB = await createNoydb({ store: inlineMemory(), sync: syncAdapter, user: 'b', encrypt: false })
 
-      const compA = await dbA.openCompartment(COMP)
-      const compB = await dbB.openCompartment(COMP)
+      const compA = await dbA.openVault(COMP)
+      const compB = await dbB.openVault(COMP)
 
       // A announces presence
       const handleA = compA.collection('invoices').presence<CursorPayload>()
@@ -201,7 +201,7 @@ describe('presence (v0.9 #134)', () => {
     it('stop() clears the poll interval', async () => {
       const clearIntervalSpy = vi.spyOn(globalThis, 'clearInterval')
       const db = await createNoydb({ store: inlineMemory(), user: 'u', encrypt: false })
-      const comp = await db.openCompartment(COMP)
+      const comp = await db.openVault(COMP)
       const handle = comp.collection('invoices').presence({ pollIntervalMs: 100 })
 
       handle.subscribe(() => {}) // starts poll
@@ -224,7 +224,7 @@ describe('presence (v0.9 #134)', () => {
         user: 'u',
         encrypt: false,
       })
-      const comp = await db.openCompartment(COMP)
+      const comp = await db.openVault(COMP)
       const handle = comp.collection('invoices').presence<CursorPayload>()
 
       await handle.update({ path: 'invoices/inv-1', action: 'viewing' })

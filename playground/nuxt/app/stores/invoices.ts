@@ -8,7 +8,7 @@
  * @noy-db/core.
  *
  * It's also the v0.3 evidence: "Reference Vue/Nuxt accounting demo
- * uses ONLY the Pinia API — no direct Compartment/Collection calls
+ * uses ONLY the Pinia API — no direct Vault/Collection calls
  * in components." Encryption, keyring, adapter, and schema wiring
  * are all invisible at the call site.
  */
@@ -32,11 +32,11 @@ export const InvoiceSchema = z.object({
 export type Invoice = z.infer<typeof InvoiceSchema>
 
 /**
- * Store id matches the compartment+collection hierarchy: 'demo-co' is
- * a single tenant compartment in this demo. Real apps would open a
- * compartment per tenant.
+ * Store id matches the vault+collection hierarchy: 'demo-co' is
+ * a single tenant vault in this demo. Real apps would open a
+ * vault per tenant.
  */
 export const useInvoices = defineNoydbStore<Invoice>('invoices', {
-  compartment: 'demo-co',
+  vault: 'demo-co',
   schema: InvoiceSchema,
 })

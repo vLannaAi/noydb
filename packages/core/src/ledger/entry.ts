@@ -67,7 +67,7 @@ export interface LedgerEntry {
   /**
    * Hex-encoded sha256 of the canonical JSON of the PREVIOUS entry.
    * The genesis entry (index 0) has `prevHash === ''` — the first
-   * entry in a fresh compartment has nothing to point back to.
+   * entry in a fresh vault has nothing to point back to.
    */
   readonly prevHash: string
 
@@ -232,7 +232,7 @@ function bytesToHex(bytes: Uint8Array): string {
 
 /**
  * Pad an index to the canonical 10-digit form used as the adapter key.
- * Ten digits is enough for ~10 billion ledger entries per compartment
+ * Ten digits is enough for ~10 billion ledger entries per vault
  * — far beyond any realistic use case, but cheap enough that the extra
  * digits don't hurt storage.
  */

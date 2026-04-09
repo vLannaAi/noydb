@@ -22,7 +22,7 @@
  * // existing store — add one option, no component changes:
  * export const useClients = defineStore('clients', {
  *   state: () => ({ list: [] as Client[] }),
- *   noydb: { compartment: 'C101', collection: 'clients', persist: 'list' },
+ *   noydb: { vault: 'C101', collection: 'clients', persist: 'list' },
  * });
  * ```
  *
@@ -43,7 +43,7 @@
  */
 
 import type { PiniaPluginContext, PiniaPlugin, StateTree } from 'pinia'
-import { createNoydb, type Noydb, type NoydbOptions, type NoydbStore, type Compartment, type Collection } from '@noy-db/core'
+import { createNoydb, type Noydb, type NoydbOptions, type NoydbStore, type Vault, type Collection } from '@noy-db/core'
 
 /**
  * Per-store NOYDB configuration. Attached to a Pinia store via the `noydb`
@@ -53,9 +53,9 @@ import { createNoydb, type Noydb, type NoydbOptions, type NoydbStore, type Compa
  * Pass a single key, an array of keys, or `'*'` to mirror the entire state.
  */
 export interface StoreNoydbOptions<S extends StateTree = StateTree> {
-  /** Compartment (tenant) name. */
-  compartment: string
-  /** Collection name within the compartment. */
+  /** Vault (tenant) name. */
+  vault: string
+  /** Collection name within the vault. */
   collection: string
   /**
    * Which state keys to persist. Defaults to `'*'` (the entire state object).
@@ -119,13 +119,13 @@ export function createNoydbPiniaPlugin(opts: NoydbPiniaPluginOptions): PiniaPlug
     return dbPromise
   }
 
-  // Compartment cache so opening a compartment is a one-time cost per app.
-  const compartmentCache = new Map<string, Promise<Compartment>>()
-  function getCompartment(name: string): Promise<Compartment> {
-    let p = compartmentCache.get(name)
+  // Vault cache so opening a vault is a one-time cost per app.
+  const vaultCache = new Map<string, Promise<Vault>>()
+  function getCompartment(name: string): Promise<Vault> {
+    let p = vaultCache.get(name)
     if (!p) {
-      p = getDb().then((db) => db.openCompartment(name))
-      compartmentCache.set(name, p)
+      p = getDb().then((db) => db.openVault(name))
+      vaultCache.set(name, p)
     }
     return p
   }
@@ -154,8 +154,8 @@ export function createNoydbPiniaPlugin(opts: NoydbPiniaPluginOptions): PiniaPlug
     // store can be awaited via `$noydbReady`.
     const ready = (async (): Promise<void> => {
       try {
-        const compartment = await getCompartment(noydbOption.compartment)
-        const collection: Collection<StateTree> = compartment.collection<StateTree>(
+        const vault = await getCompartment(noydbOption.vault)
+        const collection: Collection<StateTree> = vault.collection<StateTree>(
           noydbOption.collection,
         )
 
@@ -258,7 +258,7 @@ declare module 'pinia' {
      * `createNoydbPiniaPlugin` augmentation plugin.
      *
      * The chosen state keys are encrypted and persisted to the configured
-     * compartment + collection on every mutation, and rehydrated on first
+     * vault + collection on every mutation, and rehydrated on first
      * store access.
      */
     noydb?: StoreNoydbOptions<S>
