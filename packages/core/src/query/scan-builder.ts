@@ -60,11 +60,13 @@
  */
 
 import type { Clause, FieldClause, Operator } from './predicate.js'
-import { evaluateClause } from './predicate.js'
+import { evaluateClause, readPath } from './predicate.js'
 import type {
   AggregateSpec,
   AggregateResult,
 } from './aggregate.js'
+import type { JoinContext, JoinLeg, JoinableSource } from './join.js'
+import { DanglingReferenceError } from '../errors.js'
 
 /**
  * Page provider — the Collection-shaped hook the builder calls to
@@ -96,15 +98,39 @@ export class ScanBuilder<T> implements AsyncIterable<T> {
   private readonly pageProvider: ScanPageProvider<T>
   private readonly pageSize: number
   private readonly clauses: readonly Clause[]
+  /**
+   * Zero-or-more join legs to apply per record as the stream flows.
+   * Each leg attaches the resolved right-side record (or null) under
+   * its alias. v0.6 #76 — streaming joins.
+   *
+   * Joins are evaluated AFTER clauses, so a `where()` filtered-out
+   * record never triggers a right-side lookup. This is the same
+   * ordering as `Query.toArray()` (clauses first, joins after) and
+   * keeps the streaming path from doing wasted work.
+   */
+  private readonly joins: readonly JoinLeg[]
+  /**
+   * Join resolution context. Required for `.join()` to translate a
+   * field name into a target collection + ref mode and to resolve
+   * the right-side `JoinableSource`. Optional because tests
+   * construct ScanBuilder directly with synthetic page providers
+   * that don't know about ref() — calling `.join()` without a
+   * context throws with an actionable error.
+   */
+  private readonly joinContext: JoinContext | undefined
 
   constructor(
     pageProvider: ScanPageProvider<T>,
     pageSize: number = DEFAULT_SCAN_PAGE_SIZE,
     clauses: readonly Clause[] = [],
+    joins: readonly JoinLeg[] = [],
+    joinContext?: JoinContext,
   ) {
     this.pageProvider = pageProvider
     this.pageSize = pageSize
     this.clauses = clauses
+    this.joins = joins
+    this.joinContext = joinContext
   }
 
   /**
@@ -122,10 +148,13 @@ export class ScanBuilder<T> implements AsyncIterable<T> {
    */
   where(field: string, op: Operator, value: unknown): ScanBuilder<T> {
     const clause: FieldClause = { type: 'field', field, op, value }
-    return new ScanBuilder<T>(this.pageProvider, this.pageSize, [
-      ...this.clauses,
-      clause,
-    ])
+    return new ScanBuilder<T>(
+      this.pageProvider,
+      this.pageSize,
+      [...this.clauses, clause],
+      this.joins,
+      this.joinContext,
+    )
   }
 
   /**
@@ -139,10 +168,135 @@ export class ScanBuilder<T> implements AsyncIterable<T> {
       type: 'filter',
       fn: fn as (record: unknown) => boolean,
     }
-    return new ScanBuilder<T>(this.pageProvider, this.pageSize, [
-      ...this.clauses,
-      clause,
-    ])
+    return new ScanBuilder<T>(
+      this.pageProvider,
+      this.pageSize,
+      [...this.clauses, clause],
+      this.joins,
+      this.joinContext,
+    )
+  }
+
+  /**
+   * Resolve a `ref()`-declared foreign key per record as the scan
+   * stream flows, attaching the right-side record (or null) under
+   * `opts.as`. v0.6 #76 — streaming joins over `scan()`.
+   *
+   * ```ts
+   * for await (const inv of invoices.scan().join('clientId', { as: 'client' })) {
+   *   await processInvoice(inv) // inv.client is attached
+   * }
+   *
+   * // Or terminate with .aggregate() for streaming joined aggregation
+   * const { total } = await invoices.scan()
+   *   .where('status', '==', 'open')
+   *   .join('clientId', { as: 'client' })
+   *   .aggregate({ total: sum('amount') })
+   * ```
+   *
+   * **The key difference from eager `.join()` (#73):** the LEFT
+   * side streams page-by-page from the adapter and is never
+   * materialized. Memory ceiling on the left is O(pageSize), not
+   * O(rowCount). This is what makes streaming joins suitable for
+   * collections that exceed the eager join's 50_000-row ceiling.
+   *
+   * **Right-side strategy** is auto-selected per leg:
+   *   - **Indexed** — right source exposes `lookupById`, so each
+   *     left row costs O(1). This is the common path for
+   *     Collection right sides, which back `lookupById` with a Map
+   *     lookup over the in-memory cache. The right collection must
+   *     be in eager mode (the same constraint as eager join's
+   *     `querySourceForJoin` from #73).
+   *   - **Hash** — right source has only `snapshot()`. Build a
+   *     `Map<id, record>` once at iteration start, probe per left
+   *     row. Same correctness, same per-row cost as the indexed
+   *     path; the difference is the upfront cost of materializing
+   *     the right side once.
+   *
+   * Both strategies hold the right side in memory for the duration
+   * of the iteration. The "streaming" property applies to the LEFT
+   * side only — true left-and-right streaming joins (where neither
+   * side fits in memory) require a sort-merge join planner that's
+   * out of scope for v0.6.
+   *
+   * **Ref-mode semantics** match eager `.join()` exactly:
+   *   - `strict`  → throws `DanglingReferenceError` mid-stream
+   *     when a left record points at a non-existent right id.
+   *     The throw aborts the async iterator — consumers should
+   *     wrap the `for await` in try/catch if they want to recover.
+   *   - `warn`    → attaches `null` and emits a one-shot warning
+   *     per unique dangling pair (deduped via the same warn
+   *     channel as eager join).
+   *   - `cascade` → attaches `null` silently. A delete-time mode;
+   *     dangling refs at read time are mid-flight or pre-existing
+   *     orphans, not a DSL error.
+   *
+   * Left records with null/undefined FK values attach `null`
+   * regardless of mode — same "no reference at all" policy as
+   * eager join and write-time `enforceRefsOnPut`.
+   *
+   * **Multi-FK chaining** is supported via repeated `.join()`
+   * calls: each leg resolves an independent ref. Each leg
+   * independently picks its right-side strategy and applies its
+   * own ref mode.
+   *
+   * **Joins are NOT applied** to a `.aggregate()` terminal that
+   * doesn't reference joined fields — wait, that's not quite
+   * right. The streaming path actually DOES apply joins before
+   * `.aggregate()` because the join attaches a field that the
+   * spec might reference. Unlike `Query.aggregate()` (which skips
+   * joins entirely as a projection-only short-circuit), the
+   * streaming aggregation can't know whether the spec touches a
+   * joined field, so it always applies joins. Consumers who want
+   * unjoined streaming aggregation should leave `.join()` off the
+   * chain — the chain is composable for a reason.
+   *
+   * #87 constraint #1 — every JoinLeg carries `partitionScope:
+   * 'all'` plumbed through but never read by v0.6. Same seam as
+   * eager join (#73).
+   */
+  join<As extends string, R = unknown>(
+    field: string,
+    opts: { as: As },
+  ): ScanBuilder<T & Record<As, R | null>> {
+    if (!this.joinContext) {
+      throw new Error(
+        `ScanBuilder.join() requires a join context. Use ` +
+          `collection.scan() to construct a join-capable scan instead ` +
+          `of the ScanBuilder constructor directly (the direct ` +
+          `constructor is only used for tests with synthetic page ` +
+          `providers).`,
+      )
+    }
+    const descriptor = this.joinContext.resolveRef(field)
+    if (!descriptor) {
+      throw new Error(
+        `ScanBuilder.join(): no ref() declared for field "${field}" on ` +
+          `collection "${this.joinContext.leftCollection}". Add ` +
+          `refs: { ${field}: ref('<target-collection>') } to the ` +
+          `collection options, then retry.`,
+      )
+    }
+    const leg: JoinLeg = {
+      field,
+      as: opts.as,
+      target: descriptor.target,
+      mode: descriptor.mode,
+      strategy: undefined,
+      maxRows: undefined,
+      // #87 constraint #1 — always 'all' in v0.6, never read by
+      // the streaming executor. v0.10 partition-aware scan joins
+      // will populate this from where() predicates without
+      // changing the planner shape.
+      partitionScope: 'all',
+    }
+    return new ScanBuilder<T & Record<As, R | null>>(
+      this.pageProvider as unknown as ScanPageProvider<T & Record<As, R | null>>,
+      this.pageSize,
+      this.clauses,
+      [...this.joins, leg],
+      this.joinContext,
+    )
   }
 
   /**
@@ -154,10 +308,35 @@ export class ScanBuilder<T> implements AsyncIterable<T> {
    * return type for `for await … of` consumers.
    */
   async *[Symbol.asyncIterator](): AsyncIterator<T> {
+    // One-time setup: resolve every join leg's right-side source
+    // and pick its strategy (lookupById per row vs hash from
+    // snapshot once). Both are O(left) per record after setup; the
+    // difference is the upfront cost of hashing the right side
+    // when there's no lookupById.
+    //
+    // Hash maps live for the lifetime of the iteration, so memory
+    // for the right side is O(rightRowCount) per leg. Memory for
+    // the left side stays O(pageSize) regardless — that's the
+    // streaming property we're after.
+    const joinResolvers = this.joins.length === 0 ? null : this.buildJoinResolvers()
+
     let page = await this.pageProvider.listPage({ limit: this.pageSize })
     while (true) {
       for (const record of page.items) {
-        if (this.recordMatches(record)) yield record
+        if (!this.recordMatches(record)) continue
+        if (joinResolvers === null) {
+          yield record
+        } else {
+          // Apply every join leg in declaration order. Each
+          // leg attaches a field — the result of one leg becomes
+          // the input to the next. Multi-FK chaining (#75) is
+          // supported by construction.
+          let attached: unknown = record
+          for (const resolver of joinResolvers) {
+            attached = this.applyOneJoinStreaming(attached, resolver)
+          }
+          yield attached as T
+        }
       }
       if (page.nextCursor === null) return
       page = await this.pageProvider.listPage({
@@ -165,6 +344,169 @@ export class ScanBuilder<T> implements AsyncIterable<T> {
         limit: this.pageSize,
       })
     }
+  }
+
+  /**
+   * Per-leg right-side resolution state. Built once at iteration
+   * start and reused for every left record. Two strategies:
+   *
+   *   - `lookupById`: present when the right source exposes the
+   *     hook directly (typical Collection right side). Per-row
+   *     cost is O(1).
+   *   - `hashByPrimaryKey`: built from `snapshot()` when no
+   *     lookupById. Per-row cost is O(1) after the upfront O(N)
+   *     materialization. Same as eager join's hash strategy.
+   *
+   * `warnedKeys` is the per-leg dedup set for ref-mode 'warn'. We
+   * key on `field→target:refId` so the same dangling pair only
+   * warns once per iteration. The dedup is per-iteration, not
+   * per-process — a long-running scan that re-iterates would warn
+   * again, which is the desired behavior (the data may have
+   * changed between iterations).
+   */
+  private buildJoinResolvers(): Array<{
+    leg: JoinLeg
+    source: JoinableSource
+    lookupById: ((id: string) => unknown) | null
+    hashByPrimaryKey: ReadonlyMap<string, unknown> | null
+    warnedKeys: Set<string>
+  }> {
+    if (!this.joinContext) {
+      // Unreachable — .join() throws if joinContext is missing.
+      // Belt-and-braces because the iterator is invoked via
+      // Symbol.asyncIterator on a builder that may have been
+      // constructed via the direct constructor with pre-populated
+      // joins.
+      throw new Error(
+        `ScanBuilder iterator: ${this.joins.length} join leg(s) ` +
+          `present but no JoinContext attached. Use collection.scan() ` +
+          `to construct a join-capable scan.`,
+      )
+    }
+    const resolvers: Array<{
+      leg: JoinLeg
+      source: JoinableSource
+      lookupById: ((id: string) => unknown) | null
+      hashByPrimaryKey: ReadonlyMap<string, unknown> | null
+      warnedKeys: Set<string>
+    }> = []
+    for (const leg of this.joins) {
+      const source = this.joinContext.resolveSource(leg.target)
+      if (!source) {
+        throw new Error(
+          `ScanBuilder.join() cannot resolve target collection ` +
+            `"${leg.target}" (referenced from field "${leg.field}" on ` +
+            `"${this.joinContext.leftCollection}"). Make sure the target ` +
+            `collection has been opened via compartment.collection() ` +
+            `at least once before iterating the scan.`,
+        )
+      }
+      // Strategy selection: prefer lookupById when available
+      // (O(1) per row, no upfront cost), fall back to hashing
+      // snapshot() once otherwise.
+      let lookupById: ((id: string) => unknown) | null = null
+      let hashByPrimaryKey: ReadonlyMap<string, unknown> | null = null
+      if (source.lookupById) {
+        // Bind through an arrow so the lookupById's `this`
+        // doesn't drift — same pattern as the eager join's
+        // strategy resolver.
+        const fn = source.lookupById.bind(source)
+        lookupById = (id: string): unknown => fn(id)
+      } else {
+        const map = new Map<string, unknown>()
+        for (const record of source.snapshot()) {
+          const rawId = readPath(record, 'id')
+          const key = coerceRefKey(rawId)
+          if (key !== null) map.set(key, record)
+        }
+        hashByPrimaryKey = map
+      }
+      resolvers.push({
+        leg,
+        source,
+        lookupById,
+        hashByPrimaryKey,
+        warnedKeys: new Set<string>(),
+      })
+    }
+    return resolvers
+  }
+
+  /**
+   * Resolve a single join leg for one left record and return the
+   * left record with the joined field attached under
+   * `leg.as`. Pure function over `(left, resolver)`; never
+   * mutates the input.
+   *
+   * Ref-mode dispatch matches eager `applyJoins` from #73:
+   *   - null/undefined FK → attach null silently (always allowed)
+   *   - dangling FK + strict → throw `DanglingReferenceError`
+   *   - dangling FK + warn → attach null, warn-once per pair
+   *   - dangling FK + cascade → attach null silently
+   */
+  private applyOneJoinStreaming(
+    left: unknown,
+    resolver: {
+      leg: JoinLeg
+      source: JoinableSource
+      lookupById: ((id: string) => unknown) | null
+      hashByPrimaryKey: ReadonlyMap<string, unknown> | null
+      warnedKeys: Set<string>
+    },
+  ): unknown {
+    if (left === null || typeof left !== 'object') {
+      // Pathological input; matches eager join's defensive return.
+      return left
+    }
+    const { leg } = resolver
+    const rawId = readPath(left, leg.field)
+    const refKey = coerceRefKey(rawId)
+    let right: unknown = undefined
+    if (refKey !== null) {
+      if (resolver.lookupById !== null) {
+        right = resolver.lookupById(refKey)
+      } else if (resolver.hashByPrimaryKey !== null) {
+        right = resolver.hashByPrimaryKey.get(refKey)
+      }
+    }
+
+    const merged: Record<string, unknown> = {
+      ...(left as Record<string, unknown>),
+    }
+    if (right === undefined) {
+      // No matching record. Distinguish "no ref at all" (null FK)
+      // from "dangling ref" (FK pointed at nothing).
+      if (refKey !== null && leg.mode === 'strict') {
+        throw new DanglingReferenceError({
+          field: leg.field,
+          target: leg.target,
+          refId: refKey,
+          message:
+            `ScanBuilder.join() strict dangling: record references ` +
+            `"${leg.target}:${refKey}" via field "${leg.field}", but no ` +
+            `such record exists. Use ref() mode 'warn' or 'cascade' if ` +
+            `dangling refs are acceptable, or run ` +
+            `compartment.checkIntegrity() to find and fix the orphans.`,
+        })
+      }
+      if (refKey !== null && leg.mode === 'warn') {
+        const dedupKey = `${leg.field}→${leg.target}:${refKey}`
+        if (!resolver.warnedKeys.has(dedupKey)) {
+          resolver.warnedKeys.add(dedupKey)
+          console.warn(
+            `[noy-db] ScanBuilder.join() encountered dangling ref in ` +
+              `'warn' mode: field "${leg.field}" → "${leg.target}:` +
+              `${refKey}" not found. Attaching null.`,
+          )
+        }
+      }
+      // strict already threw above; warn falls through here; cascade
+      // hits this path silently.
+      merged[leg.as] = null
+    } else {
+      merged[leg.as] = right
+    }
+    return merged
   }
 
   /**
@@ -245,4 +587,23 @@ export class ScanBuilder<T> implements AsyncIterable<T> {
     }
     return true
   }
+}
+
+/**
+ * Coerce an unknown FK value into a lookup key string.
+ *
+ * Mirror of the same helper in `query/join.ts` — kept local to
+ * `scan-builder.ts` to avoid pulling the eager join executor's
+ * surface area into this file. Strings and numbers convert to
+ * string keys; everything else (objects, arrays, booleans, null,
+ * undefined) returns null and is treated as "no ref at all".
+ *
+ * Matches the write-time `enforceRefsOnPut` policy: nullish ref
+ * values are never dangling, regardless of mode.
+ */
+function coerceRefKey(value: unknown): string | null {
+  if (value === null || value === undefined) return null
+  if (typeof value === 'string') return value
+  if (typeof value === 'number' || typeof value === 'bigint') return String(value)
+  return null
 }
