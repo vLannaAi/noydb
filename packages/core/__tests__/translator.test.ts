@@ -7,13 +7,13 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import type { NoydbAdapter, EncryptedEnvelope, CompartmentSnapshot } from '../src/types.js'
+import type { NoydbStore, EncryptedEnvelope, CompartmentSnapshot } from '../src/types.js'
 import { ConflictError } from '../src/errors.js'
 import { createNoydb } from '../src/noydb.js'
 import { i18nText } from '../src/i18n.js'
 import { TranslatorNotConfiguredError } from '../src/errors.js'
 
-function memory(): NoydbAdapter {
+function memory(): NoydbStore {
   const store = new Map<string, Map<string, Map<string, EncryptedEnvelope>>>()
   function getCollection(c: string, col: string) {
     let comp = store.get(c)
@@ -53,7 +53,7 @@ interface LineItem {
 async function makeDb(translator?: (ctx: { text: string; from: string; to: string; field: string; collection: string }) => Promise<string>, translatorName?: string) {
   const adapter = memory()
   return createNoydb({
-    adapter,
+    store: adapter,
     user: 'alice',
     encrypt: false,
     plaintextTranslator: translator,

@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { createNoydb } from '../src/noydb.js'
 import type { Noydb } from '../src/noydb.js'
-import type { NoydbAdapter, EncryptedEnvelope, CompartmentSnapshot } from '../src/types.js'
+import type { NoydbStore, EncryptedEnvelope, CompartmentSnapshot } from '../src/types.js'
 import { ConflictError } from '../src/errors.js'
 import { Query } from '../src/query/index.js'
 
 /** Inline memory adapter — same pattern as integration.test.ts. */
-function memory(): NoydbAdapter {
+function memory(): NoydbStore {
   const store = new Map<string, Map<string, Map<string, EncryptedEnvelope>>>()
   function getCollection(c: string, col: string) {
     let comp = store.get(c)
@@ -68,7 +68,7 @@ describe('Collection.query() — integration with crypto + adapter', () => {
 
   beforeEach(async () => {
     db = await createNoydb({
-      adapter: memory(),
+      store: memory(),
       user: 'owner',
       secret: 'integration-test-passphrase-2026',
     })

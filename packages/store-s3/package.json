@@ -1,14 +1,14 @@
 {
-  "name": "@noy-db/file",
-  "version": "0.9.0",
-  "description": "JSON file adapter for noy-db — encrypted document store on local disk, USB sticks, or network drives",
+  "name": "@noy-db/store-s3",
+  "version": "0.10.0",
+  "description": "AWS S3 adapter for noy-db — encrypted object storage with zero-knowledge cloud sync",
   "license": "MIT",
   "author": "vLannaAi <vicio@lanna.ai>",
-  "homepage": "https://github.com/vLannaAi/noy-db/tree/main/packages/file#readme",
+  "homepage": "https://github.com/vLannaAi/noy-db/tree/main/packages/s3#readme",
   "repository": {
     "type": "git",
     "url": "https://github.com/vLannaAi/noy-db.git",
-    "directory": "packages/file"
+    "directory": "packages/s3"
   },
   "bugs": {
     "url": "https://github.com/vLannaAi/noy-db/issues"
@@ -45,23 +45,21 @@
     "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {
-    "@noy-db/core": "workspace:*"
+    "@noy-db/core": "workspace:*",
+    "@aws-sdk/client-s3": "^3.0.0"
   },
   "devDependencies": {
     "@noy-db/core": "workspace:*",
-    "@noy-db/test-adapter-conformance": "workspace:*",
-    "@types/node": "^22.0.0"
+    "@aws-sdk/client-s3": "^3.0.0"
   },
   "keywords": [
     "noy-db",
     "adapter",
-    "file",
-    "json",
-    "filesystem",
-    "local-disk",
-    "usb",
-    "storage",
+    "s3",
+    "aws",
+    "object-storage",
+    "cloud",
     "encryption",
-    "offline-first"
+    "zero-knowledge"
   ]
 }

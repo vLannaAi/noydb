@@ -2,14 +2,14 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { createApp } from 'vue'
 import { createPinia, defineStore, setActivePinia, type Pinia } from 'pinia'
 import { createNoydbPiniaPlugin } from '../src/plugin.js'
-import { type NoydbAdapter, type EncryptedEnvelope, type CompartmentSnapshot, ConflictError } from '@noy-db/core'
+import { type NoydbStore, type EncryptedEnvelope, type CompartmentSnapshot, ConflictError } from '@noy-db/core'
 
 /**
  * Inline memory adapter — same pattern as the integration tests in
  * @noy-db/core. Kept here so the pinia package has zero workspace
  * dependency on @noy-db/memory at test time.
  */
-function memory(): NoydbAdapter {
+function memory(): NoydbStore {
   const store = new Map<string, Map<string, Map<string, EncryptedEnvelope>>>()
   function getCollection(c: string, col: string): Map<string, EncryptedEnvelope> {
     let comp = store.get(c)
@@ -71,11 +71,9 @@ interface ClientsState {
  * setActivePinia() is called. Without the app context, plugins are silently
  * skipped, which is the most common gotcha when testing Pinia plugins.
  */
-function makePinia(adapter: NoydbAdapter = memory(), secret: () => string = () => 'plugin-test-passphrase-2026'): Pinia {
+function makePinia(adapter: NoydbStore = memory(), secret: () => string = () => 'plugin-test-passphrase-2026'): Pinia {
   const pinia = createPinia()
-  pinia.use(createNoydbPiniaPlugin({
-    adapter,
-    user: 'owner',
+  pinia.use(createNoydbPiniaPlugin({ adapter, user: 'owner',
     secret,
   }))
   const app = createApp({ render: () => null })
@@ -256,9 +254,7 @@ describe('createNoydbPiniaPlugin — augmentation path', () => {
     const adapter = memory()
     let secretCalls = 0
     const pinia = createPinia()
-    pinia.use(createNoydbPiniaPlugin({
-      adapter,
-      user: 'owner',
+    pinia.use(createNoydbPiniaPlugin({ adapter, user: 'owner',
       secret: () => {
         secretCalls++
         return 'shared-secret-2026'
@@ -408,7 +404,7 @@ describe('createNoydbPiniaPlugin — augmentation path', () => {
 
   it('14. surfaces hydration errors via $noydbError without throwing', async () => {
     // Adapter that throws on get() to simulate corrupted storage.
-    const brokenAdapter: NoydbAdapter = {
+    const brokenAdapter: NoydbStore = {
       ...memory(),
       name: 'broken',
       async get() {

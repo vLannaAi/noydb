@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import type { NoydbAdapter, EncryptedEnvelope, CompartmentSnapshot } from '../src/types.js'
+import type { NoydbStore, EncryptedEnvelope, CompartmentSnapshot } from '../src/types.js'
 import { ConflictError } from '../src/errors.js'
 import {
   createOwnerKeyring,
@@ -13,7 +13,7 @@ import {
 } from '../src/keyring.js'
 import { encrypt, decrypt } from '../src/crypto.js'
 
-function inlineMemory(): NoydbAdapter {
+function inlineMemory(): NoydbStore {
   const store = new Map<string, Map<string, Map<string, EncryptedEnvelope>>>()
   function gc(c: string, col: string) {
     let comp = store.get(c); if (!comp) { comp = new Map(); store.set(c, comp) }
@@ -41,7 +41,7 @@ function inlineMemory(): NoydbAdapter {
 }
 
 describe('keyring', () => {
-  let adapter: NoydbAdapter
+  let adapter: NoydbStore
   const COMP = 'C101'
 
   beforeEach(() => {

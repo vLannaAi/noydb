@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { runAdapterConformanceTests } from '@noy-db/test-adapter-conformance'
+import { runStoreConformanceTests } from '@noy-db/test-adapter-conformance'
 import { browser } from '../src/index.js'
 
 // ─── Full conformance suite with obfuscation ───────────────────────────
 
-runAdapterConformanceTests(
+runStoreConformanceTests(
   'browser (localStorage + obfuscate)',
   async () => {
     localStorage.clear()

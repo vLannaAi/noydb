@@ -1,12 +1,12 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { runAdapterConformanceTests } from '@noy-db/test-adapter-conformance'
+import { runStoreConformanceTests } from '@noy-db/test-adapter-conformance'
 import { jsonFile } from '../src/index.js'
 
 let dirs: string[] = []
 
-runAdapterConformanceTests(
+runStoreConformanceTests(
   'jsonFile',
   async () => {
     const dir = await mkdtemp(join(tmpdir(), 'noydb-test-'))

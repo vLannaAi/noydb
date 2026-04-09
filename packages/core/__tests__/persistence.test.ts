@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import type { NoydbAdapter, EncryptedEnvelope, CompartmentSnapshot } from '../src/types.js'
+import type { NoydbStore, EncryptedEnvelope, CompartmentSnapshot } from '../src/types.js'
 import { ConflictError, InvalidKeyError } from '../src/errors.js'
 import { createNoydb } from '../src/noydb.js'
 
 /** Shared memory adapter — persists across createNoydb calls. */
-function persistentMemory(): NoydbAdapter {
+function persistentMemory(): NoydbStore {
   const store = new Map<string, Map<string, Map<string, EncryptedEnvelope>>>()
   function gc(c: string, col: string) {
     let comp = store.get(c); if (!comp) { comp = new Map(); store.set(c, comp) }
@@ -42,14 +42,14 @@ describe('persistence round-trip (simulated page reload)', () => {
     const adapter = persistentMemory()
 
     // Session 1: create and write
-    const db1 = await createNoydb({ adapter, user: USER, secret: PASS })
+    const db1 = await createNoydb({ store: adapter, user: USER, secret: PASS })
     const comp1 = await db1.openCompartment(COMP)
     await comp1.collection<Invoice>('invoices').put('inv-1', { amount: 5000, status: 'draft' })
     await comp1.collection<Invoice>('invoices').put('inv-2', { amount: 3000, status: 'paid' })
     db1.close()
 
     // Session 2: reopen with same credentials (simulates page reload)
-    const db2 = await createNoydb({ adapter, user: USER, secret: PASS })
+    const db2 = await createNoydb({ store: adapter, user: USER, secret: PASS })
     const comp2 = await db2.openCompartment(COMP)
     const inv1 = await comp2.collection<Invoice>('invoices').get('inv-1')
     const inv2 = await comp2.collection<Invoice>('invoices').get('inv-2')
@@ -63,13 +63,13 @@ describe('persistence round-trip (simulated page reload)', () => {
     const adapter = persistentMemory()
 
     // Session 1: create keyring + add DEK via collection use
-    const db1 = await createNoydb({ adapter, user: USER, secret: PASS })
+    const db1 = await createNoydb({ store: adapter, user: USER, secret: PASS })
     const comp1 = await db1.openCompartment(COMP)
     await comp1.collection<Invoice>('invoices').put('inv-1', { amount: 100, status: 'x' })
     db1.close()
 
     // Session 2: wrong passphrase — must throw, NOT silently create new keyring
-    const db2 = await createNoydb({ adapter, user: USER, secret: 'wrong-passphrase' })
+    const db2 = await createNoydb({ store: adapter, user: USER, secret: 'wrong-passphrase' })
     await expect(db2.openCompartment(COMP)).rejects.toThrow(InvalidKeyError)
     db2.close()
   })
@@ -78,19 +78,19 @@ describe('persistence round-trip (simulated page reload)', () => {
     const adapter = persistentMemory()
 
     // Session 1: create and write
-    const db1 = await createNoydb({ adapter, user: USER, secret: PASS })
+    const db1 = await createNoydb({ store: adapter, user: USER, secret: PASS })
     const comp1 = await db1.openCompartment(COMP)
     await comp1.collection<Invoice>('invoices').put('inv-1', { amount: 7000, status: 'sent' })
     await db1.changeSecret(COMP, 'new-passphrase')
     db1.close()
 
     // Session 2: old passphrase fails
-    const db2 = await createNoydb({ adapter, user: USER, secret: PASS })
+    const db2 = await createNoydb({ store: adapter, user: USER, secret: PASS })
     await expect(db2.openCompartment(COMP)).rejects.toThrow()
     db2.close()
 
     // Session 3: new passphrase works and data is intact
-    const db3 = await createNoydb({ adapter, user: USER, secret: 'new-passphrase' })
+    const db3 = await createNoydb({ store: adapter, user: USER, secret: 'new-passphrase' })
     const comp3 = await db3.openCompartment(COMP)
     const inv = await comp3.collection<Invoice>('invoices').get('inv-1')
     expect(inv).toEqual({ amount: 7000, status: 'sent' })
@@ -101,7 +101,7 @@ describe('persistence round-trip (simulated page reload)', () => {
     const adapter = persistentMemory()
 
     // Session 1
-    const db1 = await createNoydb({ adapter, user: USER, secret: PASS })
+    const db1 = await createNoydb({ store: adapter, user: USER, secret: PASS })
     const comp1 = await db1.openCompartment(COMP)
     const invoices1 = comp1.collection<Invoice>('invoices')
     await invoices1.put('inv-1', { amount: 100, status: 'a' })
@@ -111,7 +111,7 @@ describe('persistence round-trip (simulated page reload)', () => {
     db1.close()
 
     // Session 2: fresh instance must reflect the delete
-    const db2 = await createNoydb({ adapter, user: USER, secret: PASS })
+    const db2 = await createNoydb({ store: adapter, user: USER, secret: PASS })
     const comp2 = await db2.openCompartment(COMP)
     const invoices2 = comp2.collection<Invoice>('invoices')
     const count = await invoices2.count()
@@ -124,14 +124,14 @@ describe('persistence round-trip (simulated page reload)', () => {
 
   it('query() before await returns empty (documents sync cache dependency)', async () => {
     const adapter = persistentMemory()
-    const db = await createNoydb({ adapter, user: USER, secret: PASS })
+    const db = await createNoydb({ store: adapter, user: USER, secret: PASS })
     const comp = await db.openCompartment(COMP)
     const invoices = comp.collection<Invoice>('invoices')
     await invoices.put('inv-1', { amount: 100, status: 'a' })
     db.close()
 
     // Fresh collection on same adapter — query before any await
-    const db2 = await createNoydb({ adapter, user: USER, secret: PASS })
+    const db2 = await createNoydb({ store: adapter, user: USER, secret: PASS })
     const comp2 = await db2.openCompartment(COMP)
     const freshInvoices = comp2.collection<Invoice>('invoices')
     const syncResult = freshInvoices.query(() => true)

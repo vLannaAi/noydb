@@ -7,13 +7,13 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import type { NoydbAdapter, EncryptedEnvelope, CompartmentSnapshot } from '../src/types.js'
+import type { NoydbStore, EncryptedEnvelope, CompartmentSnapshot } from '../src/types.js'
 import { ConflictError } from '../src/errors.js'
 import { createNoydb } from '../src/noydb.js'
 import { dictKey } from '../src/dictionary.js'
 import { sum, count } from '../src/query/index.js'
 
-function memory(): NoydbAdapter {
+function memory(): NoydbStore {
   const store = new Map<string, Map<string, Map<string, EncryptedEnvelope>>>()
   function getCollection(c: string, col: string) {
     let comp = store.get(c)
@@ -52,7 +52,7 @@ interface Invoice {
 
 async function setup() {
   const adapter = memory()
-  const db = await createNoydb({ adapter, user: 'alice', encrypt: false })
+  const db = await createNoydb({ store: adapter, user: 'alice', encrypt: false })
   const company = await db.openCompartment('company')
 
   const statusDict = company.dictionary('status')

@@ -1,8 +1,8 @@
-import { runAdapterConformanceTests } from '@noy-db/test-adapter-conformance'
+import { runStoreConformanceTests } from '@noy-db/test-adapter-conformance'
 import { browser } from '../src/index.js'
 
 // Run conformance suite against localStorage backend
-runAdapterConformanceTests(
+runStoreConformanceTests(
   'browser (localStorage)',
   async () => {
     // Clear localStorage before each test factory call

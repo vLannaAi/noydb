@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { setActivePinia, createPinia, storeToRefs } from 'pinia'
-import { createNoydb, type Noydb, type NoydbAdapter, type EncryptedEnvelope, type CompartmentSnapshot, type StandardSchemaV1, ConflictError, Query } from '@noy-db/core'
+import { createNoydb, type Noydb, type NoydbStore, type EncryptedEnvelope, type CompartmentSnapshot, type StandardSchemaV1, ConflictError, Query } from '@noy-db/core'
 import { defineNoydbStore, setActiveNoydb } from '../src/index.js'
 
 /** Inline memory adapter — same pattern as @noy-db/core integration tests. */
-function memory(): NoydbAdapter {
+function memory(): NoydbStore {
   const store = new Map<string, Map<string, Map<string, EncryptedEnvelope>>>()
   function getCollection(c: string, col: string) {
     let comp = store.get(c)
@@ -62,7 +62,7 @@ interface Invoice {
 
 async function makeNoydb(): Promise<Noydb> {
   return createNoydb({
-    adapter: memory(),
+    store: memory(),
     user: 'owner',
     secret: 'pinia-test-passphrase-2026',
   })

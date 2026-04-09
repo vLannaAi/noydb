@@ -12,14 +12,14 @@ import {
   SYNC_CREDENTIALS_COLLECTION,
 } from '../src/sync-credentials.js'
 import { PermissionDeniedError } from '../src/errors.js'
-import type { NoydbAdapter, EncryptedEnvelope, CompartmentSnapshot } from '../src/types.js'
+import type { NoydbStore, EncryptedEnvelope, CompartmentSnapshot } from '../src/types.js'
 import type { UnlockedKeyring } from '../src/keyring.js'
 import { createOwnerKeyring, grant } from '../src/keyring.js'
 import { ConflictError } from '../src/errors.js'
 
 // ─── Inline memory adapter ─────────────────────────────────────────────────
 
-function memory(): NoydbAdapter {
+function memory(): NoydbStore {
   const store = new Map<string, Map<string, Map<string, EncryptedEnvelope>>>()
   function getCollection(c: string, col: string) {
     let comp = store.get(c)
@@ -62,7 +62,7 @@ function memory(): NoydbAdapter {
 
 const COMPARTMENT = 'test-compartment'
 
-let adapter: NoydbAdapter
+let adapter: NoydbStore
 let ownerKeyring: UnlockedKeyring
 
 beforeEach(async () => {

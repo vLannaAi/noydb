@@ -25,7 +25,7 @@ import os from 'node:os'
 import path from 'node:path'
 import {
   createNoydb as realCreateNoydb,
-  type NoydbAdapter,
+  type NoydbStore,
   type EncryptedEnvelope,
   type CompartmentSnapshot,
   ConflictError,
@@ -38,7 +38,7 @@ import type { ReadPassphrase } from '../src/commands/shared.js'
 
 // ─── Shared in-memory adapter (same shape as other test files) ──────
 
-function memory(): NoydbAdapter {
+function memory(): NoydbStore {
   const store = new Map<string, Map<string, Map<string, EncryptedEnvelope>>>()
   function getCollection(c: string, col: string) {
     let comp = store.get(c)
@@ -125,8 +125,8 @@ function sharedAdapter() {
 // ─── Test setup — pre-populate a compartment with data ─────────────
 
 interface Fixture {
-  adapter: NoydbAdapter
-  buildAdapter: (dir: string) => NoydbAdapter
+  store: NoydbStore
+  buildAdapter: (dir: string) => NoydbStore
 }
 
 async function makeFixture(): Promise<Fixture> {
@@ -135,7 +135,7 @@ async function makeFixture(): Promise<Fixture> {
   // and a few records per collection. Every test starts from this
   // baseline.
   const db = await realCreateNoydb({
-    adapter,
+    store: adapter,
     user: 'owner-alice',
     secret: 'alice-pass-1234',
   })
@@ -193,7 +193,7 @@ describe('noy-db rotate — #38', () => {
     })
     // Reconnect via a fresh Noydb against the same (rotated) adapter.
     const db = await realCreateNoydb({
-      adapter: fx.adapter,
+      store: fx.adapter,
       user: 'owner-alice',
       secret: 'alice-pass-1234',
     })
@@ -256,7 +256,7 @@ describe('noy-db add user — #38', () => {
     // Try to open the compartment as Ann. If the grant succeeded,
     // this works with the new passphrase and NOT the old one.
     const annDb = await realCreateNoydb({
-      adapter: fx.adapter,
+      store: fx.adapter,
       user: 'ann',
       secret: 'ann-pass',
     })

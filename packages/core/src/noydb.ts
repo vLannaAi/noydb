@@ -17,7 +17,7 @@ import type {
   ReAuthOperation,
   TranslatorAuditEntry,
 } from './types.js'
-import { ValidationError, NoAccessError, InvalidKeyError, AdapterCapabilityError } from './errors.js'
+import { ValidationError, NoAccessError, InvalidKeyError, StoreCapabilityError } from './errors.js'
 import { Compartment } from './compartment.js'
 import { NoydbEventEmitter } from './events.js'
 import {
@@ -181,7 +181,7 @@ export class Noydb {
     let syncEngine: SyncEngine | undefined
     if (this.options.sync) {
       syncEngine = new SyncEngine({
-        local: this.options.adapter,
+        local: this.options.store,
         remote: this.options.sync,
         compartment: name,
         strategy: this.options.conflict ?? 'version',
@@ -191,7 +191,7 @@ export class Noydb {
     }
 
     comp = new Compartment({
-      adapter: this.options.adapter,
+      adapter: this.options.store,
       name,
       keyring,
       encrypted: this.options.encrypt !== false,
@@ -224,7 +224,7 @@ export class Noydb {
               // refreshed keyring too.
               this.keyringCache.delete(name)
               const refreshed = await loadKeyring(
-                this.options.adapter,
+                this.options.store,
                 name,
                 this.options.user,
                 this.options.secret as string,
@@ -247,7 +247,7 @@ export class Noydb {
     if (this.options.encrypt === false) {
       const keyring = createPlaintextKeyring(this.options.user)
       const comp = new Compartment({
-        adapter: this.options.adapter,
+        adapter: this.options.store,
         name,
         keyring,
         encrypted: false,
@@ -266,7 +266,7 @@ export class Noydb {
     }
 
     const comp = new Compartment({
-      adapter: this.options.adapter,
+      adapter: this.options.store,
       name,
       keyring,
       encrypted: true,
@@ -281,14 +281,14 @@ export class Noydb {
   async grant(compartment: string, options: GrantOptions): Promise<void> {
     this.checkPolicyOperation(compartment, 'grant')
     const keyring = await this.getKeyring(compartment)
-    await keyringGrant(this.options.adapter, compartment, keyring, options)
+    await keyringGrant(this.options.store, compartment, keyring, options)
   }
 
   /** Revoke a user's access to a compartment. */
   async revoke(compartment: string, options: RevokeOptions): Promise<void> {
     this.checkPolicyOperation(compartment, 'revoke')
     const keyring = await this.getKeyring(compartment)
-    await keyringRevoke(this.options.adapter, compartment, keyring, options)
+    await keyringRevoke(this.options.store, compartment, keyring, options)
   }
 
   /**
@@ -312,7 +312,7 @@ export class Noydb {
   async rotate(compartment: string, collections: string[]): Promise<void> {
     this.checkPolicyOperation(compartment, 'rotate')
     const keyring = await this.getKeyring(compartment)
-    await keyringRotate(this.options.adapter, compartment, keyring, collections)
+    await keyringRotate(this.options.store, compartment, keyring, collections)
     // Refresh the cached keyring so subsequent operations see the
     // freshly-rotated DEKs. Without this, `ensureCollectionDEK` on
     // the next Collection access would still hold the old ones.
@@ -321,7 +321,7 @@ export class Noydb {
 
   /** List all users with access to a compartment. */
   async listUsers(compartment: string): Promise<UserInfo[]> {
-    return keyringListUsers(this.options.adapter, compartment)
+    return keyringListUsers(this.options.store, compartment)
   }
 
   // ─── Cross-compartment queries (v0.5 #63) ──────────────────────
@@ -338,9 +338,9 @@ export class Noydb {
    * silently dropped from the result — the existence of those
    * compartments is **not** confirmed in the return value.
    *
-   * Requires the optional `NoydbAdapter.listCompartments()` capability.
-   * Throws `AdapterCapabilityError` against adapters that don't
-   * implement it (today: dynamo, s3, browser). For those backends the
+   * Requires the optional `NoydbStore.listCompartments()` capability.
+   * Throws `StoreCapabilityError` against stores that don't
+   * implement it (today: store-dynamo, store-s3, store-browser). For those backends the
    * consumer should either pass an explicit candidate list to
    * `queryAcross()` directly, or maintain a compartment index out of
    * band.
@@ -393,9 +393,9 @@ export class Noydb {
     if (this.closed) throw new ValidationError('Instance is closed')
     this.resetSessionTimer()
 
-    const adapter = this.options.adapter
+    const adapter = this.options.store
     if (typeof adapter.listCompartments !== 'function') {
-      throw new AdapterCapabilityError(
+      throw new StoreCapabilityError(
         'listCompartments',
         'Noydb.listAccessibleCompartments()',
         adapter.name,
@@ -571,7 +571,7 @@ export class Noydb {
     this.checkPolicyOperation(compartment, 'changeSecret')
     const keyring = await this.getKeyring(compartment)
     const updated = await keyringChangeSecret(
-      this.options.adapter,
+      this.options.store,
       compartment,
       keyring,
       newPassphrase,
@@ -742,12 +742,12 @@ export class Noydb {
 
     let keyring: UnlockedKeyring
     try {
-      keyring = await loadKeyring(this.options.adapter, compartment, this.options.user, this.options.secret)
+      keyring = await loadKeyring(this.options.store, compartment, this.options.user, this.options.secret)
     } catch (err) {
       // Only create a new keyring if no keyring exists (NoAccessError).
       // If the keyring exists but the passphrase is wrong (InvalidKeyError), propagate the error.
       if (err instanceof NoAccessError) {
-        keyring = await createOwnerKeyring(this.options.adapter, compartment, this.options.user, this.options.secret)
+        keyring = await createOwnerKeyring(this.options.store, compartment, this.options.user, this.options.secret)
       } else {
         throw err
       }

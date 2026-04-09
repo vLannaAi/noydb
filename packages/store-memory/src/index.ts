@@ -1,4 +1,4 @@
-import type { NoydbAdapter, EncryptedEnvelope, CompartmentSnapshot } from '@noy-db/core'
+import type { NoydbStore, EncryptedEnvelope, CompartmentSnapshot } from '@noy-db/core'
 import { ConflictError } from '@noy-db/core'
 
 /**
@@ -6,7 +6,7 @@ import { ConflictError } from '@noy-db/core'
  * No persistence — data is lost when the process exits.
  * Intended for testing and development.
  */
-export function memory(): NoydbAdapter {
+export function memory(): NoydbStore {
   // compartment -> collection -> id -> envelope
   const store = new Map<string, Map<string, Map<string, EncryptedEnvelope>>>()
 

@@ -1,5 +1,5 @@
 import type {
-  NoydbAdapter,
+  NoydbStore,
   EncryptedEnvelope,
   CompartmentBackup,
   CompartmentSnapshot,
@@ -43,7 +43,7 @@ import { ReservedCollectionNameError } from './errors.js'
 
 /** A compartment (tenant namespace) containing collections. */
 export class Compartment {
-  private readonly adapter: NoydbAdapter
+  private readonly adapter: NoydbStore
   private readonly name: string
   /**
    * The active in-memory keyring. NOT readonly because `load()`
@@ -57,7 +57,7 @@ export class Compartment {
   private readonly emitter: NoydbEventEmitter
   private readonly onDirty: OnDirtyCallback | undefined
   private readonly onRegisterConflictResolver: ((name: string, resolver: CollectionConflictResolver) => void) | undefined
-  private readonly syncAdapter: NoydbAdapter | undefined
+  private readonly syncAdapter: NoydbStore | undefined
   private readonly historyConfig: HistoryConfig
   private getDEK: (collectionName: string) => Promise<CryptoKey>
 
@@ -153,7 +153,7 @@ export class Compartment {
     | undefined
 
   constructor(opts: {
-    adapter: NoydbAdapter
+    adapter: NoydbStore
     name: string
     keyring: UnlockedKeyring
     encrypted: boolean
@@ -173,7 +173,7 @@ export class Compartment {
      */
     onRegisterConflictResolver?: ((name: string, resolver: CollectionConflictResolver) => void) | undefined
     /** v0.9 #134 — optional remote/sync adapter for presence broadcasting. */
-    syncAdapter?: NoydbAdapter | undefined
+    syncAdapter?: NoydbStore | undefined
   }) {
     this.adapter = opts.adapter
     this.name = opts.name

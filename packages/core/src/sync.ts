@@ -1,5 +1,5 @@
 import type {
-  NoydbAdapter,
+  NoydbStore,
   DirtyEntry,
   Conflict,
   ConflictStrategy,
@@ -18,8 +18,8 @@ import type { NoydbEventEmitter } from './events.js'
 
 /** Sync engine: dirty tracking, push, pull, conflict resolution. */
 export class SyncEngine {
-  private readonly local: NoydbAdapter
-  private readonly remote: NoydbAdapter
+  private readonly local: NoydbStore
+  private readonly remote: NoydbStore
   private readonly strategy: ConflictStrategy
   private readonly emitter: NoydbEventEmitter
   private readonly compartment: string
@@ -35,8 +35,8 @@ export class SyncEngine {
   private readonly conflictResolvers = new Map<string, CollectionConflictResolver>()
 
   constructor(opts: {
-    local: NoydbAdapter
-    remote: NoydbAdapter
+    local: NoydbStore
+    remote: NoydbStore
     compartment: string
     strategy: ConflictStrategy
     emitter: NoydbEventEmitter

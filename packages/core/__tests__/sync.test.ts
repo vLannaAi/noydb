@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import type { NoydbAdapter, EncryptedEnvelope, CompartmentSnapshot, PushResult, PullResult, Conflict } from '../src/types.js'
+import type { NoydbStore, EncryptedEnvelope, CompartmentSnapshot, PushResult, PullResult, Conflict } from '../src/types.js'
 import { ConflictError } from '../src/errors.js'
 import { createNoydb } from '../src/noydb.js'
 import type { Noydb } from '../src/noydb.js'
 
-function inlineMemory(): NoydbAdapter {
+function inlineMemory(): NoydbStore {
   const store = new Map<string, Map<string, Map<string, EncryptedEnvelope>>>()
   function gc(c: string, col: string) {
     let comp = store.get(c); if (!comp) { comp = new Map(); store.set(c, comp) }
@@ -37,9 +37,9 @@ describe('sync engine', () => {
   const COMP = 'C101'
 
   describe('two-instance sync (unencrypted)', () => {
-    let localA: NoydbAdapter
-    let localB: NoydbAdapter
-    let remote: NoydbAdapter
+    let localA: NoydbStore
+    let localB: NoydbStore
+    let remote: NoydbStore
     let dbA: Noydb
     let dbB: Noydb
 
@@ -48,8 +48,8 @@ describe('sync engine', () => {
       localB = inlineMemory()
       remote = inlineMemory()
 
-      dbA = await createNoydb({ adapter: localA, sync: remote, user: 'user-a', encrypt: false })
-      dbB = await createNoydb({ adapter: localB, sync: remote, user: 'user-b', encrypt: false })
+      dbA = await createNoydb({ store: localA, sync: remote, user: 'user-a', encrypt: false })
+      dbB = await createNoydb({ store: localB, sync: remote, user: 'user-b', encrypt: false })
     })
 
     it('A writes, pushes; B pulls, sees the record', async () => {
@@ -157,14 +157,14 @@ describe('sync engine', () => {
     })
 
     it('syncStatus returns correct state when no sync configured', async () => {
-      const noSyncDb = await createNoydb({ adapter: inlineMemory(), user: 'u', encrypt: false })
+      const noSyncDb = await createNoydb({ store: inlineMemory(), user: 'u', encrypt: false })
       const status = noSyncDb.syncStatus('any')
       expect(status.dirty).toBe(0)
       expect(status.online).toBe(true)
     })
 
     it('push without sync adapter throws', async () => {
-      const noSyncDb = await createNoydb({ adapter: inlineMemory(), user: 'u', encrypt: false })
+      const noSyncDb = await createNoydb({ store: inlineMemory(), user: 'u', encrypt: false })
       await expect(noSyncDb.push('any')).rejects.toThrow('No sync adapter')
     })
   })
@@ -182,7 +182,7 @@ describe('sync engine', () => {
       await localAdapter.put(COMP, 'invoices', 'inv-1', localEnv)
 
       const db = await createNoydb({
-        adapter: localAdapter, sync: remoteAdapter, user: 'u', encrypt: false,
+        store: localAdapter, sync: remoteAdapter, user: 'u', encrypt: false,
         conflict: 'version',
       })
       const comp = await db.openCompartment(COMP)
@@ -199,7 +199,7 @@ describe('sync engine', () => {
       const remote = inlineMemory()
 
       const db = await createNoydb({
-        adapter: local, sync: remote, user: 'u', encrypt: false,
+        store: local, sync: remote, user: 'u', encrypt: false,
         conflict: 'local-wins',
       })
 
@@ -226,7 +226,7 @@ describe('sync engine', () => {
       const remote = inlineMemory()
 
       const db = await createNoydb({
-        adapter: local, sync: remote, user: 'u', encrypt: false,
+        store: local, sync: remote, user: 'u', encrypt: false,
         conflict: 'remote-wins',
       })
 
@@ -250,7 +250,7 @@ describe('sync engine', () => {
       const conflictsSeen: Conflict[] = []
 
       const db = await createNoydb({
-        adapter: local, sync: remote, user: 'u', encrypt: false,
+        store: local, sync: remote, user: 'u', encrypt: false,
         conflict: (conflict) => {
           conflictsSeen.push(conflict)
           return 'remote'

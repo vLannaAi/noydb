@@ -27,7 +27,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { createNoydb } from '../src/noydb.js'
 import type { Noydb } from '../src/noydb.js'
-import type { NoydbAdapter, EncryptedEnvelope, CompartmentSnapshot } from '../src/types.js'
+import type { NoydbStore, EncryptedEnvelope, CompartmentSnapshot } from '../src/types.js'
 import { ConflictError } from '../src/errors.js'
 import {
   canonicalJson,
@@ -39,7 +39,7 @@ import {
 
 // ─── Inline memory adapter (unchanged from other test files) ─────────
 
-function memory(): NoydbAdapter {
+function memory(): NoydbStore {
   const store = new Map<string, Map<string, Map<string, EncryptedEnvelope>>>()
   function getCollection(c: string, col: string) {
     let comp = store.get(c)
@@ -178,7 +178,7 @@ describe('LedgerStore via Compartment.ledger() — #43', () => {
 
   beforeEach(async () => {
     db = await createNoydb({
-      adapter: memory(),
+      store: memory(),
       user: 'alice',
       secret: 'test-passphrase-1234',
     })
@@ -294,7 +294,7 @@ describe('LedgerStore via Compartment.ledger() — #43', () => {
   it('detects mid-chain tampering via verify()', async () => {
     const adapter = memory()
     const tamperDb = await createNoydb({
-      adapter,
+      store: adapter,
       user: 'alice',
       secret: 'test-passphrase-1234',
     })
@@ -356,7 +356,7 @@ describe('LedgerStore via Compartment.ledger() — #43', () => {
     // ledger DEK.
     const adapter = memory()
     const tamperDb = await createNoydb({
-      adapter,
+      store: adapter,
       user: 'alice',
       secret: 'test-passphrase-1234',
     })
@@ -416,7 +416,7 @@ describe('LedgerStore via Compartment.ledger() — #43', () => {
     // up the correct head. This is the "process restart" scenario.
     const adapter = memory()
     const db1 = await createNoydb({
-      adapter,
+      store: adapter,
       user: 'alice',
       secret: 'test-passphrase-1234',
     })
@@ -426,7 +426,7 @@ describe('LedgerStore via Compartment.ledger() — #43', () => {
 
     // "Restart" — open a fresh Noydb against the same adapter.
     const db2 = await createNoydb({
-      adapter,
+      store: adapter,
       user: 'alice',
       secret: 'test-passphrase-1234',
     })

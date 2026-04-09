@@ -44,7 +44,7 @@
  * puts via `collection('_ledger')` would bypass the `append()` logic.
  */
 
-import type { NoydbAdapter, EncryptedEnvelope } from '../types.js'
+import type { NoydbStore, EncryptedEnvelope } from '../types.js'
 import { NOYDB_FORMAT_VERSION } from '../types.js'
 import { encrypt, decrypt } from '../crypto.js'
 import {
@@ -135,7 +135,7 @@ export type VerifyResult =
  * ledger on every head() / verify() call; acceptable at v0.4 scale).
  */
 export class LedgerStore {
-  private readonly adapter: NoydbAdapter
+  private readonly adapter: NoydbStore
   private readonly compartment: string
   private readonly encrypted: boolean
   private readonly getDEK: (collectionName: string) => Promise<CryptoKey>
@@ -164,7 +164,7 @@ export class LedgerStore {
   private headCache: { entry: LedgerEntry; hash: string } | null | undefined = undefined
 
   constructor(opts: {
-    adapter: NoydbAdapter
+    adapter: NoydbStore
     compartment: string
     encrypted: boolean
     getDEK: (collectionName: string) => Promise<CryptoKey>

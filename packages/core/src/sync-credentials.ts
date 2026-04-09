@@ -37,7 +37,7 @@
  * against the caller's keyring role at call time.
  */
 
-import type { NoydbAdapter, EncryptedEnvelope } from './types.js'
+import type { NoydbStore, EncryptedEnvelope } from './types.js'
 import { NOYDB_FORMAT_VERSION } from './types.js'
 import type { UnlockedKeyring } from './keyring.js'
 import { encrypt, decrypt } from './crypto.js'
@@ -94,7 +94,7 @@ function requireAdminAccess(keyring: UnlockedKeyring): void {
  * Requires owner or admin role.
  */
 export async function putCredential(
-  adapter: NoydbAdapter,
+  adapter: NoydbStore,
   compartment: string,
   keyring: UnlockedKeyring,
   credential: SyncCredential,
@@ -134,7 +134,7 @@ export async function putCredential(
  * Requires owner or admin role.
  */
 export async function getCredential(
-  adapter: NoydbAdapter,
+  adapter: NoydbStore,
   compartment: string,
   keyring: UnlockedKeyring,
   adapterId: string,
@@ -157,7 +157,7 @@ export async function getCredential(
  * No-op if the credential doesn't exist. Requires owner or admin role.
  */
 export async function deleteCredential(
-  adapter: NoydbAdapter,
+  adapter: NoydbStore,
   compartment: string,
   keyring: UnlockedKeyring,
   adapterId: string,
@@ -174,7 +174,7 @@ export async function deleteCredential(
  * Requires owner or admin role.
  */
 export async function listCredentials(
-  adapter: NoydbAdapter,
+  adapter: NoydbStore,
   compartment: string,
   keyring: UnlockedKeyring,
 ): Promise<string[]> {
@@ -190,7 +190,7 @@ export async function listCredentials(
  * Requires owner or admin role.
  */
 export async function credentialStatus(
-  adapter: NoydbAdapter,
+  adapter: NoydbStore,
   compartment: string,
   keyring: UnlockedKeyring,
   adapterId: string,

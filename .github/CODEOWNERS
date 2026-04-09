@@ -15,11 +15,11 @@
 /packages/core/                @vLannaAi
 
 # Adapters
-/packages/memory/              @vLannaAi
-/packages/file/                @vLannaAi
-/packages/dynamo/              @vLannaAi
-/packages/s3/                  @vLannaAi
-/packages/browser/             @vLannaAi
+/packages/store-memory/              @vLannaAi
+/packages/store-file/                @vLannaAi
+/packages/store-dynamo/              @vLannaAi
+/packages/store-s3/                  @vLannaAi
+/packages/store-browser/             @vLannaAi
 
 # Vue / Pinia / Nuxt — v0.3 surface
 /packages/vue/                 @vLannaAi

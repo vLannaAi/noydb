@@ -52,9 +52,9 @@ export interface ListPageResult {
   nextCursor: string | null
 }
 
-// ─── Adapter Interface ─────────────────────────────────────────────────
+// ─── Store Interface ───────────────────────────────────────────────────
 
-export interface NoydbAdapter {
+export interface NoydbStore {
   /**
    * Optional human-readable adapter name (e.g. 'memory', 'file', 'dynamo').
    * Used in diagnostic messages and the listPage fallback warning. Adapters
@@ -140,13 +140,13 @@ export interface NoydbAdapter {
   /**
    * Optional cross-compartment enumeration extension (v0.5 #63).
    *
-   * Returns the names of every top-level compartment the adapter
+   * Returns the names of every top-level compartment the store
    * currently stores. Used by `Noydb.listAccessibleCompartments()` to
    * enumerate the universe of compartments before filtering down to
    * the ones the calling principal can actually unwrap.
    *
    * **Why this is optional:** the storage shape of compartments
-   * differs across backends. Memory and file adapters store
+   * differs across backends. Memory and file stores store
    * compartments as top-level keys / directories and can enumerate
    * them in O(1) calls. DynamoDB stores everything in a single table
    * keyed by `(compartment#collection, id)` — enumerating compartments
@@ -155,36 +155,36 @@ export interface NoydbAdapter {
    * provisioned. S3 needs a prefix list (cheap if enabled, ACL-sensitive
    * otherwise). Browser localStorage can scan keys by prefix.
    *
-   * Adapters that cannot implement `listCompartments` cheaply or
-   * cleanly should omit it. Core surfaces an `AdapterCapabilityError`
+   * Stores that cannot implement `listCompartments` cheaply or
+   * cleanly should omit it. Core surfaces a `StoreCapabilityError`
    * with a clear message when a caller invokes
-   * `listAccessibleCompartments()` against an adapter that doesn't
+   * `listAccessibleCompartments()` against a store that doesn't
    * provide this method, so consumers know to either upgrade their
-   * adapter, provide a candidate list explicitly to `queryAcross()`,
+   * store, provide a candidate list explicitly to `queryAcross()`,
    * or fall back to maintaining the compartment index out of band.
    *
    * **Privacy note:** `listCompartments` returns *every* compartment
-   * the adapter has, not just the ones the caller can access. The
+   * the store has, not just the ones the caller can access. The
    * existence-leak filtering (returning only compartments whose
    * keyring the caller can unwrap) happens in core, not in the
-   * adapter. The adapter is trusted to know its own contents — that
+   * store. The store is trusted to know its own contents — that
    * is not a leak in the threat model. The leak the API guards
    * against is the *return value* of `listAccessibleCompartments()`
    * exposing existence to a downstream observer who only sees that
    * function's output.
    *
    * The 6-method core contract is unchanged — this is an additive
-   * extension discovered via `'listCompartments' in adapter`.
+   * extension discovered via `'listCompartments' in store`.
    */
   listCompartments?(): Promise<string[]>
 }
 
-// ─── Adapter Factory Helper ────────────────────────────────────────────
+// ─── Store Factory Helper ──────────────────────────────────────────────
 
-/** Type-safe helper for creating adapter factories. */
-export function defineAdapter<TOptions>(
-  factory: (options: TOptions) => NoydbAdapter,
-): (options: TOptions) => NoydbAdapter {
+/** Type-safe helper for creating store factories. */
+export function createStore<TOptions>(
+  factory: (options: TOptions) => NoydbStore,
+): (options: TOptions) => NoydbStore {
   return factory
 }
 
@@ -774,13 +774,41 @@ export interface PresencePeer<P> {
 // Re-exported from crdt.ts so consumers only need one import path.
 export type { CrdtMode, CrdtState, LwwMapState, RgaState, YjsState } from './crdt.js'
 
+// ─── Store Capabilities (v0.10 #141 #143) ─────────────────────────────
+
+export type StoreAuthKind =
+  | 'none'
+  | 'filesystem'
+  | 'api-key'
+  | 'iam'
+  | 'oauth'
+  | 'kerberos'
+  | 'browser-origin'
+
+export interface StoreAuth {
+  kind: StoreAuthKind | StoreAuthKind[]
+  required: boolean
+  flow: 'static' | 'oauth' | 'kerberos' | 'implicit'
+}
+
+export interface StoreCapabilities {
+  /**
+   * true — the store's expectedVersion check and write are atomic at the
+   * storage layer. Two concurrent puts with the same expectedVersion will
+   * produce exactly one success and one ConflictError.
+   * false — check and write are separate operations with a race window.
+   */
+  casAtomic: boolean
+  auth: StoreAuth
+}
+
 // ─── Factory Options ───────────────────────────────────────────────────
 
 export interface NoydbOptions {
-  /** Primary adapter (local storage). */
-  readonly adapter: NoydbAdapter
-  /** Optional remote adapter for sync. */
-  readonly sync?: NoydbAdapter
+  /** Primary store (local storage). */
+  readonly store: NoydbStore
+  /** Optional remote store for sync. */
+  readonly sync?: NoydbStore
   /** User identifier. */
   readonly user: string
   /** Passphrase for key derivation. Required unless encrypt is false. */

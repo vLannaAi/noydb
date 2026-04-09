@@ -17,7 +17,7 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
 import { createNoydb, type Noydb } from '../src/noydb.js'
 import type {
-  NoydbAdapter,
+  NoydbStore,
   EncryptedEnvelope,
   CompartmentSnapshot,
   ListPageResult,
@@ -27,7 +27,7 @@ import { ScanBuilder, count, sum, type ScanPageProvider, type JoinContext } from
 import { ref } from '../src/refs.js'
 
 /** Inline memory adapter — same shape as the existing integration tests. */
-function memory(): NoydbAdapter {
+function memory(): NoydbStore {
   const store = new Map<string, Map<string, Map<string, EncryptedEnvelope>>>()
   function getCollection(c: string, col: string): Map<string, EncryptedEnvelope> {
     let comp = store.get(c)
@@ -177,7 +177,7 @@ describe('Collection.scan().join() > strict mode (default)', () => {
 
   beforeEach(async () => {
     db = await createNoydb({
-      adapter: memory(),
+      store: memory(),
       user: 'owner',
       secret: 'scan-join-test-passphrase-2026',
     })
@@ -272,7 +272,7 @@ describe('Collection.scan().join() > ref-mode dispatch on dangling refs', () => 
 
   beforeEach(async () => {
     db = await createNoydb({
-      adapter: memory(),
+      store: memory(),
       user: 'owner',
       secret: 'scan-join-test-passphrase-2026',
     })
@@ -367,7 +367,7 @@ describe('Collection.scan().join().join() > multi-FK chaining', () => {
 
   beforeEach(async () => {
     db = await createNoydb({
-      adapter: memory(),
+      store: memory(),
       user: 'owner',
       secret: 'scan-join-test-passphrase-2026',
     })
@@ -420,7 +420,7 @@ describe('Collection.scan().join().aggregate() > joined streaming aggregation', 
 
   beforeEach(async () => {
     db = await createNoydb({
-      adapter: memory(),
+      store: memory(),
       user: 'owner',
       secret: 'scan-join-test-passphrase-2026',
     })
@@ -466,7 +466,7 @@ describe('Collection.scan() > backward compatibility unchanged', () => {
 
   beforeEach(async () => {
     db = await createNoydb({
-      adapter: memory(),
+      store: memory(),
       user: 'owner',
       secret: 'scan-join-test-passphrase-2026',
     })

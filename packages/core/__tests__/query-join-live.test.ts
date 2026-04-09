@@ -6,7 +6,7 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
 import { createNoydb, type Noydb } from '../src/noydb.js'
 import type {
-  NoydbAdapter,
+  NoydbStore,
   EncryptedEnvelope,
   CompartmentSnapshot,
 } from '../src/types.js'
@@ -14,7 +14,7 @@ import { ConflictError } from '../src/errors.js'
 import { resetJoinWarnings } from '../src/query/index.js'
 import { ref } from '../src/refs.js'
 
-function memory(): NoydbAdapter {
+function memory(): NoydbStore {
   const store = new Map<string, Map<string, Map<string, EncryptedEnvelope>>>()
   function getCollection(c: string, col: string): Map<string, EncryptedEnvelope> {
     let comp = store.get(c)
@@ -81,7 +81,7 @@ describe('Query.live() with .join() — v0.6 #74', () => {
 
   beforeEach(async () => {
     db = await createNoydb({
-      adapter: memory(),
+      store: memory(),
       user: 'owner',
       secret: 'live-join-test-passphrase-2026',
     })

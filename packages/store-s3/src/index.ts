@@ -1,4 +1,4 @@
-import type { NoydbAdapter, EncryptedEnvelope, CompartmentSnapshot } from '@noy-db/core'
+import type { NoydbStore, EncryptedEnvelope, CompartmentSnapshot } from '@noy-db/core'
 import { ConflictError } from '@noy-db/core'
 import {
   S3Client as AwsS3Client,
@@ -39,7 +39,7 @@ export interface S3Options {
  * Create an S3 adapter.
  * Key scheme: `{prefix}/{compartment}/{collection}/{id}.json`
  */
-export function s3(options: S3Options): NoydbAdapter {
+export function s3(options: S3Options): NoydbStore {
   const { bucket, prefix = '' } = options
 
   // Use the injected client if provided (tests, advanced consumers).

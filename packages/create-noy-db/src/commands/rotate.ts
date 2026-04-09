@@ -35,8 +35,8 @@
  * those injections to their real implementations.
  */
 
-import { createNoydb, type Noydb, type NoydbAdapter } from '@noy-db/core'
-import { jsonFile } from '@noy-db/file'
+import { createNoydb, type Noydb, type NoydbStore } from '@noy-db/core'
+import { jsonFile } from '@noy-db/store-file'
 import type { ReadPassphrase } from './shared.js'
 import { defaultReadPassphrase } from './shared.js'
 
@@ -66,7 +66,7 @@ export interface RotateOptions {
    * and gets `jsonFile`; tests pass one that returns the shared
    * in-memory adapter their fixture used.
    */
-  buildAdapter?: (dir: string) => NoydbAdapter
+  buildAdapter?: (dir: string) => NoydbStore
 }
 
 export interface RotateResult {
@@ -97,7 +97,7 @@ export async function rotate(options: RotateOptions): Promise<RotateResult> {
   let db: Noydb | null = null
   try {
     db = await createDb({
-      adapter: buildAdapter(options.dir),
+      store: buildAdapter(options.dir),
       user: options.user,
       secret,
     })

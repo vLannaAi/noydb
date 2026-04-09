@@ -22,7 +22,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { createNoydb } from '../src/noydb.js'
 import type { Noydb } from '../src/noydb.js'
 import type {
-  NoydbAdapter,
+  NoydbStore,
   EncryptedEnvelope,
   CompartmentSnapshot,
   ListPageResult,
@@ -43,7 +43,7 @@ import {
 import { validateBundleHeader, decodeBundleHeader, encodeBundleHeader } from '../src/bundle/format.js'
 
 /** Inline memory adapter — same shape as other integration tests. */
-function memory(): NoydbAdapter {
+function memory(): NoydbStore {
   const store = new Map<string, Map<string, Map<string, EncryptedEnvelope>>>()
   function getCollection(c: string, col: string): Map<string, EncryptedEnvelope> {
     let comp = store.get(c)
@@ -255,7 +255,7 @@ describe('bundle > round-trip with real compartment', () => {
 
   beforeEach(async () => {
     db = await createNoydb({
-      adapter: memory(),
+      store: memory(),
       user: 'owner',
       secret: 'bundle-test-passphrase-2026',
     })
@@ -402,7 +402,7 @@ describe('bundle > readNoydbBundleHeader (no decompression)', () => {
 
   beforeEach(async () => {
     db = await createNoydb({
-      adapter: memory(),
+      store: memory(),
       user: 'owner',
       secret: 'bundle-test-passphrase-2026',
     })
@@ -440,7 +440,7 @@ describe('bundle > integrity tampering', () => {
 
   beforeEach(async () => {
     db = await createNoydb({
-      adapter: memory(),
+      store: memory(),
       user: 'owner',
       secret: 'bundle-test-passphrase-2026',
     })
@@ -498,7 +498,7 @@ describe('bundle > handle stability across re-exports', () => {
 
   beforeEach(async () => {
     db = await createNoydb({
-      adapter: memory(),
+      store: memory(),
       user: 'owner',
       secret: 'bundle-test-passphrase-2026',
     })
@@ -535,7 +535,7 @@ describe('bundle > handle stability across re-exports', () => {
     // to both.
     const adapter = memory()
     const db1 = await createNoydb({
-      adapter,
+      store: adapter,
       user: 'owner',
       secret: 'bundle-test-passphrase-2026',
     })
@@ -544,7 +544,7 @@ describe('bundle > handle stability across re-exports', () => {
 
     // New noydb instance over the same adapter.
     const db2 = await createNoydb({
-      adapter,
+      store: adapter,
       user: 'owner',
       secret: 'bundle-test-passphrase-2026',
     })

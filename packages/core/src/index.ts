@@ -8,7 +8,7 @@ export type {
   Permissions,
   EncryptedEnvelope,
   CompartmentSnapshot,
-  NoydbAdapter,
+  NoydbStore,
   ListPageResult,
   KeyringFile,
   CompartmentBackup,
@@ -52,7 +52,13 @@ export {
   NOYDB_KEYRING_VERSION,
   NOYDB_BACKUP_VERSION,
   NOYDB_SYNC_VERSION,
-  defineAdapter,
+  createStore,
+} from './types.js'
+
+export type {
+  StoreAuthKind,
+  StoreAuth,
+  StoreCapabilities,
 } from './types.js'
 
 // Errors
@@ -65,7 +71,7 @@ export {
   ReadOnlyError,
   PermissionDeniedError,
   PrivilegeEscalationError,
-  AdapterCapabilityError,
+  StoreCapabilityError,
   ConflictError,
   NetworkError,
   NotFoundError,

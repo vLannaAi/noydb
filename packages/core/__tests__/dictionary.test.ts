@@ -15,7 +15,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { createNoydb } from '../src/noydb.js'
 import type { Noydb } from '../src/noydb.js'
-import type { NoydbAdapter, EncryptedEnvelope, CompartmentSnapshot } from '../src/types.js'
+import type { NoydbStore, EncryptedEnvelope, CompartmentSnapshot } from '../src/types.js'
 import { ConflictError } from '../src/errors.js'
 import {
   ReservedCollectionNameError,
@@ -26,7 +26,7 @@ import { dictKey } from '../src/dictionary.js'
 
 // ─── Inline memory adapter ─────────────────────────────────────────────
 
-function memory(): NoydbAdapter {
+function memory(): NoydbStore {
   const store = new Map<string, Map<string, Map<string, EncryptedEnvelope>>>()
   function getCollection(c: string, col: string) {
     let comp = store.get(c)
@@ -82,7 +82,7 @@ describe('DictionaryHandle — CRUD (#81)', () => {
 
   beforeEach(async () => {
     db = await createNoydb({
-      adapter: memory(),
+      store: memory(),
       user: 'alice',
       secret: 'test-passphrase-dict-1234',
     })
@@ -199,7 +199,7 @@ describe('DictionaryHandle.rename() (#81)', () => {
 
   beforeEach(async () => {
     db = await createNoydb({
-      adapter: memory(),
+      store: memory(),
       user: 'alice',
       secret: 'test-passphrase-dict-1234',
     })
@@ -251,7 +251,7 @@ describe('Reserved _dict_* name policy (#81)', () => {
 
   beforeEach(async () => {
     db = await createNoydb({
-      adapter: memory(),
+      store: memory(),
       user: 'alice',
       secret: 'test-passphrase-dict-1234',
     })
@@ -279,7 +279,7 @@ describe('dictKey — per-call locale reads (#81)', () => {
 
   beforeEach(async () => {
     db = await createNoydb({
-      adapter: memory(),
+      store: memory(),
       user: 'alice',
       secret: 'test-passphrase-dict-1234',
     })
@@ -408,7 +408,7 @@ describe('dictKey ACL — write permissions (#81)', () => {
     // Set up owner, then grant client access
     const adp = memory()
     const ownerDb = await createNoydb({
-      adapter: adp,
+      store: adp,
       user: 'owner',
       secret: 'test-passphrase-dict-1234',
     })
@@ -427,7 +427,7 @@ describe('dictKey ACL — write permissions (#81)', () => {
 
     // Client opens the same compartment
     const clientDb = await createNoydb({
-      adapter: adp,
+      store: adp,
       user: 'client',
       secret: 'client-passphrase-dict-1234',
     })
@@ -442,7 +442,7 @@ describe('dictKey ACL — write permissions (#81)', () => {
   it('allows operator write when writableBy is set to operator', async () => {
     const adp = memory()
     const ownerDb = await createNoydb({
-      adapter: adp,
+      store: adp,
       user: 'owner',
       secret: 'test-passphrase-dict-1234',
     })
@@ -459,7 +459,7 @@ describe('dictKey ACL — write permissions (#81)', () => {
     })
 
     const opDb = await createNoydb({
-      adapter: adp,
+      store: adp,
       user: 'op',
       secret: 'op-passphrase-dict-1234',
     })

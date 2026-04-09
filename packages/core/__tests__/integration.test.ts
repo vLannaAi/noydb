@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { createNoydb } from '../src/noydb.js'
 import type { Noydb } from '../src/noydb.js'
-import type { NoydbAdapter, EncryptedEnvelope, CompartmentSnapshot } from '../src/types.js'
+import type { NoydbStore, EncryptedEnvelope, CompartmentSnapshot } from '../src/types.js'
 import { ConflictError } from '../src/errors.js'
 
 /** Inline memory adapter to avoid circular workspace dependency. */
-function memory(): NoydbAdapter {
+function memory(): NoydbStore {
   const store = new Map<string, Map<string, Map<string, EncryptedEnvelope>>>()
   function getCollection(c: string, col: string) {
     let comp = store.get(c)
@@ -47,7 +47,7 @@ describe('integration: full lifecycle', () => {
   describe('encrypted mode', () => {
     beforeEach(async () => {
       db = await createNoydb({
-        adapter: memory(),
+        store: memory(),
         user: 'owner-01',
         secret: 'test-passphrase-12345',
       })
@@ -160,7 +160,7 @@ describe('integration: full lifecycle', () => {
     })
 
     it('dump and load round-trips in unencrypted mode', async () => {
-      const plainDb = await createNoydb({ adapter: memory(), user: 'dev', encrypt: false })
+      const plainDb = await createNoydb({ store: memory(), user: 'dev', encrypt: false })
       const comp = await plainDb.openCompartment('TEST')
       const invoices = comp.collection<Invoice>('invoices')
 
@@ -170,7 +170,7 @@ describe('integration: full lifecycle', () => {
       const backup = await comp.dump()
 
       // Restore into a new compartment on a fresh instance
-      const plainDb2 = await createNoydb({ adapter: memory(), user: 'dev', encrypt: false })
+      const plainDb2 = await createNoydb({ store: memory(), user: 'dev', encrypt: false })
       const comp2 = await plainDb2.openCompartment('TEST')
       await comp2.load(backup)
 
@@ -189,7 +189,7 @@ describe('integration: full lifecycle', () => {
   describe('unencrypted mode', () => {
     beforeEach(async () => {
       db = await createNoydb({
-        adapter: memory(),
+        store: memory(),
         user: 'dev',
         encrypt: false,
       })

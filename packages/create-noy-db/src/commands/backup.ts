@@ -38,8 +38,8 @@
 
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
-import { createNoydb, type Noydb, type NoydbAdapter } from '@noy-db/core'
-import { jsonFile } from '@noy-db/file'
+import { createNoydb, type Noydb, type NoydbStore } from '@noy-db/core'
+import { jsonFile } from '@noy-db/store-file'
 import type { ReadPassphrase } from './shared.js'
 import { defaultReadPassphrase } from './shared.js'
 
@@ -60,7 +60,7 @@ export interface BackupOptions {
   /** Injected Noydb factory. */
   createDb?: typeof createNoydb
   /** Injected adapter factory. */
-  buildAdapter?: (dir: string) => NoydbAdapter
+  buildAdapter?: (dir: string) => NoydbStore
 }
 
 export interface BackupResult {
@@ -110,7 +110,7 @@ export async function backup(options: BackupOptions): Promise<BackupResult> {
   let db: Noydb | null = null
   try {
     db = await createDb({
-      adapter: buildAdapter(options.dir),
+      store: buildAdapter(options.dir),
       user: options.user,
       secret,
     })

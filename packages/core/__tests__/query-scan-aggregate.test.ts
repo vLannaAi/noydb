@@ -15,7 +15,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { createNoydb } from '../src/noydb.js'
 import type { Noydb } from '../src/noydb.js'
-import type { NoydbAdapter, EncryptedEnvelope, CompartmentSnapshot, ListPageResult } from '../src/types.js'
+import type { NoydbStore, EncryptedEnvelope, CompartmentSnapshot, ListPageResult } from '../src/types.js'
 import { ConflictError } from '../src/errors.js'
 import {
   ScanBuilder,
@@ -28,7 +28,7 @@ import {
 } from '../src/query/index.js'
 
 /** Inline memory adapter — same pattern as the other integration tests. */
-function memory(): NoydbAdapter {
+function memory(): NoydbStore {
   const store = new Map<string, Map<string, Map<string, EncryptedEnvelope>>>()
   function getCollection(c: string, col: string): Map<string, EncryptedEnvelope> {
     let comp = store.get(c)
@@ -273,7 +273,7 @@ describe('Collection.scan() > backward-compatible for-await iteration', () => {
 
   beforeEach(async () => {
     db = await createNoydb({
-      adapter: memory(),
+      store: memory(),
       user: 'owner',
       secret: 'scan-agg-test-passphrase-2026',
     })
@@ -294,7 +294,7 @@ describe('Collection.scan().aggregate() > real collection over memory adapter', 
 
   beforeEach(async () => {
     db = await createNoydb({
-      adapter: memory(),
+      store: memory(),
       user: 'owner',
       secret: 'scan-agg-test-passphrase-2026',
     })

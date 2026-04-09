@@ -20,7 +20,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { createNoydb } from '../src/noydb.js'
 import type { Noydb } from '../src/noydb.js'
-import type { NoydbAdapter, EncryptedEnvelope, CompartmentSnapshot } from '../src/types.js'
+import type { NoydbStore, EncryptedEnvelope, CompartmentSnapshot } from '../src/types.js'
 import { ConflictError } from '../src/errors.js'
 import {
   ref,
@@ -29,7 +29,7 @@ import {
   RefRegistry,
 } from '../src/refs.js'
 
-function memory(): NoydbAdapter {
+function memory(): NoydbStore {
   const store = new Map<string, Map<string, Map<string, EncryptedEnvelope>>>()
   function getCollection(c: string, col: string) {
     let comp = store.get(c)
@@ -162,7 +162,7 @@ describe('strict mode on put — #45', () => {
 
   beforeEach(async () => {
     db = await createNoydb({
-      adapter: memory(),
+      store: memory(),
       user: 'alice',
       secret: 'test-passphrase-1234',
     })
@@ -257,7 +257,7 @@ describe('strict mode on delete — #45', () => {
 
   beforeEach(async () => {
     db = await createNoydb({
-      adapter: memory(),
+      store: memory(),
       user: 'alice',
       secret: 'test-passphrase-1234',
     })
@@ -303,7 +303,7 @@ describe('warn mode — #45', () => {
 
   beforeEach(async () => {
     db = await createNoydb({
-      adapter: memory(),
+      store: memory(),
       user: 'alice',
       secret: 'test-passphrase-1234',
     })
@@ -350,7 +350,7 @@ describe('cascade mode — #45', () => {
 
   beforeEach(async () => {
     db = await createNoydb({
-      adapter: memory(),
+      store: memory(),
       user: 'alice',
       secret: 'test-passphrase-1234',
     })
@@ -413,7 +413,7 @@ describe('checkIntegrity — #45', () => {
 
   beforeEach(async () => {
     db = await createNoydb({
-      adapter: memory(),
+      store: memory(),
       user: 'alice',
       secret: 'test-passphrase-1234',
     })

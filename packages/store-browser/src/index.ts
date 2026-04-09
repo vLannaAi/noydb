@@ -1,4 +1,4 @@
-import type { NoydbAdapter, EncryptedEnvelope, CompartmentSnapshot } from '@noy-db/core'
+import type { NoydbStore, EncryptedEnvelope, CompartmentSnapshot } from '@noy-db/core'
 import { ConflictError } from '@noy-db/core'
 
 export interface BrowserOptions {
@@ -17,7 +17,7 @@ export interface BrowserOptions {
  * Key scheme (normal):    `{prefix}:{compartment}:{collection}:{id}`
  * Key scheme (obfuscated): `{prefix}:{hash}:{hash}:{hash}`
  */
-export function browser(options: BrowserOptions = {}): NoydbAdapter {
+export function browser(options: BrowserOptions = {}): NoydbStore {
   const prefix = options.prefix ?? 'noydb'
   const obfuscate = options.obfuscate ?? false
 
@@ -143,7 +143,7 @@ function unwrapValue(raw: string, obfuscate: boolean, obfKey: string): { envelop
 
 // ─── localStorage Backend ──────────────────────────────────────────────
 
-function createLocalStorageAdapter(prefix: string, obfuscate: boolean, obfKey: string): NoydbAdapter {
+function createLocalStorageAdapter(prefix: string, obfuscate: boolean, obfKey: string): NoydbStore {
   function key(compartment: string, collection: string, id: string): string {
     return `${prefix}:${hashComponent(compartment, obfuscate)}:${hashComponent(collection, obfuscate)}:${hashComponent(id, obfuscate)}`
   }
@@ -306,7 +306,7 @@ function createLocalStorageAdapter(prefix: string, obfuscate: boolean, obfKey: s
 
 // ─── IndexedDB Backend ─────────────────────────────────────────────────
 
-function createIndexedDBAdapter(prefix: string, obfuscate: boolean, obfKey: string): NoydbAdapter {
+function createIndexedDBAdapter(prefix: string, obfuscate: boolean, obfKey: string): NoydbStore {
   const DB_NAME = `${prefix}_noydb`
   const STORE_NAME = 'records'
   let dbPromise: Promise<IDBDatabase> | null = null
@@ -367,9 +367,9 @@ function createIndexedDBAdapter(prefix: string, obfuscate: boolean, obfKey: stri
     async put(compartment, collection, id, envelope, expectedVersion) {
       const k = key(compartment, collection, id)
 
+      const { store, complete } = await tx('readwrite')
       if (expectedVersion !== undefined) {
-        const { store: readStore } = await tx('readonly')
-        const existing = await idbRequest(readStore.get(k))
+        const existing = await idbRequest(store.get(k))
         if (existing) {
           const env = obfuscate && '_e' in (existing as StoredValue) ? (existing as StoredValue)._e : existing as EncryptedEnvelope
           if (env._v !== expectedVersion) {
@@ -379,7 +379,6 @@ function createIndexedDBAdapter(prefix: string, obfuscate: boolean, obfKey: stri
       }
 
       const value = obfuscate ? { _oi: xorEncode(id, obfKey), _oc: xorEncode(collection, obfKey), _e: envelope } : envelope
-      const { store, complete } = await tx('readwrite')
       store.put(value, k)
       await complete
     },

@@ -1,18 +1,18 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import type { NoydbAdapter, EncryptedEnvelope, CompartmentSnapshot } from '../src/types.js'
+import type { NoydbStore, EncryptedEnvelope, CompartmentSnapshot } from '../src/types.js'
 import { ConflictError } from '../src/errors.js'
 import { createNoydb } from '../src/noydb.js'
 
 // ─── Inline memory adapter with optional listSince support ─────────────────
 
-function inlineMemory(opts: { supportsListSince?: boolean } = {}): NoydbAdapter {
+function inlineMemory(opts: { supportsListSince?: boolean } = {}): NoydbStore {
   const store = new Map<string, Map<string, Map<string, EncryptedEnvelope>>>()
   function gc(c: string, col: string) {
     let comp = store.get(c); if (!comp) { comp = new Map(); store.set(c, comp) }
     let coll = comp.get(col); if (!coll) { coll = new Map(); comp.set(col, coll) }
     return coll
   }
-  const adapter: NoydbAdapter = {
+  const adapter: NoydbStore = {
     async get(c, col, id) { return store.get(c)?.get(col)?.get(id) ?? null },
     async put(c, col, id, env, ev) {
       const coll = gc(c, col); const ex = coll.get(id)
@@ -52,7 +52,7 @@ describe('partial sync (v0.9 #133)', () => {
       const local = inlineMemory()
       const remote = inlineMemory()
 
-      const db = await createNoydb({ adapter: local, sync: remote, user: 'u', encrypt: false })
+      const db = await createNoydb({ store: local, sync: remote, user: 'u', encrypt: false })
       const comp = await db.openCompartment(COMP)
       const invoices = comp.collection<Invoice>('invoices')
       const payments = comp.collection<Invoice>('payments')
@@ -79,7 +79,7 @@ describe('partial sync (v0.9 #133)', () => {
       const local = inlineMemory()
       const remote = inlineMemory()
 
-      const db = await createNoydb({ adapter: local, sync: remote, user: 'u', encrypt: false })
+      const db = await createNoydb({ store: local, sync: remote, user: 'u', encrypt: false })
       const comp = await db.openCompartment(COMP)
       await comp.collection<Invoice>('invoices').put('inv-1', { amount: 100, status: 'a' })
       await comp.collection<Invoice>('payments').put('pay-1', { amount: 50, status: 'b' })
@@ -93,7 +93,7 @@ describe('partial sync (v0.9 #133)', () => {
       const local = inlineMemory()
       const remote = inlineMemory()
 
-      const db = await createNoydb({ adapter: local, sync: remote, user: 'u', encrypt: false })
+      const db = await createNoydb({ store: local, sync: remote, user: 'u', encrypt: false })
       const comp = await db.openCompartment(COMP)
       await comp.collection<Invoice>('invoices').put('inv-1', { amount: 100, status: 'a' })
 
@@ -109,8 +109,8 @@ describe('partial sync (v0.9 #133)', () => {
       const localB = inlineMemory()
       const remote = inlineMemory()
 
-      const dbA = await createNoydb({ adapter: localA, sync: remote, user: 'a', encrypt: false })
-      const dbB = await createNoydb({ adapter: localB, sync: remote, user: 'b', encrypt: false })
+      const dbA = await createNoydb({ store: localA, sync: remote, user: 'a', encrypt: false })
+      const dbB = await createNoydb({ store: localB, sync: remote, user: 'b', encrypt: false })
 
       const compA = await dbA.openCompartment(COMP)
       await compA.collection<Invoice>('invoices').put('inv-1', { amount: 100, status: 'x' })
@@ -140,7 +140,7 @@ describe('partial sync (v0.9 #133)', () => {
         _noydb: 1, _v: 1, _ts: '2026-01-20T00:00:00.000Z', _iv: '', _data: JSON.stringify({ amount: 2, status: 'new' }),
       })
 
-      const db = await createNoydb({ adapter: local, sync: remote, user: 'u', encrypt: false })
+      const db = await createNoydb({ store: local, sync: remote, user: 'u', encrypt: false })
       await db.openCompartment(COMP)
       const result = await db.pull(COMP, { modifiedSince: cutoff })
 
@@ -164,7 +164,7 @@ describe('partial sync (v0.9 #133)', () => {
         _noydb: 1, _v: 1, _ts: '2026-01-20T00:00:00.000Z', _iv: '', _data: JSON.stringify({ amount: 2, status: 'b' }),
       })
 
-      const db = await createNoydb({ adapter: local, sync: remote, user: 'u', encrypt: false })
+      const db = await createNoydb({ store: local, sync: remote, user: 'u', encrypt: false })
       await db.openCompartment(COMP)
       // Filter to invoices only + modifiedSince
       const result = await db.pull(COMP, { collections: ['invoices'], modifiedSince: cutoff })
@@ -181,7 +181,7 @@ describe('partial sync (v0.9 #133)', () => {
       const localB = inlineMemory()
       const remote = inlineMemory()
 
-      const dbA = await createNoydb({ adapter: localA, sync: remote, user: 'a', encrypt: false })
+      const dbA = await createNoydb({ store: localA, sync: remote, user: 'a', encrypt: false })
       const compA = await dbA.openCompartment(COMP)
       await compA.collection<Invoice>('invoices').put('inv-1', { amount: 1, status: 'a' })
       await compA.collection<Invoice>('payments').put('pay-1', { amount: 2, status: 'b' })

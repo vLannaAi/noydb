@@ -1,4 +1,4 @@
-import type { NoydbAdapter, KeyringFile, Role, Permissions, GrantOptions, RevokeOptions, UserInfo, EncryptedEnvelope } from './types.js'
+import type { NoydbStore, KeyringFile, Role, Permissions, GrantOptions, RevokeOptions, UserInfo, EncryptedEnvelope } from './types.js'
 import { NOYDB_KEYRING_VERSION, NOYDB_FORMAT_VERSION } from './types.js'
 import {
   deriveKey,
@@ -69,7 +69,7 @@ export interface UnlockedKeyring {
 
 /** Load and unlock a user's keyring for a compartment. */
 export async function loadKeyring(
-  adapter: NoydbAdapter,
+  adapter: NoydbStore,
   compartment: string,
   userId: string,
   passphrase: string,
@@ -103,7 +103,7 @@ export async function loadKeyring(
 
 /** Create the initial owner keyring for a new compartment. */
 export async function createOwnerKeyring(
-  adapter: NoydbAdapter,
+  adapter: NoydbStore,
   compartment: string,
   userId: string,
   passphrase: string,
@@ -140,7 +140,7 @@ export async function createOwnerKeyring(
 
 /** Grant access to a new user. Caller must have grant privilege. */
 export async function grant(
-  adapter: NoydbAdapter,
+  adapter: NoydbStore,
   compartment: string,
   callerKeyring: UnlockedKeyring,
   options: GrantOptions,
@@ -245,7 +245,7 @@ export async function grant(
  * was originally granted by A) terminate cleanly.
  */
 async function findAdminDescendants(
-  adapter: NoydbAdapter,
+  adapter: NoydbStore,
   compartment: string,
   rootUserId: string,
 ): Promise<string[]> {
@@ -283,7 +283,7 @@ async function findAdminDescendants(
 
 /** Revoke a user's access. Optionally rotate keys for affected collections. */
 export async function revoke(
-  adapter: NoydbAdapter,
+  adapter: NoydbStore,
   compartment: string,
   callerKeyring: UnlockedKeyring,
   options: RevokeOptions,
@@ -365,7 +365,7 @@ export async function revoke(
  * 3. Re-wrap new DEKs for all remaining users
  */
 export async function rotateKeys(
-  adapter: NoydbAdapter,
+  adapter: NoydbStore,
   compartment: string,
   callerKeyring: UnlockedKeyring,
   collections: string[],
@@ -498,7 +498,7 @@ export async function rotateKeys(
 
 /** Change the user's passphrase. Re-wraps all DEKs with the new KEK. */
 export async function changeSecret(
-  adapter: NoydbAdapter,
+  adapter: NoydbStore,
   compartment: string,
   keyring: UnlockedKeyring,
   newPassphrase: string,
@@ -541,7 +541,7 @@ export async function changeSecret(
 
 /** List all users with access to a compartment. */
 export async function listUsers(
-  adapter: NoydbAdapter,
+  adapter: NoydbStore,
   compartment: string,
 ): Promise<UserInfo[]> {
   const userIds = await adapter.list(compartment, '_keyring')
@@ -568,7 +568,7 @@ export async function listUsers(
 
 /** Ensure a DEK exists for a collection. Generates one if new. */
 export async function ensureCollectionDEK(
-  adapter: NoydbAdapter,
+  adapter: NoydbStore,
   compartment: string,
   keyring: UnlockedKeyring,
 ): Promise<(collectionName: string) => Promise<CryptoKey>> {
@@ -602,7 +602,7 @@ export function hasAccess(keyring: UnlockedKeyring, collectionName: string): boo
 
 /** Persist a keyring file to the adapter. */
 export async function persistKeyring(
-  adapter: NoydbAdapter,
+  adapter: NoydbStore,
   compartment: string,
   keyring: UnlockedKeyring,
 ): Promise<void> {
@@ -632,7 +632,7 @@ function resolvePermissions(role: Role, explicit?: Permissions): Permissions {
 }
 
 async function writeKeyringFile(
-  adapter: NoydbAdapter,
+  adapter: NoydbStore,
   compartment: string,
   userId: string,
   keyringFile: KeyringFile,

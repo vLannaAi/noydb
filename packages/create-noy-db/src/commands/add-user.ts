@@ -28,8 +28,8 @@
  *   partial-state-on-crash is already handled.
  */
 
-import { createNoydb, type Noydb, type NoydbAdapter, type Role } from '@noy-db/core'
-import { jsonFile } from '@noy-db/file'
+import { createNoydb, type Noydb, type NoydbStore, type Role } from '@noy-db/core'
+import { jsonFile } from '@noy-db/store-file'
 import type { ReadPassphrase } from './shared.js'
 import { defaultReadPassphrase } from './shared.js'
 
@@ -61,7 +61,7 @@ export interface AddUserOptions {
   /** Injected Noydb factory. */
   createDb?: typeof createNoydb
   /** Injected adapter factory. */
-  buildAdapter?: (dir: string) => NoydbAdapter
+  buildAdapter?: (dir: string) => NoydbStore
 }
 
 export interface AddUserResult {
@@ -110,7 +110,7 @@ export async function addUser(options: AddUserOptions): Promise<AddUserResult> {
   let db: Noydb | null = null
   try {
     db = await createDb({
-      adapter: buildAdapter(options.dir),
+      store: buildAdapter(options.dir),
       user: options.callerUser,
       secret: callerSecret,
     })

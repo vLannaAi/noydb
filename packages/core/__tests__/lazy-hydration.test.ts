@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { createNoydb } from '../src/noydb.js'
 import type { Noydb } from '../src/noydb.js'
-import type { NoydbAdapter, EncryptedEnvelope, CompartmentSnapshot, ListPageResult } from '../src/types.js'
+import type { NoydbStore, EncryptedEnvelope, CompartmentSnapshot, ListPageResult } from '../src/types.js'
 import { ConflictError } from '../src/errors.js'
 
 /**
@@ -9,7 +9,7 @@ import { ConflictError } from '../src/errors.js'
  * but with a `_getCalls` counter so tests can prove that lazy mode hits
  * the adapter on cache miss instead of using a preloaded snapshot.
  */
-function memory(): NoydbAdapter & { _getCalls: number; _resetCounters(): void } {
+function memory(): NoydbStore & { _getCalls: number; _resetCounters(): void } {
   const store = new Map<string, Map<string, Map<string, EncryptedEnvelope>>>()
   let getCalls = 0
   function getCollection(c: string, col: string): Map<string, EncryptedEnvelope> {
@@ -100,14 +100,14 @@ interface Invoice {
  */
 async function seedAdapterAndReopen(n: number): Promise<{
   db: Noydb
-  adapter: ReturnType<typeof memory>
+  store: ReturnType<typeof memory>
   comp: Awaited<ReturnType<Noydb['openCompartment']>>
 }> {
   const adapter = memory()
 
   // Phase 1: write N records via an EAGER collection.
   const seeder = await createNoydb({
-    adapter,
+    store: adapter,
     user: 'owner',
     secret: 'lazy-test-passphrase-2026',
   })
@@ -127,7 +127,7 @@ async function seedAdapterAndReopen(n: number): Promise<{
   // seeder's in-memory cache. We open the compartment here so the
   // keyring read happens BEFORE the counter reset.
   const db = await createNoydb({
-    adapter,
+    store: adapter,
     user: 'owner',
     secret: 'lazy-test-passphrase-2026',
   })
@@ -144,7 +144,7 @@ describe('Collection — lazy mode construction', () => {
 
   beforeEach(async () => {
     const db = await createNoydb({
-      adapter: memory(),
+      store: memory(),
       user: 'owner',
       secret: 'lazy-test-passphrase-2026',
     })

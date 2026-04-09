@@ -48,18 +48,6 @@ importers:
         specifier: workspace:*
         version: link:../core
 
-  packages/browser:
-    devDependencies:
-      '@noy-db/core':
-        specifier: workspace:*
-        version: link:../core
-      '@noy-db/test-adapter-conformance':
-        specifier: workspace:*
-        version: link:../../test-harnesses/adapter-conformance
-      happy-dom:
-        specifier: ^18.0.0
-        version: 18.0.1
-
   packages/core:
     devDependencies:
       '@types/node':
@@ -77,12 +65,12 @@ importers:
       '@noy-db/core':
         specifier: workspace:*
         version: link:../core
-      '@noy-db/file':
+      '@noy-db/store-file':
         specifier: workspace:*
-        version: link:../file
-      '@noy-db/memory':
+        version: link:../store-file
+      '@noy-db/store-memory':
         specifier: workspace:*
-        version: link:../memory
+        version: link:../store-memory
       diff:
         specifier: ^7.0.0
         version: 7.0.0
@@ -99,39 +87,6 @@ importers:
       '@types/node':
         specifier: ^22.0.0
         version: 22.19.17
-
-  packages/dynamo:
-    devDependencies:
-      '@aws-sdk/client-dynamodb':
-        specifier: ^3.0.0
-        version: 3.1024.0
-      '@aws-sdk/lib-dynamodb':
-        specifier: ^3.0.0
-        version: 3.1024.0(@aws-sdk/client-dynamodb@3.1024.0)
-      '@noy-db/core':
-        specifier: workspace:*
-        version: link:../core
-
-  packages/file:
-    devDependencies:
-      '@noy-db/core':
-        specifier: workspace:*
-        version: link:../core
-      '@noy-db/test-adapter-conformance':
-        specifier: workspace:*
-        version: link:../../test-harnesses/adapter-conformance
-      '@types/node':
-        specifier: ^22.0.0
-        version: 22.19.17
-
-  packages/memory:
-    devDependencies:
-      '@noy-db/core':
-        specifier: workspace:*
-        version: link:../core
-      '@noy-db/test-adapter-conformance':
-        specifier: workspace:*
-        version: link:../../test-harnesses/adapter-conformance
 
   packages/nuxt:
     devDependencies:
@@ -172,7 +127,52 @@ importers:
         specifier: ^3.5.32
         version: 3.5.32(typescript@5.9.3)
 
-  packages/s3:
+  packages/store-browser:
+    devDependencies:
+      '@noy-db/core':
+        specifier: workspace:*
+        version: link:../core
+      '@noy-db/test-adapter-conformance':
+        specifier: workspace:*
+        version: link:../../test-harnesses/adapter-conformance
+      happy-dom:
+        specifier: ^18.0.0
+        version: 18.0.1
+
+  packages/store-dynamo:
+    devDependencies:
+      '@aws-sdk/client-dynamodb':
+        specifier: ^3.0.0
+        version: 3.1024.0
+      '@aws-sdk/lib-dynamodb':
+        specifier: ^3.0.0
+        version: 3.1024.0(@aws-sdk/client-dynamodb@3.1024.0)
+      '@noy-db/core':
+        specifier: workspace:*
+        version: link:../core
+
+  packages/store-file:
+    devDependencies:
+      '@noy-db/core':
+        specifier: workspace:*
+        version: link:../core
+      '@noy-db/test-adapter-conformance':
+        specifier: workspace:*
+        version: link:../../test-harnesses/adapter-conformance
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.17
+
+  packages/store-memory:
+    devDependencies:
+      '@noy-db/core':
+        specifier: workspace:*
+        version: link:../core
+      '@noy-db/test-adapter-conformance':
+        specifier: workspace:*
+        version: link:../../test-harnesses/adapter-conformance
+
+  packages/store-s3:
     devDependencies:
       '@aws-sdk/client-s3':
         specifier: ^3.0.0
@@ -204,24 +204,24 @@ importers:
       '@noy-db/core':
         specifier: workspace:*
         version: link:../packages/core
-      '@noy-db/file':
+      '@noy-db/store-file':
         specifier: workspace:*
-        version: link:../packages/file
-      '@noy-db/memory':
+        version: link:../packages/store-file
+      '@noy-db/store-memory':
         specifier: workspace:*
-        version: link:../packages/memory
+        version: link:../packages/store-memory
 
   playground/browser:
     dependencies:
-      '@noy-db/browser':
-        specifier: workspace:*
-        version: link:../../packages/browser
       '@noy-db/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@noy-db/memory':
+      '@noy-db/store-browser':
         specifier: workspace:*
-        version: link:../../packages/memory
+        version: link:../../packages/store-browser
+      '@noy-db/store-memory':
+        specifier: workspace:*
+        version: link:../../packages/store-memory
     devDependencies:
       vite:
         specifier: ^6.0.0
@@ -229,9 +229,6 @@ importers:
 
   playground/nuxt:
     dependencies:
-      '@noy-db/browser':
-        specifier: workspace:*
-        version: link:../../packages/browser
       '@noy-db/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -241,6 +238,9 @@ importers:
       '@noy-db/pinia':
         specifier: workspace:*
         version: link:../../packages/pinia
+      '@noy-db/store-browser':
+        specifier: workspace:*
+        version: link:../../packages/store-browser
       '@noy-db/vue':
         specifier: workspace:*
         version: link:../../packages/vue
@@ -262,15 +262,15 @@ importers:
 
   playground/pinia:
     dependencies:
-      '@noy-db/browser':
-        specifier: workspace:*
-        version: link:../../packages/browser
       '@noy-db/core':
         specifier: workspace:*
         version: link:../../packages/core
       '@noy-db/pinia':
         specifier: workspace:*
         version: link:../../packages/pinia
+      '@noy-db/store-browser':
+        specifier: workspace:*
+        version: link:../../packages/store-browser
       pinia:
         specifier: ^3.0.1
         version: 3.0.4(typescript@5.9.3)(vue@3.5.32(typescript@5.9.3))

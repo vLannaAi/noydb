@@ -1,11 +1,11 @@
 import { describe, it, expect, vi } from 'vitest'
-import type { NoydbAdapter, EncryptedEnvelope, CompartmentSnapshot } from '../src/types.js'
+import type { NoydbStore, EncryptedEnvelope, CompartmentSnapshot } from '../src/types.js'
 import { ConflictError } from '../src/errors.js'
 import { createNoydb } from '../src/noydb.js'
 
 // ─── Inline memory adapter with optional pub/sub ───────────────────────────
 
-function inlineMemory(opts: { pubsub?: boolean } = {}): NoydbAdapter & {
+function inlineMemory(opts: { pubsub?: boolean } = {}): NoydbStore & {
   _channels: Map<string, Array<(p: string) => void>>
 } {
   const store = new Map<string, Map<string, Map<string, EncryptedEnvelope>>>()
@@ -17,7 +17,7 @@ function inlineMemory(opts: { pubsub?: boolean } = {}): NoydbAdapter & {
     return coll
   }
 
-  const adapter: NoydbAdapter & { _channels: typeof channels } = {
+  const adapter: NoydbStore & { _channels: typeof channels } = {
     _channels: channels,
     async get(c, col, id) { return store.get(c)?.get(col)?.get(id) ?? null },
     async put(c, col, id, env, ev) {
@@ -65,7 +65,7 @@ interface CursorPayload { path: string; action: 'viewing' | 'editing' }
 describe('presence (v0.9 #134)', () => {
   describe('presence() API', () => {
     it('collection.presence() returns a PresenceHandle', async () => {
-      const db = await createNoydb({ adapter: inlineMemory(), user: 'u', encrypt: false })
+      const db = await createNoydb({ store: inlineMemory(), user: 'u', encrypt: false })
       const comp = await db.openCompartment(COMP)
       const invoices = comp.collection('invoices')
       const handle = invoices.presence()
@@ -77,7 +77,7 @@ describe('presence (v0.9 #134)', () => {
     })
 
     it('update() does not throw without pub/sub adapter', async () => {
-      const db = await createNoydb({ adapter: inlineMemory(), user: 'u', encrypt: false })
+      const db = await createNoydb({ store: inlineMemory(), user: 'u', encrypt: false })
       const comp = await db.openCompartment(COMP)
       const invoices = comp.collection('invoices')
       const handle = invoices.presence<CursorPayload>()
@@ -86,7 +86,7 @@ describe('presence (v0.9 #134)', () => {
     })
 
     it('subscribe() returns an unsubscribe function', async () => {
-      const db = await createNoydb({ adapter: inlineMemory(), user: 'u', encrypt: false })
+      const db = await createNoydb({ store: inlineMemory(), user: 'u', encrypt: false })
       const comp = await db.openCompartment(COMP)
       const handle = comp.collection('invoices').presence<CursorPayload>({ pollIntervalMs: 100 })
       const unsub = handle.subscribe(() => {})
@@ -100,8 +100,8 @@ describe('presence (v0.9 #134)', () => {
     it('delivers presence payload to subscriber via pub/sub', async () => {
       const sharedAdapter = inlineMemory({ pubsub: true })
 
-      const dbA = await createNoydb({ adapter: inlineMemory(), sync: sharedAdapter, user: 'a', encrypt: false })
-      const dbB = await createNoydb({ adapter: inlineMemory(), sync: sharedAdapter, user: 'b', encrypt: false })
+      const dbA = await createNoydb({ store: inlineMemory(), sync: sharedAdapter, user: 'a', encrypt: false })
+      const dbB = await createNoydb({ store: inlineMemory(), sync: sharedAdapter, user: 'b', encrypt: false })
 
       const compA = await dbA.openCompartment(COMP)
       const compB = await dbB.openCompartment(COMP)
@@ -128,7 +128,7 @@ describe('presence (v0.9 #134)', () => {
 
     it('unsubscribe removes listener from channel', async () => {
       const sharedAdapter = inlineMemory({ pubsub: true })
-      const db = await createNoydb({ adapter: inlineMemory(), sync: sharedAdapter, user: 'u', encrypt: false })
+      const db = await createNoydb({ store: inlineMemory(), sync: sharedAdapter, user: 'u', encrypt: false })
       const comp = await db.openCompartment(COMP)
       const handle = comp.collection('invoices').presence()
 
@@ -149,7 +149,7 @@ describe('presence (v0.9 #134)', () => {
     it('update() writes a presence record to the sync adapter', async () => {
       const syncAdapter = inlineMemory()
       const db = await createNoydb({
-        adapter: inlineMemory(),
+        store: inlineMemory(),
         sync: syncAdapter,
         user: 'u',
         encrypt: false,
@@ -168,8 +168,8 @@ describe('presence (v0.9 #134)', () => {
 
     it('subscribe poll reads peers from sync adapter', async () => {
       const syncAdapter = inlineMemory()
-      const dbA = await createNoydb({ adapter: inlineMemory(), sync: syncAdapter, user: 'a', encrypt: false })
-      const dbB = await createNoydb({ adapter: inlineMemory(), sync: syncAdapter, user: 'b', encrypt: false })
+      const dbA = await createNoydb({ store: inlineMemory(), sync: syncAdapter, user: 'a', encrypt: false })
+      const dbB = await createNoydb({ store: inlineMemory(), sync: syncAdapter, user: 'b', encrypt: false })
 
       const compA = await dbA.openCompartment(COMP)
       const compB = await dbB.openCompartment(COMP)
@@ -200,7 +200,7 @@ describe('presence (v0.9 #134)', () => {
 
     it('stop() clears the poll interval', async () => {
       const clearIntervalSpy = vi.spyOn(globalThis, 'clearInterval')
-      const db = await createNoydb({ adapter: inlineMemory(), user: 'u', encrypt: false })
+      const db = await createNoydb({ store: inlineMemory(), user: 'u', encrypt: false })
       const comp = await db.openCompartment(COMP)
       const handle = comp.collection('invoices').presence({ pollIntervalMs: 100 })
 
@@ -219,7 +219,7 @@ describe('presence (v0.9 #134)', () => {
       // We can't test full encryption without a real passphrase in this adapter,
       // but we can verify that when encrypt is false, the record is readable.
       const db = await createNoydb({
-        adapter: inlineMemory(),
+        store: inlineMemory(),
         sync: syncAdapter,
         user: 'u',
         encrypt: false,

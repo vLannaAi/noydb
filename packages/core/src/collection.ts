@@ -1,4 +1,4 @@
-import type { NoydbAdapter, EncryptedEnvelope, ChangeEvent, HistoryConfig, HistoryOptions, HistoryEntry, PruneOptions, ListPageResult, LocaleReadOptions, ConflictPolicy, CollectionConflictResolver } from './types.js'
+import type { NoydbStore, EncryptedEnvelope, ChangeEvent, HistoryConfig, HistoryOptions, HistoryEntry, PruneOptions, ListPageResult, LocaleReadOptions, ConflictPolicy, CollectionConflictResolver } from './types.js'
 import { NOYDB_FORMAT_VERSION } from './types.js'
 import type { CrdtMode, CrdtState, LwwMapState, RgaState } from './crdt.js'
 import { resolveCrdtSnapshot, mergeCrdtStates, buildLwwMapState, buildRgaState } from './crdt.js'
@@ -79,7 +79,7 @@ function warnOnceFallback(adapterName: string): void {
 
 /** A typed collection of records within a compartment. */
 export class Collection<T> {
-  private readonly adapter: NoydbAdapter
+  private readonly adapter: NoydbStore
   private readonly compartment: string
   private readonly name: string
   private readonly keyring: UnlockedKeyring
@@ -231,7 +231,7 @@ export class Collection<T> {
   private readonly crdtMode: CrdtMode | undefined
 
   /** v0.9 #134 — optional remote/sync adapter for presence broadcasting. */
-  private readonly syncAdapter: NoydbAdapter | undefined
+  private readonly syncAdapter: NoydbStore | undefined
 
   /**
    * Optional back-reference to the owning compartment's ref
@@ -286,7 +286,7 @@ export class Collection<T> {
     | undefined
 
   constructor(opts: {
-    adapter: NoydbAdapter
+    adapter: NoydbStore
     compartment: string
     name: string
     keyring: UnlockedKeyring
@@ -407,7 +407,7 @@ export class Collection<T> {
      * writes heartbeats to this adapter so other devices can read them.
      * If the adapter implements pub/sub, presence updates are real-time.
      */
-    syncAdapter?: NoydbAdapter | undefined
+    syncAdapter?: NoydbStore | undefined
   }) {
     this.adapter = opts.adapter
     this.compartment = opts.compartment

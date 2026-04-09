@@ -14,11 +14,11 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { createNoydb } from '../src/noydb.js'
 import type { Noydb } from '../src/noydb.js'
-import type { NoydbAdapter, EncryptedEnvelope, CompartmentSnapshot } from '../src/types.js'
+import type { NoydbStore, EncryptedEnvelope, CompartmentSnapshot } from '../src/types.js'
 import { ConflictError } from '../src/errors.js'
 
 // Inline memory adapter (same as other test files).
-function memory(): NoydbAdapter {
+function memory(): NoydbStore {
   const store = new Map<string, Map<string, Map<string, EncryptedEnvelope>>>()
   function getCollection(c: string, col: string) {
     let comp = store.get(c)
@@ -77,12 +77,12 @@ interface Invoice {
 
 describe('delta history — #44', () => {
   let db: Noydb
-  let adapter: NoydbAdapter
+  let adapter: NoydbStore
 
   beforeEach(async () => {
     adapter = memory()
     db = await createNoydb({
-      adapter,
+      store: adapter,
       user: 'alice',
       secret: 'test-passphrase-1234',
     })

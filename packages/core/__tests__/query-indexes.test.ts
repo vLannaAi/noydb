@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { CollectionIndexes } from '../src/query/indexes.js'
 import { createNoydb } from '../src/noydb.js'
 import type { Noydb } from '../src/noydb.js'
-import type { NoydbAdapter, EncryptedEnvelope, CompartmentSnapshot } from '../src/types.js'
+import type { NoydbStore, EncryptedEnvelope, CompartmentSnapshot } from '../src/types.js'
 import { ConflictError } from '../src/errors.js'
 
 /**
@@ -10,7 +10,7 @@ import { ConflictError } from '../src/errors.js'
  * @noy-db/core. Augmented with `_putCalls` so tests can spy on what the
  * adapter receives.
  */
-function memory(): NoydbAdapter & { _putCalls: Array<{ collection: string; id: string; envelope: EncryptedEnvelope }> } {
+function memory(): NoydbStore & { _putCalls: Array<{ collection: string; id: string; envelope: EncryptedEnvelope }> } {
   const store = new Map<string, Map<string, Map<string, EncryptedEnvelope>>>()
   const calls: Array<{ collection: string; id: string; envelope: EncryptedEnvelope }> = []
   function getCollection(c: string, col: string): Map<string, EncryptedEnvelope> {
@@ -201,7 +201,7 @@ describe('Collection.query() — index-aware execution', () => {
     // Reset adapter state.
     adapter._putCalls.length = 0
     db = await createNoydb({
-      adapter: memory(),
+      store: memory(),
       user: 'owner',
       secret: 'index-test-passphrase-2026',
     })
@@ -309,7 +309,7 @@ describe('Collection.query() — index-aware execution', () => {
     // the adapter must not see plaintext field values like 'paid' anywhere.
     const localAdapter = memory()
     const localDb = await createNoydb({
-      adapter: localAdapter,
+      store: localAdapter,
       user: 'owner',
       secret: 'index-spy-passphrase-2026',
     })
@@ -348,7 +348,7 @@ describe('Collection.query() — index-aware execution', () => {
 
   it('22. indexed query is at least 5× faster than a linear scan on 10K records (DoD)', async () => {
     const localDb = await createNoydb({
-      adapter: memory(),
+      store: memory(),
       user: 'owner',
       secret: 'bench-passphrase-2026',
       history: { enabled: false }, // skip history snapshots for the bench

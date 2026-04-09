@@ -20,10 +20,10 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { createNoydb } from '../src/noydb.js'
 import type { Noydb } from '../src/noydb.js'
-import type { NoydbAdapter, EncryptedEnvelope, CompartmentSnapshot } from '../src/types.js'
+import type { NoydbStore, EncryptedEnvelope, CompartmentSnapshot } from '../src/types.js'
 import { ConflictError, BackupLedgerError, BackupCorruptedError } from '../src/errors.js'
 
-function memory(): NoydbAdapter {
+function memory(): NoydbStore {
   const store = new Map<string, Map<string, Map<string, EncryptedEnvelope>>>()
   function getCollection(c: string, col: string) {
     let comp = store.get(c)
@@ -83,7 +83,7 @@ describe('verifiable backups — #46', () => {
 
   beforeEach(async () => {
     db = await createNoydb({
-      adapter: memory(),
+      store: memory(),
       user: 'alice',
       secret: 'test-passphrase-1234',
     })
@@ -112,7 +112,7 @@ describe('verifiable backups — #46', () => {
   it('round-trips a clean backup with no errors', async () => {
     const adapter1 = memory()
     const sourceDb = await createNoydb({
-      adapter: adapter1,
+      store: adapter1,
       user: 'alice',
       secret: 'test-passphrase-1234',
     })
@@ -130,7 +130,7 @@ describe('verifiable backups — #46', () => {
     // — verifiable-backup integrity is orthogonal to encryption.
     const adapter2 = memory()
     const targetDb = await createNoydb({
-      adapter: adapter2,
+      store: adapter2,
       user: 'alice',
       secret: 'test-passphrase-1234',
     })
@@ -170,7 +170,7 @@ describe('verifiable backups — #46', () => {
 
     const adapter2 = memory()
     const targetDb = await createNoydb({
-      adapter: adapter2,
+      store: adapter2,
       user: 'alice',
       secret: 'test-passphrase-1234',
     })
@@ -193,7 +193,7 @@ describe('verifiable backups — #46', () => {
 
     const adapter2 = memory()
     const targetDb = await createNoydb({
-      adapter: adapter2,
+      store: adapter2,
       user: 'alice',
       secret: 'test-passphrase-1234',
     })
@@ -220,7 +220,7 @@ describe('verifiable backups — #46', () => {
 
     const adapter2 = memory()
     const targetDb = await createNoydb({
-      adapter: adapter2,
+      store: adapter2,
       user: 'alice',
       secret: 'test-passphrase-1234',
     })
@@ -247,7 +247,7 @@ describe('verifiable backups — #46', () => {
 
     const adapter2 = memory()
     const targetDb = await createNoydb({
-      adapter: adapter2,
+      store: adapter2,
       user: 'alice',
       secret: 'test-passphrase-1234',
     })
@@ -303,7 +303,7 @@ describe('verifiable backups — #46', () => {
     // match, and verifyBackupIntegrity returns kind: 'data'.
     const adapter = memory()
     const localDb = await createNoydb({
-      adapter,
+      store: adapter,
       user: 'alice',
       secret: 'test-passphrase-1234',
     })

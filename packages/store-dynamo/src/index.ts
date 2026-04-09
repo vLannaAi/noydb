@@ -1,4 +1,4 @@
-import type { NoydbAdapter, EncryptedEnvelope, CompartmentSnapshot } from '@noy-db/core'
+import type { NoydbStore, EncryptedEnvelope, CompartmentSnapshot } from '@noy-db/core'
 import { ConflictError } from '@noy-db/core'
 
 export interface DynamoOptions {
@@ -44,7 +44,7 @@ interface QueryCommandInput {
  * - _iv (String): base64 IV
  * - _data (String): base64 ciphertext
  */
-export function dynamo(options: DynamoOptions): NoydbAdapter {
+export function dynamo(options: DynamoOptions): NoydbStore {
   const { table } = options
 
   // Lazy client initialization — only creates the client when first used

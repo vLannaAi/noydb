@@ -101,21 +101,21 @@ jobs:
       # ship to consumers via the scaffolder. Turbo's ^build pattern
       # pulls in the transitive dependencies automatically.
       #
-      # `@noy-db/file` is included because `@noy-db/create` declares
+      # `@noy-db/store-file` is included because `create-noy-db` declares
       # it in `dependencies` (not peer) and at pack time `workspace:*`
       # expands to a PINNED version string. If the e2e doesn't provide
-      # the matching @noy-db/file tarball, the install step hits
+      # the matching @noy-db/store-file tarball, the install step hits
       # ERESOLVE / ETARGET whenever the workspace version is ahead of
       # the version currently on the public npm registry — exactly
       # what happens on a release PR before publish.
       - name: Build scaffolder + runtime deps
         run: |
           pnpm turbo build \
-            --filter='@noy-db/create' \
+            --filter='create-noy-db' \
             --filter='@noy-db/core' \
-            --filter='@noy-db/memory' \
-            --filter='@noy-db/file' \
-            --filter='@noy-db/browser' \
+            --filter='@noy-db/store-memory' \
+            --filter='@noy-db/store-file' \
+            --filter='@noy-db/store-browser' \
             --filter='@noy-db/pinia'
 
       # Each pnpm pack leaves a .tgz in the package directory. We
@@ -125,12 +125,12 @@ jobs:
         id: pack
         run: |
           set -eux
-          for pkg in core memory file browser pinia create-noy-db; do
+          for pkg in core store-memory store-file store-browser pinia create-noy-db; do
             (cd "packages/$pkg" && pnpm pack)
           done
-          ls -la packages/core/*.tgz packages/memory/*.tgz \
-                 packages/file/*.tgz \
-                 packages/browser/*.tgz packages/pinia/*.tgz \
+          ls -la packages/core/*.tgz packages/store-memory/*.tgz \
+                 packages/store-file/*.tgz \
+                 packages/store-browser/*.tgz packages/pinia/*.tgz \
                  packages/create-noy-db/*.tgz
 
       # Create a consumer project in a scratch directory OUTSIDE the
@@ -169,11 +169,11 @@ jobs:
             printf '%s' "$matches"
           }
           CORE_TGZ=$(resolve "$GITHUB_WORKSPACE/packages/core/noy-db-core-*.tgz")
-          MEMORY_TGZ=$(resolve "$GITHUB_WORKSPACE/packages/memory/noy-db-memory-*.tgz")
-          FILE_TGZ=$(resolve "$GITHUB_WORKSPACE/packages/file/noy-db-file-*.tgz")
-          BROWSER_TGZ=$(resolve "$GITHUB_WORKSPACE/packages/browser/noy-db-browser-*.tgz")
+          MEMORY_TGZ=$(resolve "$GITHUB_WORKSPACE/packages/store-memory/noy-db-store-memory-*.tgz")
+          FILE_TGZ=$(resolve "$GITHUB_WORKSPACE/packages/store-file/noy-db-store-file-*.tgz")
+          BROWSER_TGZ=$(resolve "$GITHUB_WORKSPACE/packages/store-browser/noy-db-store-browser-*.tgz")
           PINIA_TGZ=$(resolve "$GITHUB_WORKSPACE/packages/pinia/noy-db-pinia-*.tgz")
-          CREATE_TGZ=$(resolve "$GITHUB_WORKSPACE/packages/create-noy-db/noy-db-create-*.tgz")
+          CREATE_TGZ=$(resolve "$GITHUB_WORKSPACE/packages/create-noy-db/create-noy-db-*.tgz")
           {
             echo "core=$CORE_TGZ"
             echo "memory=$MEMORY_TGZ"
@@ -239,29 +239,29 @@ jobs:
              --arg create  "$CREATE" \
              '.dependencies = {
                 "@noy-db/core":    $core,
-                "@noy-db/memory":  $memory,
-                "@noy-db/file":    $file,
-                "@noy-db/browser": $browser,
+                "@noy-db/store-memory":  $memory,
+                "@noy-db/store-file":    $file,
+                "@noy-db/store-browser": $browser,
                 "@noy-db/pinia":   $pinia,
-                "@noy-db/create":  $create,
+                "create-noy-db":  $create,
                 "pinia": "^3.0.0",
                 "vue":   "^3.5.0"
               }
               | .overrides = {
                   "@noy-db/core":    $core,
-                  "@noy-db/memory":  $memory,
-                  "@noy-db/file":    $file,
-                  "@noy-db/browser": $browser,
+                  "@noy-db/store-memory":  $memory,
+                  "@noy-db/store-file":    $file,
+                  "@noy-db/store-browser": $browser,
                   "@noy-db/pinia":   $pinia,
-                  "@noy-db/create":  $create
+                  "create-noy-db":  $create
                 }
               | .pnpm.overrides = {
                   "@noy-db/core":    $core,
-                  "@noy-db/memory":  $memory,
-                  "@noy-db/file":    $file,
-                  "@noy-db/browser": $browser,
+                  "@noy-db/store-memory":  $memory,
+                  "@noy-db/store-file":    $file,
+                  "@noy-db/store-browser": $browser,
                   "@noy-db/pinia":   $pinia,
-                  "@noy-db/create":  $create
+                  "create-noy-db":  $create
                 }' package.json > package.json.new
           mv package.json.new package.json
 
@@ -272,11 +272,11 @@ jobs:
           packages: []
           overrides:
             "@noy-db/core": "$CORE"
-            "@noy-db/memory": "$MEMORY"
-            "@noy-db/file": "$FILE"
-            "@noy-db/browser": "$BROWSER"
+            "@noy-db/store-memory": "$MEMORY"
+            "@noy-db/store-file": "$FILE"
+            "@noy-db/store-browser": "$BROWSER"
             "@noy-db/pinia": "$PINIA"
-            "@noy-db/create": "$CREATE"
+            "create-noy-db": "$CREATE"
           YAML
 
           cat package.json
@@ -291,7 +291,7 @@ jobs:
         working-directory: ${{ runner.temp }}/consumer
         run: |
           set -eux
-          node ./node_modules/@noy-db/create/dist/bin/create.js \
+          node ./node_modules/create-noy-db/dist/bin/create.js \
             my-app --yes --adapter memory --no-sample-data
           # The wizard should have produced a minimal Nuxt 4 starter.
           # Confirm the load-bearing files landed where we expect.
@@ -309,10 +309,10 @@ jobs:
           set -eux
           cat > smoke.mjs <<'EOF'
           import { createNoydb, ref, LedgerStore, computePatch, applyPatch, SchemaValidationError, BackupLedgerError } from '@noy-db/core'
-          import { memory } from '@noy-db/memory'
+          import { memory } from '@noy-db/store-memory'
 
           const db = await createNoydb({
-            adapter: memory(),
+            store: memory(),
             user: 'e2e',
             secret: 'e2e-passphrase-2026',
           })
@@ -376,4 +376,4 @@ jobs:
         working-directory: ${{ runner.temp }}/consumer
         run: |
           set -eux
-          node ./node_modules/@noy-db/create/dist/bin/noy-db.js verify
+          node ./node_modules/create-noy-db/dist/bin/noy-db.js verify

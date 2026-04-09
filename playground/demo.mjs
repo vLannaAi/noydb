@@ -15,8 +15,8 @@
  */
 
 import { createNoydb, formatDiff } from '@noy-db/core'
-import { memory } from '@noy-db/memory'
-import { jsonFile } from '@noy-db/file'
+import { memory } from '@noy-db/store-memory'
+import { jsonFile } from '@noy-db/store-file'
 import { createInterface } from 'node:readline'
 import { mkdtemp, rm, readdir, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -104,7 +104,7 @@ async function main() {
     info(`Data directory: ${tempDir}`)
 
     const ownerDb = await createNoydb({
-      adapter: jsonFile({ dir: tempDir }),
+      store: jsonFile({ dir: tempDir }),
       user: 'owner-firm',
       secret: 'firm-secure-passphrase-2026',
       history: { enabled: true },
@@ -190,7 +190,7 @@ async function main() {
 
     section('Operator login — reading and writing')
     const opDb = await createNoydb({
-      adapter: jsonFile({ dir: tempDir }),
+      store: jsonFile({ dir: tempDir }),
       user: 'op-somchai',
       secret: 'somchai-pass-2026',
     })
@@ -205,7 +205,7 @@ async function main() {
 
     section('Viewer login — read-only access')
     const viewerDb = await createNoydb({
-      adapter: jsonFile({ dir: tempDir }),
+      store: jsonFile({ dir: tempDir }),
       user: 'viewer-audit',
       secret: 'audit-readonly-pass',
     })
@@ -237,14 +237,14 @@ async function main() {
     const cloudAdapter = memory() // simulates DynamoDB/S3
 
     const officeDb = await createNoydb({
-      adapter: memory(),
+      store: memory(),
       sync: cloudAdapter,
       user: 'owner',
       encrypt: false, // unencrypted for demo clarity
     })
 
     const homeDb = await createNoydb({
-      adapter: memory(),
+      store: memory(),
       sync: cloudAdapter,
       user: 'owner',
       encrypt: false,
@@ -361,7 +361,7 @@ async function main() {
 
     section('Simulating disaster — creating a completely fresh store')
     const freshDb = await createNoydb({
-      adapter: memory(),
+      store: memory(),
       user: 'owner',
       encrypt: false,
     })

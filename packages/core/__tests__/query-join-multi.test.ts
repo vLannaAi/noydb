@@ -10,7 +10,7 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
 import { createNoydb, type Noydb } from '../src/noydb.js'
 import type {
-  NoydbAdapter,
+  NoydbStore,
   EncryptedEnvelope,
   CompartmentSnapshot,
 } from '../src/types.js'
@@ -19,7 +19,7 @@ import { resetJoinWarnings } from '../src/query/index.js'
 import { ref } from '../src/refs.js'
 
 /** Same memory adapter shape used in query-integration / query-join tests. */
-function memory(): NoydbAdapter {
+function memory(): NoydbStore {
   const store = new Map<string, Map<string, Map<string, EncryptedEnvelope>>>()
   function getCollection(c: string, col: string): Map<string, EncryptedEnvelope> {
     let comp = store.get(c)
@@ -90,7 +90,7 @@ describe('Query.join() multi-FK chaining — v0.6 #75', () => {
 
   beforeEach(async () => {
     db = await createNoydb({
-      adapter: memory(),
+      store: memory(),
       user: 'owner',
       secret: 'multi-join-test-passphrase-2026',
     })

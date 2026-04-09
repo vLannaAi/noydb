@@ -79,11 +79,11 @@ export class PermissionDeniedError extends NoydbError {
  */
 /**
  * Thrown when a caller invokes an API that requires an optional
- * adapter capability the active adapter does not implement (v0.5
+ * store capability the active store does not implement (v0.5
  * #63).
  *
  * Today the only call site is `Noydb.listAccessibleCompartments()`,
- * which depends on the optional `NoydbAdapter.listCompartments()`
+ * which depends on the optional `NoydbStore.listCompartments()`
  * method. The error message names the missing method and the calling
  * API so consumers know exactly which combination is unsupported,
  * and the `capability` field is machine-readable so library code can
@@ -93,23 +93,23 @@ export class PermissionDeniedError extends NoydbError {
  * The class lives in `errors.ts` rather than as a generic
  * `ValidationError` because the diagnostic shape is different: a
  * `ValidationError` says "the inputs you passed are wrong"; this
- * error says "the inputs are fine, but the adapter you wired up
+ * error says "the inputs are fine, but the store you wired up
  * doesn't support what you're asking for." Different fix, different
  * documentation.
  */
-export class AdapterCapabilityError extends NoydbError {
-  /** The adapter method/capability that was missing. */
+export class StoreCapabilityError extends NoydbError {
+  /** The store method/capability that was missing. */
   readonly capability: string
 
-  constructor(capability: string, callerApi: string, adapterName?: string) {
+  constructor(capability: string, callerApi: string, storeName?: string) {
     super(
-      'ADAPTER_CAPABILITY',
-      `${callerApi} requires the optional adapter capability "${capability}" ` +
-        `but the active adapter${adapterName ? ` (${adapterName})` : ''} does not implement it. ` +
-        `Use an adapter that supports "${capability}" (memory, file) or pass an explicit ` +
+      'STORE_CAPABILITY',
+      `${callerApi} requires the optional store capability "${capability}" ` +
+        `but the active store${storeName ? ` (${storeName})` : ''} does not implement it. ` +
+        `Use a store that supports "${capability}" (store-memory, store-file) or pass an explicit ` +
         `compartment list to bypass enumeration.`,
     )
-    this.name = 'AdapterCapabilityError'
+    this.name = 'StoreCapabilityError'
     this.capability = capability
   }
 }

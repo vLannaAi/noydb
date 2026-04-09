@@ -10,7 +10,7 @@
  * ```ts
  * import { createPinia } from 'pinia';
  * import { createNoydbPiniaPlugin } from '@noy-db/pinia';
- * import { jsonFile } from '@noy-db/file';
+ * import { jsonFile } from '@noy-db/store-file';
  *
  * const pinia = createPinia();
  * pinia.use(createNoydbPiniaPlugin({
@@ -43,7 +43,7 @@
  */
 
 import type { PiniaPluginContext, PiniaPlugin, StateTree } from 'pinia'
-import { createNoydb, type Noydb, type NoydbOptions, type NoydbAdapter, type Compartment, type Collection } from '@noy-db/core'
+import { createNoydb, type Noydb, type NoydbOptions, type NoydbStore, type Compartment, type Collection } from '@noy-db/core'
 
 /**
  * Per-store NOYDB configuration. Attached to a Pinia store via the `noydb`
@@ -76,8 +76,8 @@ export interface StoreNoydbOptions<S extends StateTree = StateTree> {
  * rather than being stored in config.
  */
 export interface NoydbPiniaPluginOptions {
-  /** The NOYDB adapter to use for persistence. */
-  adapter: NoydbAdapter
+  /** The NOYDB store to use for persistence. */
+  adapter: NoydbStore
   /** User identifier (matches the keyring file). */
   user: string
   /**
@@ -86,7 +86,7 @@ export interface NoydbPiniaPluginOptions {
    */
   secret: () => string | Promise<string>
   /** Optional Noydb open-options forwarded to `createNoydb`. */
-  noydbOptions?: Partial<Omit<NoydbOptions, 'adapter' | 'user' | 'secret'>>
+  noydbOptions?: Partial<Omit<NoydbOptions, 'store' | 'user' | 'secret'>>
 }
 
 // The fixed document id under which a store's persisted state lives. Using a
@@ -109,7 +109,7 @@ export function createNoydbPiniaPlugin(opts: NoydbPiniaPluginOptions): PiniaPlug
       dbPromise = (async (): Promise<Noydb> => {
         const secret = await opts.secret()
         return createNoydb({
-          adapter: opts.adapter,
+          store: opts.adapter,
           user: opts.user,
           secret,
           ...opts.noydbOptions,

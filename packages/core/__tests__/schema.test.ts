@@ -27,13 +27,13 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { z } from 'zod'
 import { createNoydb } from '../src/noydb.js'
 import type { Noydb } from '../src/noydb.js'
-import type { NoydbAdapter, EncryptedEnvelope, CompartmentSnapshot } from '../src/types.js'
+import type { NoydbStore, EncryptedEnvelope, CompartmentSnapshot } from '../src/types.js'
 import { ConflictError, SchemaValidationError } from '../src/errors.js'
 import type { StandardSchemaV1, InferOutput } from '../src/schema.js'
 
 // ─── Inline memory adapter (same pattern as other test files) ─────────
 
-function memory(): NoydbAdapter {
+function memory(): NoydbStore {
   const store = new Map<string, Map<string, Map<string, EncryptedEnvelope>>>()
   function getCollection(c: string, col: string) {
     let comp = store.get(c)
@@ -108,7 +108,7 @@ describe('schema validation — #42', () => {
 
   beforeEach(async () => {
     db = await createNoydb({
-      adapter: memory(),
+      store: memory(),
       user: 'alice',
       secret: 'test-passphrase-1234',
     })
@@ -282,7 +282,7 @@ describe('schema validation — #42', () => {
     // that bypasses decryptRecord.
     const sharedAdapter = memory()
     const looseDb = await createNoydb({
-      adapter: sharedAdapter,
+      store: sharedAdapter,
       user: 'alice',
       secret: 'test-passphrase-1234',
     })
@@ -291,7 +291,7 @@ describe('schema validation — #42', () => {
     await loose.put('inv-legacy', { id: 'inv-legacy', note: 'old shape' })
 
     const strictDb = await createNoydb({
-      adapter: sharedAdapter,
+      store: sharedAdapter,
       user: 'alice',
       secret: 'test-passphrase-1234',
     })

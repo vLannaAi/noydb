@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterAll } from 'vitest'
-import type { NoydbAdapter, EncryptedEnvelope } from '@noy-db/core'
+import type { NoydbStore, EncryptedEnvelope } from '@noy-db/core'
 import { ConflictError } from '@noy-db/core'
 
 function makeEnvelope(version: number, data = 'test-data'): EncryptedEnvelope {
@@ -16,13 +16,13 @@ function makeEnvelope(version: number, data = 'test-data'): EncryptedEnvelope {
  * Parameterized adapter conformance test suite.
  * Every NOYDB adapter must pass all of these tests.
  */
-export function runAdapterConformanceTests(
+export function runStoreConformanceTests(
   name: string,
-  factory: () => Promise<NoydbAdapter>,
+  factory: () => Promise<NoydbStore>,
   cleanup?: () => Promise<void>,
 ): void {
   describe(`Adapter Conformance: ${name}`, () => {
-    let adapter: NoydbAdapter
+    let adapter: NoydbStore
 
     beforeEach(async () => {
       adapter = await factory()

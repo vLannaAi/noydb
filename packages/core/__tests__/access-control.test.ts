@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import type { NoydbAdapter, EncryptedEnvelope, CompartmentSnapshot } from '../src/types.js'
+import type { NoydbStore, EncryptedEnvelope, CompartmentSnapshot } from '../src/types.js'
 import { ConflictError, ReadOnlyError, PermissionDeniedError, NoAccessError } from '../src/errors.js'
 import { createNoydb } from '../src/noydb.js'
 import type { Noydb } from '../src/noydb.js'
 
-function inlineMemory(): NoydbAdapter {
+function inlineMemory(): NoydbStore {
   const store = new Map<string, Map<string, Map<string, EncryptedEnvelope>>>()
   function gc(c: string, col: string) {
     let comp = store.get(c); if (!comp) { comp = new Map(); store.set(c, comp) }
@@ -34,13 +34,13 @@ function inlineMemory(): NoydbAdapter {
 interface Invoice { amount: number; status: string }
 
 describe('access control: permission matrix', () => {
-  let adapter: NoydbAdapter
+  let adapter: NoydbStore
   let ownerDb: Noydb
   const COMP = 'C101'
 
   beforeEach(async () => {
     adapter = inlineMemory()
-    ownerDb = await createNoydb({ adapter, user: 'owner-01', secret: 'owner-pass' })
+    ownerDb = await createNoydb({ store: adapter, user: 'owner-01', secret: 'owner-pass' })
 
     // Seed data: owner writes to invoices and payments
     const comp = await ownerDb.openCompartment(COMP)
@@ -101,7 +101,7 @@ describe('access control: permission matrix', () => {
 
     beforeEach(async () => {
       await ownerDb.grant(COMP, { userId: 'admin-01', displayName: 'Admin', role: 'admin', passphrase: 'admin-pass' })
-      adminDb = await createNoydb({ adapter, user: 'admin-01', secret: 'admin-pass' })
+      adminDb = await createNoydb({ store: adapter, user: 'admin-01', secret: 'admin-pass' })
     })
 
     it('can read all collections', async () => {
@@ -160,7 +160,7 @@ describe('access control: permission matrix', () => {
         passphrase: 'op-pass',
         permissions: { invoices: 'rw' },
       })
-      opDb = await createNoydb({ adapter, user: 'op-01', secret: 'op-pass' })
+      opDb = await createNoydb({ store: adapter, user: 'op-01', secret: 'op-pass' })
     })
 
     it('can read permitted collections', async () => {
@@ -211,7 +211,7 @@ describe('access control: permission matrix', () => {
         userId: 'viewer-01', displayName: 'Viewer', role: 'viewer',
         passphrase: 'viewer-pass',
       })
-      viewerDb = await createNoydb({ adapter, user: 'viewer-01', secret: 'viewer-pass' })
+      viewerDb = await createNoydb({ store: adapter, user: 'viewer-01', secret: 'viewer-pass' })
     })
 
     it('can read all collections', async () => {
@@ -250,7 +250,7 @@ describe('access control: permission matrix', () => {
         passphrase: 'client-pass',
         permissions: { invoices: 'ro' },
       })
-      clientDb = await createNoydb({ adapter, user: 'client-01', secret: 'client-pass' })
+      clientDb = await createNoydb({ store: adapter, user: 'client-01', secret: 'client-pass' })
     })
 
     it('can read permitted collections', async () => {

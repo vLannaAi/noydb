@@ -31,7 +31,7 @@
  *   `DictionaryHandle.put/putAll/get/delete/rename/list` — CRUD
  */
 
-import type { NoydbAdapter, EncryptedEnvelope } from './types.js'
+import type { NoydbStore, EncryptedEnvelope } from './types.js'
 import { NOYDB_FORMAT_VERSION } from './types.js'
 import type { UnlockedKeyring } from './keyring.js'
 import { encrypt, decrypt } from './crypto.js'
@@ -183,7 +183,7 @@ export class DictionaryHandle<Keys extends string = string> {
   }
 
   constructor(
-    private readonly adapter: NoydbAdapter,
+    private readonly adapter: NoydbStore,
     private readonly compartmentName: string,
     private readonly dictionaryName: string,
     private readonly keyring: UnlockedKeyring,

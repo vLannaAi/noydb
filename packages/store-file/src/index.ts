@@ -1,7 +1,7 @@
 import { readFile, writeFile, mkdir, readdir, unlink, stat } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import type {
-  NoydbAdapter,
+  NoydbStore,
   EncryptedEnvelope,
   CompartmentSnapshot,
   Compartment,
@@ -30,7 +30,7 @@ export interface JsonFileOptions {
  * {dir}/{compartment}/_keyring/{userId}.json
  * ```
  */
-export function jsonFile(options: JsonFileOptions): NoydbAdapter {
+export function jsonFile(options: JsonFileOptions): NoydbStore {
   const { dir, pretty = true } = options
 
   function recordPath(compartment: string, collection: string, id: string): string {

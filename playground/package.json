@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "@noy-db/core": "workspace:*",
-    "@noy-db/memory": "workspace:*",
-    "@noy-db/file": "workspace:*"
+    "@noy-db/store-memory": "workspace:*",
+    "@noy-db/store-file": "workspace:*"
   }
 }

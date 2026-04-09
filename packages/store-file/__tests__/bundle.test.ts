@@ -34,7 +34,7 @@ interface Invoice {
 
 async function makeDb(dataDir?: string): Promise<Noydb> {
   return createNoydb({
-    adapter: jsonFile({ dir: dataDir ?? join(testDir, 'data') }),
+    store: jsonFile({ dir: dataDir ?? join(testDir, 'data') }),
     user: 'owner',
     secret: 'bundle-file-test-passphrase-2026',
   })

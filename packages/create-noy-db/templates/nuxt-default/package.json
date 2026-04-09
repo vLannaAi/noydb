@@ -10,10 +10,10 @@
     "verify": "noy-db verify"
   },
   "dependencies": {
-    "@noy-db/browser": "^0.5.0",
+    "@noy-db/store-browser": "^0.5.0",
     "@noy-db/core": "^0.5.0",
-    "@noy-db/file": "^0.5.0",
-    "@noy-db/memory": "^0.5.0",
+    "@noy-db/store-file": "^0.5.0",
+    "@noy-db/store-memory": "^0.5.0",
     "@noy-db/nuxt": "^0.5.0",
     "@noy-db/pinia": "^0.5.0",
     "@noy-db/vue": "^0.5.0",
@@ -23,6 +23,6 @@
     "vue": "^3.5.32"
   },
   "devDependencies": {
-    "@noy-db/create": "^0.5.0"
+    "create-noy-db": "^0.5.0"
   }
 }

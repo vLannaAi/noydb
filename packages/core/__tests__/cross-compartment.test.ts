@@ -6,7 +6,7 @@
  *      filter narrows correctly; wrong-passphrase compartments are
  *      silently dropped (existence-leak guarantee); compartments where
  *      the user has no keyring are silently dropped.
- *   2. **AdapterCapabilityError** — adapters that don't implement
+ *   2. **StoreCapabilityError** — adapters that don't implement
  *      `listCompartments()` throw with a clear message naming the
  *      capability and the calling API.
  *   3. **queryAcross fan-out** — runs the callback against each
@@ -23,16 +23,16 @@
  *
  * The memory adapter is enriched with a custom `listCompartments`
  * implementation in the inline helper, plus a separate variant
- * without it to exercise the AdapterCapabilityError path.
+ * without it to exercise the StoreCapabilityError path.
  */
 
 import { describe, it, expect, beforeEach } from 'vitest'
-import type { NoydbAdapter, EncryptedEnvelope, CompartmentSnapshot } from '../src/types.js'
-import { ConflictError, AdapterCapabilityError } from '../src/errors.js'
+import type { NoydbStore, EncryptedEnvelope, CompartmentSnapshot } from '../src/types.js'
+import { ConflictError, StoreCapabilityError } from '../src/errors.js'
 import { createNoydb } from '../src/noydb.js'
 import type { Noydb } from '../src/noydb.js'
 
-function memory(): NoydbAdapter {
+function memory(): NoydbStore {
   const store = new Map<string, Map<string, Map<string, EncryptedEnvelope>>>()
   function gc(c: string, col: string) {
     let comp = store.get(c); if (!comp) { comp = new Map(); store.set(c, comp) }
@@ -73,8 +73,8 @@ function memory(): NoydbAdapter {
   }
 }
 
-/** Memory adapter without listCompartments — for the AdapterCapabilityError test. */
-function memoryWithoutEnumeration(): NoydbAdapter {
+/** Memory adapter without listCompartments — for the StoreCapabilityError test. */
+function memoryWithoutEnumeration(): NoydbStore {
   const adapter = memory()
   delete (adapter as { listCompartments?: unknown }).listCompartments
   return adapter
@@ -83,12 +83,12 @@ function memoryWithoutEnumeration(): NoydbAdapter {
 interface Invoice { amount: number; month: string }
 
 describe('cross-compartment queries — #63', () => {
-  let adapter: NoydbAdapter
+  let adapter: NoydbStore
   let aliceDb: Noydb
 
   beforeEach(async () => {
     adapter = memory()
-    aliceDb = await createNoydb({ adapter, user: 'alice', secret: 'alice-pass' })
+    aliceDb = await createNoydb({ store: adapter, user: 'alice', secret: 'alice-pass' })
 
     // alice owns three compartments: T1, T2, T7. Each has an `invoices`
     // collection with a couple of records keyed by month.
@@ -109,7 +109,7 @@ describe('cross-compartment queries — #63', () => {
 
     it('filters by minRole — admin keeps owner+admin only', async () => {
       // Add a fourth compartment where alice is granted as 'viewer'.
-      const ownerDb = await createNoydb({ adapter, user: 'bob', secret: 'bob-pass' })
+      const ownerDb = await createNoydb({ store: adapter, user: 'bob', secret: 'bob-pass' })
       await ownerDb.openCompartment('T-shared')
       await ownerDb.grant('T-shared', {
         userId: 'alice', displayName: 'Alice', role: 'viewer', passphrase: 'alice-pass',
@@ -124,7 +124,7 @@ describe('cross-compartment queries — #63', () => {
 
     it('does not leak existence — compartments alice cannot unwrap are silently excluded', async () => {
       // Bob creates a private compartment alice has no keyring for.
-      const bobDb = await createNoydb({ adapter, user: 'bob', secret: 'bob-pass' })
+      const bobDb = await createNoydb({ store: adapter, user: 'bob', secret: 'bob-pass' })
       const bobComp = await bobDb.openCompartment('bob-private')
       await bobComp.collection<{ secret: string }>('payments').put('p-1', { secret: 'classified' })
 
@@ -143,7 +143,7 @@ describe('cross-compartment queries — #63', () => {
       // succeeds with any passphrase because there's nothing to validate
       // — that empty-compartment edge case is a separate v0.4 hardening
       // item, documented in the listAccessibleCompartments JSDoc).
-      const bobDb = await createNoydb({ adapter, user: 'bob', secret: 'bob-pass' })
+      const bobDb = await createNoydb({ store: adapter, user: 'bob', secret: 'bob-pass' })
       const bobComp = await bobDb.openCompartment('T-mismatched')
       await bobComp.collection<{ amount: number }>('payments').put('p-1', { amount: 50 })
 
@@ -162,26 +162,26 @@ describe('cross-compartment queries — #63', () => {
       expect(accessible.find((c) => c.id === 'T-mismatched')).toBeUndefined()
     })
 
-    it('throws AdapterCapabilityError against adapters without listCompartments', async () => {
+    it('throws StoreCapabilityError against adapters without listCompartments', async () => {
       const dumb = memoryWithoutEnumeration()
-      const db = await createNoydb({ adapter: dumb, user: 'alice', secret: 'alice-pass' })
+      const db = await createNoydb({ store: dumb, user: 'alice', secret: 'alice-pass' })
       await db.openCompartment('T1')
 
-      await expect(db.listAccessibleCompartments()).rejects.toThrow(AdapterCapabilityError)
+      await expect(db.listAccessibleCompartments()).rejects.toThrow(StoreCapabilityError)
       await expect(db.listAccessibleCompartments()).rejects.toThrow(/listCompartments/)
       await expect(db.listAccessibleCompartments()).rejects.toThrow(/listAccessibleCompartments/)
     })
 
-    it('AdapterCapabilityError exposes the missing capability for catch-block dispatch', async () => {
+    it('StoreCapabilityError exposes the missing capability for catch-block dispatch', async () => {
       const dumb = memoryWithoutEnumeration()
-      const db = await createNoydb({ adapter: dumb, user: 'alice', secret: 'alice-pass' })
+      const db = await createNoydb({ store: dumb, user: 'alice', secret: 'alice-pass' })
       try {
         await db.listAccessibleCompartments()
         expect.fail('should have thrown')
       } catch (err) {
-        expect(err).toBeInstanceOf(AdapterCapabilityError)
-        expect((err as AdapterCapabilityError).capability).toBe('listCompartments')
-        expect((err as AdapterCapabilityError).code).toBe('ADAPTER_CAPABILITY')
+        expect(err).toBeInstanceOf(StoreCapabilityError)
+        expect((err as StoreCapabilityError).capability).toBe('listCompartments')
+        expect((err as StoreCapabilityError).code).toBe('STORE_CAPABILITY')
       }
     })
   })

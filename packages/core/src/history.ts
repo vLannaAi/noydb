@@ -1,4 +1,4 @@
-import type { NoydbAdapter, EncryptedEnvelope, HistoryOptions, PruneOptions } from './types.js'
+import type { NoydbStore, EncryptedEnvelope, HistoryOptions, PruneOptions } from './types.js'
 
 /**
  * History storage convention:
@@ -39,7 +39,7 @@ function matchesPrefix(id: string, collection: string, recordId?: string): boole
 
 /** Save a history entry (a complete encrypted envelope snapshot). */
 export async function saveHistory(
-  adapter: NoydbAdapter,
+  adapter: NoydbStore,
   compartment: string,
   collection: string,
   recordId: string,
@@ -51,7 +51,7 @@ export async function saveHistory(
 
 /** Get history entries for a record, sorted newest-first. */
 export async function getHistory(
-  adapter: NoydbAdapter,
+  adapter: NoydbStore,
   compartment: string,
   collection: string,
   recordId: string,
@@ -83,7 +83,7 @@ export async function getHistory(
 
 /** Get a specific version's envelope from history. */
 export async function getVersionEnvelope(
-  adapter: NoydbAdapter,
+  adapter: NoydbStore,
   compartment: string,
   collection: string,
   recordId: string,
@@ -95,7 +95,7 @@ export async function getVersionEnvelope(
 
 /** Prune history entries. Returns the number of entries deleted. */
 export async function pruneHistory(
-  adapter: NoydbAdapter,
+  adapter: NoydbStore,
   compartment: string,
   collection: string,
   recordId: string | undefined,
@@ -139,7 +139,7 @@ export async function pruneHistory(
 
 /** Clear all history for a compartment, optionally scoped to a collection or record. */
 export async function clearHistory(
-  adapter: NoydbAdapter,
+  adapter: NoydbStore,
   compartment: string,
   collection?: string,
   recordId?: string,

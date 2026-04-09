@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import type { NoydbAdapter, EncryptedEnvelope, CompartmentSnapshot } from '../src/types.js'
+import type { NoydbStore, EncryptedEnvelope, CompartmentSnapshot } from '../src/types.js'
 import { ConflictError } from '../src/errors.js'
 import { createNoydb } from '../src/noydb.js'
 import type { Noydb } from '../src/noydb.js'
 
-function persistentMemory(): NoydbAdapter {
+function persistentMemory(): NoydbStore {
   const store = new Map<string, Map<string, Map<string, EncryptedEnvelope>>>()
   function gc(c: string, col: string) {
     let comp = store.get(c); if (!comp) { comp = new Map(); store.set(c, comp) }
@@ -35,13 +35,13 @@ interface Invoice { amount: number; status: string }
 
 describe('audit history', () => {
   const COMP = 'C101'
-  let adapter: NoydbAdapter
+  let adapter: NoydbStore
   let db: Noydb
 
   beforeEach(async () => {
     adapter = persistentMemory()
     db = await createNoydb({
-      adapter,
+      store: adapter,
       user: 'owner-01',
       encrypt: false,
       history: { enabled: true },
@@ -256,7 +256,7 @@ describe('audit history', () => {
 
     it('auto-prune when maxVersions is configured', async () => {
       const dbCapped = await createNoydb({
-        adapter: persistentMemory(),
+        store: persistentMemory(),
         user: 'owner',
         encrypt: false,
         history: { enabled: true, maxVersions: 3 },
@@ -277,7 +277,7 @@ describe('audit history', () => {
   describe('history disabled', () => {
     it('no history is saved when disabled', async () => {
       const dbNoHistory = await createNoydb({
-        adapter: persistentMemory(),
+        store: persistentMemory(),
         user: 'owner',
         encrypt: false,
         history: { enabled: false },
@@ -297,7 +297,7 @@ describe('audit history', () => {
   describe('encrypted mode', () => {
     it('history works with encrypted records', async () => {
       const encDb = await createNoydb({
-        adapter: persistentMemory(),
+        store: persistentMemory(),
         user: 'owner-enc',
         secret: 'test-passphrase',
         history: { enabled: true },

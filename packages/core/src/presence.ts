@@ -15,15 +15,15 @@
  *     (if available) or local adapter, and polled periodically.
  */
 
-import type { NoydbAdapter, PresencePeer } from './types.js'
+import type { NoydbStore, PresencePeer } from './types.js'
 import { encrypt, decrypt, generateIV, bufferToBase64, derivePresenceKey } from './crypto.js'
 
 /** Options for constructing a PresenceHandle. @internal */
 export interface PresenceHandleOpts {
   /** Local adapter for storage-poll fallback. */
-  adapter: NoydbAdapter
+  adapter: NoydbStore
   /** Remote (sync) adapter — preferred for broadcasting presence if available. */
-  syncAdapter?: NoydbAdapter
+  syncAdapter?: NoydbStore
   /** Compartment name — used as part of the channel and storage key. */
   compartment: string
   /** Collection name — used as HKDF `info` and channel suffix. */
@@ -53,8 +53,8 @@ interface StoragePresenceRecord {
 
 /** Presence handle for a single collection. */
 export class PresenceHandle<P> {
-  private readonly adapter: NoydbAdapter
-  private readonly syncAdapter: NoydbAdapter | undefined
+  private readonly adapter: NoydbStore
+  private readonly syncAdapter: NoydbStore | undefined
   private readonly compartment: string
   private readonly collectionName: string
   private readonly userId: string
@@ -163,7 +163,7 @@ export class PresenceHandle<P> {
     return this.presenceKey
   }
 
-  private getPubSubAdapter(): NoydbAdapter | undefined {
+  private getPubSubAdapter(): NoydbStore | undefined {
     // Prefer the sync adapter (it broadcasts to other devices)
     if (this.syncAdapter?.presencePublish) return this.syncAdapter
     if (this.adapter.presencePublish) return this.adapter

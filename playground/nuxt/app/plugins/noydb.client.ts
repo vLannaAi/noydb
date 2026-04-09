@@ -18,7 +18,7 @@
  */
 
 import { createNoydb } from '@noy-db/core'
-import { browser } from '@noy-db/browser'
+import { browser } from '@noy-db/store-browser'
 // setActiveNoydb is auto-imported by the @noy-db/nuxt module. We reference
 // it here via the global identifier without an explicit import.
 
@@ -27,7 +27,7 @@ export default defineNuxtPlugin({
   enforce: 'pre',
   async setup(_nuxtApp) {
     const db = await createNoydb({
-      adapter: browser({ prefix: 'noydb-nuxt-demo' }),
+      store: browser({ prefix: 'noydb-nuxt-demo' }),
       user: 'demo-owner',
       // Demo-only passphrase — production apps MUST prompt the user.
       secret: 'nuxt-demo-passphrase-2026',
