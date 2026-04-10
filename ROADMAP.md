@@ -1,6 +1,6 @@
 # Roadmap
 
-> **Current:** v0.11.0 shipped — 15 packages on the hub/to-*/in-* taxonomy. **Next:** v0.12 — developer experience.
+> **Current:** v0.11.0 shipped — 15 packages on the hub/to-*/in-* taxonomy. **Next:** v0.12 — storage structure (blob store, multi-backend topology, syncPolicy).
 >
 > Related docs:
 > - [Architecture](./docs/architecture.md) — data flow, key hierarchy, threat model
@@ -20,15 +20,16 @@ npm publishing is **paused** pending registry cleanup — see HANDOVER.md.
 
 ## Releases
 
-| Version  | Status          | Theme                            |
-|---------:|-----------------|----------------------------------|
-| 0.5–0.11 | ✅ shipped      | Core library + all renames       |
-| **0.12** | 🔨 **next**     | **Developer experience**         |
-| 0.13     | 📋 planned      | Store expansion                  |
-| 0.14     | 📋 planned      | Framework integrations           |
-| 1.0      | 📋 planned      | Stability + LTS release          |
-| 1.x      | 🔭 vision       | Edge & realtime                  |
-| 2.0      | 🔭 vision       | Federation                       |
+| Version  | Status          | Theme                                               |
+|---------:|-----------------|-----------------------------------------------------|
+| 0.5–0.11 | ✅ shipped      | Core library + all renames                          |
+| **0.12** | 🔨 **next**     | **Storage structure** — blob store, multi-backend, syncPolicy |
+| 0.13     | 📋 planned      | Store expansion — `to-*` packages + matching `auth-*` |
+| 0.14     | 📋 planned      | Framework integrations — `in-*` + scaffolding       |
+| 0.15     | 📋 planned      | Developer tools — CLI, store-probe, devtools        |
+| 1.0      | 📋 planned      | Stability + LTS release                             |
+| 1.x      | 🔭 vision       | Edge & realtime                                     |
+| 2.0      | 🔭 vision       | Federation                                          |
 
 ---
 
@@ -45,87 +46,56 @@ Every future release respects these:
 
 ---
 
-## v0.12 — Developer experience
+## v0.12 — Storage structure
 
-**Goal:** Make the day-to-day development loop fast and observable — local debugging, store health checks, devtools, and scaffolder improvements. All tooling features that were deferred from v0.11 (which became the package rename) land here.
+**Goal:** Land the internal hub changes that all future store packages and topologies depend on. No new `to-*` packages ship here — just the contracts and primitives they build on.
 
-### store-probe (#146)
+### `NoydbBundleAdapter` interface (#103)
 
-`@noy-db/store-probe` — setup-time suitability test and runtime reliability monitor for any attached store. Two modes:
+A second store shape for blob-store backends (Drive, WebDAV, Git, iCloud) that operate on whole-vault bundles rather than per-record KV. Backends implement `readBundle(vaultId)` / `writeBundle(vaultId, bytes)` instead of the six-method KV contract. Core wraps bundle adapters transparently so consumers use the same `openVault` / `collection.put` API regardless of the underlying store shape.
 
-- **`probeStore(store, options?)`** (setup-time) — runs a battery of round-trip checks (put/get/delete, CAS atomicity, list semantics) and returns a structured `ProbeReport` with pass/fail per capability. Throws `StoreSuitabilityError` on hard failures. Designed to be called once during app startup in dev/staging.
-- **`monitorStore(store, options?)`** (runtime) — wraps a store instance and tracks per-operation latency, error rates, and CAS retry counts. Exposes `store.monitor.stats()` and emits `probe:degraded` events when thresholds are crossed.
+### `syncPolicy` scheduling (#101)
 
-Both work against any `NoydbStore` implementation — the probe is the canonical way to validate a custom store before shipping it.
+First-class `SyncPolicy` type in `NoydbOptions` — `{ push: { mode: 'on-change' | 'debounce' | 'interval' | 'manual', ... }, pull: { ... } }`. Default policies inferred by store category (indexed stores default `on-change`; bundle stores default `debounce` 30s). Foundation for per-target policy in the multi-backend topology.
 
-### Naked mode (#106)
+### Encrypted binary attachment store (#105)
 
-Dev-only plaintext storage mode for debugging — opt-in with heavy guardrails:
+Blobs alongside records — large files (PDFs, images, audio) stored encrypted next to their parent records without inflating the in-memory collection. `collection.attachments(id)` returns an `AttachmentHandle` with `put(name, blob)` / `get(name)` / `list()`. Blobs go through the same DEK as the parent record; the attachment envelope carries `_noydb`, `_iv`, `_data` but never loads into the query layer.
 
-- `NoydbOptions.naked: true` disables AES-GCM and stores records as cleartext JSON
-- Unconditionally throws in production (`process.env.NODE_ENV === 'production'`)
-- Throws if hostname is not `localhost` / `127.0.0.1`
-- Requires `acknowledge: 'I understand this stores plaintext'` string in options
-- Stamps every envelope with `_naked: true` so naked-mode data is never silently loaded by an encrypted instance
+### Multi-backend topology — `SyncTarget[]` (#158)
 
-Use case: debugging query plans, verifying record shapes, profiling without crypto overhead.
-
-### .noydb reader — CLI + browser extension (#102)
-
-`noydb inspect <file.noydb>` CLI command and companion browser extension for reading `.noydb` bundle files without writing code:
-
-- CLI: prints bundle header (handle, format version, body size, sha256), then decrypts and pretty-prints records given a passphrase
-- Browser extension: drag-and-drop `.noydb` files, enter passphrase, browse vaults/collections in a tree view
-- Both are read-only — no write path
-
-### Nuxt devtools tab
-
-`@noy-db/in-nuxt` devtools integration via `@nuxt/devtools-kit`:
-
-- Vault/collection tree in the devtools panel
-- Live sync status and ledger tail viewer
-- Query playground — run `.query()` chains from the browser devtools
-
-### `nuxi noydb` CLI extension
-
-`nuxi noydb <cmd>` integration for Nuxt projects:
-
-- `nuxi noydb inspect` — inspect a `.noydb` bundle
-- `nuxi noydb probe` — run store-probe against the configured adapter
-- `nuxi noydb migrate` — run keyring/envelope migrations across a vault directory
-
-### Scaffolder templates (#39)
-
-`create-noy-db` new templates:
-
-- **`vite-vue`** — plain Vite + Vue 3, no Nuxt, with `@noy-db/in-vue` + `@noy-db/to-browser-idb`
-- **`electron`** — Electron desktop app with `@noy-db/to-file` on the main process, `@noy-db/in-vue` renderer
-- **`vanilla`** — zero-framework, TypeScript only with `@noy-db/hub` + `@noy-db/to-browser-idb`
+`NoydbOptions.sync` expands to accept `NoydbStore | SyncTarget | SyncTarget[]`. Each `SyncTarget` carries a `role` (`'sync-peer' | 'backup' | 'archive'`), optional per-target `policy`, and a display `label`. Write fanout is fire-and-mark-dirty — `put()` resolves on primary success only. See discussion #137 for full design.
 
 ---
 
 ## v0.13 — Store expansion
 
-| Store                           | Why                                                                  |
-|---------------------------------|----------------------------------------------------------------------|
-| `@noy-db/to-cloudflare-r2`      | Cheap S3-compatible, no egress fees                                  |
-| `@noy-db/to-cloudflare-d1`      | SQLite at the edge, free tier                                        |
-| `@noy-db/to-supabase`           | One-click Postgres + storage                                         |
-| `@noy-db/to-ipfs`               | Content-addressed; fits the hash-chain ledger naturally              |
-| `@noy-db/to-git`                | Vault = git repo, history = commits, sync = push/pull                |
-| `@noy-db/to-webdav`             | Nextcloud, ownCloud, any WebDAV server                               |
-| `@noy-db/to-sqlite`             | Single-file backend (better than JSON for >10K records)              |
-| `@noy-db/to-turso`              | Edge SQLite with replication                                         |
-| `@noy-db/to-firestore`          | Firebase teams                                                       |
-| `@noy-db/to-postgres`           | Postgres `jsonb` column, single-table pattern                        |
+`to-*` packages that depend on v0.12 primitives (`NoydbBundleAdapter`, `syncPolicy`, `SyncTarget`), plus matching `auth-*` packages where the store has its own auth flow (OAuth for Drive, OIDC for cloud providers).
 
-Also tracked in this milestone: `NoydbBundleAdapter` interface (#103), `syncPolicy` debounce/interval scheduling (#101), Google Drive bundle adapter (#104), encrypted binary attachment store (#105), `@noy-db/decrypt-sql` (#107), SQL-backed adapters (#108).
+| Store                      | Shape    | Notes |
+|----------------------------|----------|-------|
+| `@noy-db/to-cloudflare-r2` | KV       | S3-compatible, no egress fees |
+| `@noy-db/to-cloudflare-d1` | KV       | SQLite at the edge, free tier |
+| `@noy-db/to-supabase`      | KV       | Postgres + storage |
+| `@noy-db/to-ipfs`          | Bundle   | Content-addressed, hash-chain natural fit |
+| `@noy-db/to-git`           | Bundle   | Vault = repo, history = commits |
+| `@noy-db/to-webdav`        | Bundle   | Nextcloud, ownCloud, any WebDAV |
+| `@noy-db/to-sqlite`        | KV       | Single-file, better than JSON >10K records |
+| `@noy-db/to-turso`         | KV       | Edge SQLite with replication |
+| `@noy-db/to-firestore`     | KV       | Firebase teams |
+| `@noy-db/to-postgres`      | KV       | `jsonb` column, single-table pattern |
+| `@noy-db/to-drive`         | Bundle   | Google Drive, OAuth (#104) |
+| `@noy-db/to-icloud`        | Bundle   | iCloud Drive (#142) |
+| `@noy-db/to-smb`           | KV/file  | SMB/CIFS network shares (#144) |
+| `@noy-db/to-nfs`           | KV/file  | NFS network shares (#145) |
+
+Also: `@noy-db/decrypt-sql` (#107) and SQL-backed adapters `@noy-db/to-postgres` / `@noy-db/to-mysql` (#108).
 
 ---
 
-## v0.14 — Framework integrations
+## v0.14 — Framework integrations + scaffolding
 
-Pinia/Vue/Nuxt already ship. v0.14 brings the same first-class story to other ecosystems.
+`in-*` packages for ecosystems beyond Vue/Nuxt/Pinia, plus `create-noy-db` templates and the multi-backend wizard.
 
 | Package                         | Provides                                                       |
 |---------------------------------|----------------------------------------------------------------|
@@ -133,11 +103,19 @@ Pinia/Vue/Nuxt already ship. v0.14 brings the same first-class story to other ec
 | `@noy-db/in-svelte`             | Reactive stores                                                |
 | `@noy-db/in-solid`              | Signals                                                        |
 | `@noy-db/in-qwik`               | Resumable queries                                              |
-| `@noy-db/in-tanstack-query`     | Query function adapter — paginate/infinite-scroll              |
+| `@noy-db/in-tanstack-query`     | Query function adapter — paginate / infinite-scroll            |
 | `@noy-db/in-tanstack-table`     | Bridge for the existing `useSmartTable` pattern                |
 | `@noy-db/in-zustand`            | Zustand store factory mirroring `defineNoydbStore`             |
 
 All share one core implementation; framework packages stay thin (~200 LoC each).
+
+Scaffolding additions: `vite-vue`, `electron`, and `vanilla` templates for `create-noy-db` (#155–157), plus the multi-backend setup wizard (#159).
+
+---
+
+## v0.15 — Developer tools
+
+`@noy-db/store-probe` (setup-time suitability + runtime monitor, single and multi-backend), `.noydb` reader CLI, Chrome extension, Nuxt devtools tab, `nuxi noydb` CLI extension, and naked-mode debugging (#106).
 
 ---
 

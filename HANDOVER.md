@@ -33,7 +33,7 @@ Do not re-enable until npm cleanup is complete (see below).
 v0.11 code work is **done**: all 15 packages renamed to the hub/to-*/in-* taxonomy,
 all 1065 tests passing, issue #150 closed, milestones v0.10.0 + v0.11.0 closed.
 
-**Open milestones:** v0.12.0 (developer experience), v0.13.0 (store expansion).
+**Open milestones:** v0.12.0 (storage structure), v0.13.0 (store expansion), v0.14.0 (frameworks + scaffolding), v0.15.0 (developer tools).
 
 ---
 
@@ -101,15 +101,15 @@ Version to publish: **0.11.0**. All code is ready on `main`.
 
 ---
 
-## v0.12.0 — Developer experience (next milestone)
+## v0.12.0 — Storage structure (next milestone)
 
 GitHub milestone: https://github.com/vLannaAi/noy-db/milestone/9
 
 Issues in scope:
-- **#146** `@noy-db/store-probe` — setup-time suitability test + runtime monitor
-- **#106** naked mode — dev-only plaintext storage with guardrails
-- **#102** `.noydb` reader — CLI commands + browser extension
-- **#39** scaffolder templates — Vite+Vue, Electron, vanilla
+- **#103** `NoydbBundleAdapter` interface — second store shape for blob-store backends
+- **#101** `syncPolicy` — debounce / interval / on-change scheduling
+- **#105** encrypted binary attachment store — blobs alongside records
+- **#158** `SyncTarget[]` multi-backend topology with role + per-target policy
 
 See ROADMAP.md for full design notes on each item.
 
