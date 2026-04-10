@@ -3,7 +3,7 @@
 > **Purpose:** context for the next Claude Code session. Read this first —
 > it will save you 10 minutes of re-discovery.
 >
-> **Updated:** 2026-04-10 — v0.11.0 code complete (hub/to-*/in-* rename shipped); npm cleanup in progress before publishing; v0.12 developer experience is next.
+> **Updated:** 2026-04-10 — v0.12.0 shipped (storage routing, blob store, middleware, multi-backend). npm publishing still PAUSED. Next: v0.13 store expansion.
 
 ---
 
@@ -20,20 +20,51 @@ the actual name before any commit or publish that touches user-facing copy.
 
 ---
 
-## Current state: v0.11.0 code complete — npm cleanup in progress
+## Current state: v0.12.0 shipped — npm publishing still paused
 
-```
-main  bb53cca  docs: update HANDOVER — npm cleanup status, v0.11 rename plan
-```
+v0.12.0 code is **done**. 15 packages, **850 tests** passing across 51 test files.
+**npm publishing is PAUSED** — see npm cleanup section below.
 
-Working tree clean. **npm publishing is PAUSED** — the release workflow
-(`.github/workflows/release.yml`) requires manual `workflow_dispatch`.
-Do not re-enable until npm cleanup is complete (see below).
+### What shipped in v0.12 (7 issues closed)
 
-v0.11 code work is **done**: all 15 packages renamed to the hub/to-*/in-* taxonomy,
-all 1065 tests passing, issue #150 closed, milestones v0.10.0 + v0.11.0 closed.
+| Issue | Feature | Key file |
+|-------|---------|----------|
+| #105 | Encrypted blob store (`BlobSet`) | `hub/src/blob-set.ts` |
+| #103 | `NoydbBundleStore` with OCC | `hub/src/bundle-store.ts` |
+| #101 | `syncPolicy` scheduling | `hub/src/sync-policy.ts` |
+| #158 | `SyncTarget[]` multi-backend | `hub/src/noydb.ts` |
+| #162 | `routeStore()` split-store routing | `hub/src/route-store.ts` |
+| #163 | Ephemeral routing (override/suspend) | `hub/src/route-store.ts` |
+| #164 | Store middleware (E1-E10) | `hub/src/store-middleware.ts` |
 
-**Open milestones:** v0.12.0 (storage structure), v0.13.0 (store expansion), v0.14.0 (frameworks + scaffolding), v0.15.0 (developer tools).
+### New files in hub/src/
+
+- `blob-set.ts` — BlobSet class (replaces old attachments.ts)
+- `mime-magic.ts` — MIME detection from magic bytes (55 rules, 48 formats)
+- `sync-policy.ts` — SyncPolicy types + SyncScheduler
+- `route-store.ts` — routeStore multiplexer + override/suspend
+- `store-middleware.ts` — wrapStore + 6 middlewares (retry, logging, metrics, circuit breaker, cache, health check)
+- `attachments.ts` — legacy compat file (old naming)
+
+### API renames in v0.12
+
+| Old | New |
+|-----|-----|
+| `collection.attachments(id)` | `collection.blob(id)` |
+| `AttachmentHandle` | `BlobSet` |
+| `AttachmentEntry` | `SlotRecord` |
+| `ATTACH_META_PREFIX` | `BLOB_SLOTS_PREFIX` |
+
+### Deferred to v0.13
+
+- `vault.blobGC()` full reconciliation scan
+- True streaming decompression (`DecompressionStream` piping)
+- Blob sync via `SyncTarget`
+- `_blob` DEK rotation with eTag recomputation
+- Concrete `to-drive` / `to-webdav` bundle store packages
+- Timer-mocked tests for syncPolicy debounce coalescing
+
+**Open milestones:** v0.13.0 (store expansion), v0.14.0 (frameworks + scaffolding), v0.15.0 (developer tools).
 
 ---
 
@@ -101,17 +132,17 @@ Version to publish: **0.11.0**. All code is ready on `main`.
 
 ---
 
-## v0.12.0 — Storage structure (next milestone)
+## v0.13.0 — Store expansion (next milestone)
 
-GitHub milestone: https://github.com/vLannaAi/noy-db/milestone/9
+New `to-*` packages that depend on v0.12 primitives. See ROADMAP.md for the full list (14 store packages planned).
 
-Issues in scope:
-- **#103** `NoydbBundleAdapter` interface — second store shape for blob-store backends
-- **#101** `syncPolicy` — debounce / interval / on-change scheduling
-- **#105** encrypted binary attachment store — blobs alongside records
-- **#158** `SyncTarget[]` multi-backend topology with role + per-target policy
+Priority targets:
+- `@noy-db/to-drive` — Google Drive bundle store (first `NoydbBundleStore` consumer)
+- `@noy-db/to-webdav` — WebDAV bundle store (Nextcloud, ownCloud)
+- `@noy-db/to-sqlite` — single-file SQLite (better than JSON > 10K records)
+- `@noy-db/to-cloudflare-r2` — S3-compatible, no egress fees
 
-See ROADMAP.md for full design notes on each item.
+Also: `vault.blobGC()`, true blob streaming, blob sync, `_blob` DEK rotation.
 
 ---
 

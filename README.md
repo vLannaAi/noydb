@@ -41,6 +41,9 @@ If a breach happens at your cloud provider, the attacker gets ciphertext. If a s
 - **📱 Runs on any OS, any device** — macOS, Linux, Windows, iOS, Android, Raspberry Pi, an old laptop, a shared browser tab. Any JavaScript runtime (Node 18+, Bun, Deno, every modern browser). **Minimum requirements: a JS engine and the Web Crypto API.** That's it. No GPU, no heavy dependencies, no system-level service.
 - **🌐 Offline-first** — every operation works without internet. Sync to a remote is opportunistic, not mandatory. The library doesn't distinguish between "I'm online" and "I'm offline" — both modes use the same code path.
 - **👥 Multi-user built in** — 5 role types (owner / admin / operator / viewer / client), per-collection permissions, portable keyrings, key rotation on revoke. **No auth server required** — the keyring file travels with your data and lives on the same backend.
+- **📎 Encrypted blob store** — binary files (PDFs, images, scans) alongside records. Content-addressed, deduplicated, versioned. HMAC-keyed eTags (opaque to store), AAD-bound chunks, MIME auto-detection, amendment versioning with `publish`/`getVersion`.
+- **🔀 Store routing** — `routeStore()` sends records to DynamoDB and blobs to S3 in a single `createNoydb()` call. Size-tiered, age-tiered, per-collection, vault-based geographic, and quota-aware overflow routing. Runtime `override()`/`suspend()` for shared devices and restricted networks.
+- **🧱 Store middleware** — `wrapStore(store, withRetry(), withCache(), withCircuitBreaker(), withHealthCheck())` — composable interceptors for retry, caching, circuit breaker, health monitoring, logging, and metrics.
 
 ---
 
@@ -337,22 +340,40 @@ Every package has **zero runtime dependencies**. AWS SDKs and Vue are peer depen
 
 ---
 
-## Custom Adapters
+## Custom Stores
 
-The adapter interface is 6 methods. Anything that can store a blob works with NOYDB:
+The store interface is 6 methods. Anything that can store a blob works with NOYDB:
 
 ```ts
-import { defineAdapter } from '@noy-db/hub'
+import { createStore } from '@noy-db/hub'
 
-export const myAdapter = defineAdapter((options) => ({
+export const myStore = createStore((options) => ({
   name: 'my-backend',
-  async get(compartment, collection, id) { /* ... */ },
-  async put(compartment, collection, id, envelope, expectedVersion) { /* ... */ },
-  async delete(compartment, collection, id) { /* ... */ },
-  async list(compartment, collection) { /* ... */ },
-  async loadAll(compartment) { /* ... */ },
-  async saveAll(compartment, data) { /* ... */ },
+  async get(vault, collection, id) { /* ... */ },
+  async put(vault, collection, id, envelope, expectedVersion) { /* ... */ },
+  async delete(vault, collection, id) { /* ... */ },
+  async list(vault, collection) { /* ... */ },
+  async loadAll(vault) { /* ... */ },
+  async saveAll(vault, data) { /* ... */ },
 }))
+```
+
+### Store Routing (v0.12)
+
+Route different data to different backends in a single `createNoydb()` call:
+
+```ts
+import { routeStore, wrapStore, withRetry, withCache } from '@noy-db/hub'
+
+const db = await createNoydb({
+  store: routeStore({
+    default: wrapStore(dynamo({ table: 'myapp' }), withRetry(), withCache()),
+    blobs: s3Store({ bucket: 'myapp-blobs' }),
+    age: { cold: s3Store({ bucket: 'archive' }), coldAfterDays: 90 },
+  }),
+  user: 'alice',
+  secret: passphrase,
+})
 ```
 
 ---

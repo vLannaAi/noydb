@@ -1,6 +1,6 @@
 # Roadmap
 
-> **Current:** v0.11.0 shipped — 15 packages on the hub/to-*/in-* taxonomy. **Next:** v0.12 — storage structure (blob store, multi-backend topology, syncPolicy).
+> **Current:** v0.12.0 shipped — storage routing, blob store, middleware, multi-backend topology. **Next:** v0.13 — store expansion (`to-*` packages).
 >
 > Related docs:
 > - [Architecture](./docs/architecture.md) — data flow, key hierarchy, threat model
@@ -12,7 +12,7 @@
 
 ## Status
 
-v0.11.0 is the current codebase (2026-04-10). **15 packages** on the **hub / to-* / in-*** naming taxonomy. Full surface from v0.5 through v0.11: zero-knowledge encryption, multi-user ACL, query DSL (joins, aggregations, streaming), sync v2 (CRDT, presence, partial), i18n primitives, identity/sessions, `.noydb` container format, store rename (NoydbStore / createStore / Vault), browser store split, AWS store renames, IndexedDB CAS fix, and the v0.11 package taxonomy rename. **1065 tests** passing.
+v0.12.0 is the current codebase (2026-04-10). **15 packages** on the **hub / to-* / in-*** naming taxonomy. v0.12 adds encrypted blob store, store routing (`routeStore`), store middleware (`wrapStore`), `NoydbBundleStore`, `syncPolicy` scheduling, `SyncTarget[]` multi-backend topology, and runtime ephemeral routing. **850 tests** passing.
 
 npm publishing is **paused** pending registry cleanup — see HANDOVER.md.
 
@@ -23,7 +23,7 @@ npm publishing is **paused** pending registry cleanup — see HANDOVER.md.
 | Version  | Status          | Theme                                               |
 |---------:|-----------------|-----------------------------------------------------|
 | 0.5–0.11 | ✅ shipped      | Core library + all renames                          |
-| **0.12** | 🔨 **next**     | **Storage structure** — blob store, multi-backend, syncPolicy |
+| **0.12** | ✅ **shipped**  | **Storage structure** — blob store, routing, middleware, multi-backend |
 | 0.13     | 📋 planned      | Store expansion — `to-*` packages + matching `auth-*` |
 | 0.14     | 📋 planned      | Framework integrations — `in-*` + scaffolding       |
 | 0.15     | 📋 planned      | Developer tools — CLI, store-probe, devtools        |
@@ -46,25 +46,37 @@ Every future release respects these:
 
 ---
 
-## v0.12 — Storage structure
+## v0.12 — Storage structure (shipped 2026-04-10)
 
-**Goal:** Land the internal hub changes that all future store packages and topologies depend on. No new `to-*` packages ship here — just the contracts and primitives they build on.
+Internal hub changes that all future store packages and topologies depend on. 7 issues closed (#103, #105, #101, #158, #162, #163, #164).
 
-### `NoydbBundleAdapter` interface (#103)
+### Encrypted binary blob store (#105)
 
-A second store shape for blob-store backends (Drive, WebDAV, Git, iCloud) that operate on whole-vault bundles rather than per-record KV. Backends implement `readBundle(vaultId)` / `writeBundle(vaultId, bytes)` instead of the six-method KV contract. Core wraps bundle adapters transparently so consumers use the same `openVault` / `collection.put` API regardless of the underlying store shape.
+`collection.blob(id)` returns a `BlobSet` for encrypted binary attachments. HMAC-SHA-256 keyed eTags (opaque to store), AES-256-GCM per-chunk with AAD binding, refCount with CAS retry, MIME auto-detection (55 magic-byte rules), selective versioning (`publish`/`getVersion`), HTTP `Response` surface.
+
+### Store routing — `routeStore()` (#162)
+
+Store multiplexer: records to DynamoDB, blobs to S3, cold data to archive. Five routing dimensions: collection prefix, record size (tiered blobs), record age, collection identity, vault name (geographic). 27x cost reduction for blob storage vs DynamoDB-only.
+
+### Ephemeral routing (#163)
+
+Runtime `override()`/`suspend()`/`resume()` for shared devices and restricted networks. Write-behind queue on suspended routes with replay on resume.
+
+### Store middleware (#164)
+
+`wrapStore(store, withRetry(), withCache(), withCircuitBreaker(), withHealthCheck(), withLogging(), withMetrics())` — composable interceptors for any `NoydbStore`.
+
+### `NoydbBundleStore` (#103)
+
+Second store shape for whole-vault bundle backends (Drive, WebDAV, iCloud). OCC via version tokens, `wrapBundleStore` with `autoFlush`/`batch`/`flush` modes, LWW conflict merge.
 
 ### `syncPolicy` scheduling (#101)
 
-First-class `SyncPolicy` type in `NoydbOptions` — `{ push: { mode: 'on-change' | 'debounce' | 'interval' | 'manual', ... }, pull: { ... } }`. Default policies inferred by store category (indexed stores default `on-change`; bundle stores default `debounce` 30s). Foundation for per-target policy in the multi-backend topology.
-
-### Encrypted binary attachment store (#105)
-
-Blobs alongside records — large files (PDFs, images, audio) stored encrypted next to their parent records without inflating the in-memory collection. `collection.attachments(id)` returns an `AttachmentHandle` with `put(name, blob)` / `get(name)` / `list()`. Blobs go through the same DEK as the parent record; the attachment envelope carries `_noydb`, `_iv`, `_data` but never loads into the query layer.
+`SyncPolicy` type: 4 push modes (`manual`/`on-change`/`debounce`/`interval`), 3 pull modes. `SyncScheduler` with `minIntervalMs` floor and `onUnload` hooks. `INDEXED_STORE_POLICY` / `BUNDLE_STORE_POLICY` defaults.
 
 ### Multi-backend topology — `SyncTarget[]` (#158)
 
-`NoydbOptions.sync` expands to accept `NoydbStore | SyncTarget | SyncTarget[]`. Each `SyncTarget` carries a `role` (`'sync-peer' | 'backup' | 'archive'`), optional per-target `policy`, and a display `label`. Write fanout is fire-and-mark-dirty — `put()` resolves on primary success only. See discussion #137 for full design.
+`NoydbOptions.sync` accepts `NoydbStore | SyncTarget | SyncTarget[]`. Roles: `sync-peer` (bidirectional), `backup`/`archive` (push-only). Write fanout with `sync:backup-error` event. Per-target policy override.
 
 ---
 

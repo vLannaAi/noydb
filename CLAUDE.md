@@ -12,7 +12,7 @@ The primary spec is `SPEC.md` — read it before any non-trivial work. It is the
 - `docs/architecture.md` — reader-facing data flow and threat model
 - `docs/v0.6/` — v0.6 release notes draft, merge runbook, retrospective
 
-**Status:** v0.10.0 on npm (2026-04-09). 15 packages. Full v0.5–v0.9 surface plus the v0.10 store rename (NoydbAdapter → NoydbStore), Vault rename (Compartment → Vault), browser store split, and AWS store renames. All 1065 tests passing.
+**Status:** v0.12.0 on GitHub (2026-04-10). npm paused. 15 packages. v0.12 adds encrypted blob store, store routing (`routeStore`), store middleware (`wrapStore`), `NoydbBundleStore`, `syncPolicy`, `SyncTarget[]` multi-backend, ephemeral routing. 850 tests passing.
 
 ## Architecture
 

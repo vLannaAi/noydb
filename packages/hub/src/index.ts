@@ -61,6 +61,50 @@ export type {
   StoreCapabilities,
 } from './types.js'
 
+// Blob store (v0.12 #103 #105)
+export type {
+  NoydbBundleStore,
+  BlobObject,
+  SlotRecord,
+  SlotInfo,
+  VersionRecord,
+  BlobPutOptions,
+  BlobResponseOptions,
+} from './types.js'
+export { BlobSet } from './blob-set.js'
+export {
+  BLOB_COLLECTION,
+  BLOB_INDEX_COLLECTION,
+  BLOB_CHUNKS_COLLECTION,
+  BLOB_SLOTS_PREFIX,
+  BLOB_VERSIONS_PREFIX,
+  DEFAULT_CHUNK_SIZE,
+} from './blob-set.js'
+export { detectMimeType, detectMagic, isPreCompressed } from './mime-magic.js'
+export { wrapBundleStore, createBundleStore } from './bundle-store.js'
+export type { WrappedBundleNoydbStore, WrapBundleStoreOptions } from './bundle-store.js'
+
+// Sync policy (v0.12 #101)
+export type { SyncPolicy, PushPolicy, PullPolicy, PushMode, PullMode, SyncSchedulerStatus } from './sync-policy.js'
+export { SyncScheduler, INDEXED_STORE_POLICY, BUNDLE_STORE_POLICY } from './sync-policy.js'
+
+// Sync target (v0.12 #158)
+export type { SyncTarget, SyncTargetRole } from './types.js'
+
+// Store routing (v0.12 #162)
+export { routeStore } from './route-store.js'
+export type {
+  RouteStoreOptions, RoutedNoydbStore, BlobStoreRoute, AgeRoute,
+  BlobLifecyclePolicy, OverrideTarget, OverrideOptions, SuspendOptions, RouteStatus,
+} from './route-store.js'
+
+// Store middleware (v0.12 #164 E4)
+export { wrapStore, withRetry, withLogging, withMetrics, withCircuitBreaker, withCache, withHealthCheck } from './store-middleware.js'
+export type {
+  StoreMiddleware, RetryOptions, LoggingOptions, LogLevel,
+  MetricsOptions, StoreOperation, CircuitBreakerOptions, CacheOptions, HealthCheckOptions,
+} from './store-middleware.js'
+
 // Errors
 export {
   NoydbError,
@@ -83,6 +127,7 @@ export {
   JoinTooLargeError,
   DanglingReferenceError,
   BundleIntegrityError,
+  BundleVersionConflictError,
   SessionExpiredError,
   SessionNotFoundError,
   SessionPolicyError,
@@ -279,8 +324,8 @@ export {
 } from './dev-unlock.js'
 export type { DevUnlockOptions } from './dev-unlock.js'
 
-// Crypto utilities (buffer encoding helpers)
-export { bufferToBase64, base64ToBuffer } from './crypto.js'
+// Crypto utilities (buffer encoding helpers + binary encrypt/hash)
+export { bufferToBase64, base64ToBuffer, encryptBytes, decryptBytes } from './crypto.js'
 
 // Diff
 export { diff, formatDiff } from './diff.js'
