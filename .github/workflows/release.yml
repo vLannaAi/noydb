@@ -13,9 +13,15 @@ name: Release
 # brittle for monorepos with mismatched starting versions across packages.
 # Manual version bumps + GitHub Release event is simpler and deterministic.
 
+# PUBLISHING PAUSED: npm cleanup in progress (package renaming v0.11).
+# Re-enable once all old package names are cleared from the registry.
+# To re-enable: restore `on: release: types: [published]`
 on:
-  release:
-    types: [published]
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type PUBLISH to confirm manual trigger'
+        required: true
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
