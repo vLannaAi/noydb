@@ -1,5 +1,15 @@
 # @noy-db/core
 
+## 0.11.0
+
+### Minor Changes
+
+- v0.11 package taxonomy rename — hub / to-_ / in-_ (#150)
+
+  Establishes the final naming taxonomy across all 15 packages.
+  `@noy-db/hub` (was `@noy-db/core`), `@noy-db/to-*` storage backends,
+  `@noy-db/in-*` framework integrations. No API changes — pure rename.
+
 ## 0.9.0
 
 ### Minor Changes

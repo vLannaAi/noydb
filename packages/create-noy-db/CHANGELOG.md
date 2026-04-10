@@ -1,5 +1,14 @@
 # @noy-db/create
 
+## 0.10.1
+
+### Patch Changes
+
+- Updated dependencies
+  - @noy-db/hub@0.11.0
+  - @noy-db/to-file@1.0.0
+  - @noy-db/to-memory@1.0.0
+
 ## 0.8.1
 
 ### Patch Changes

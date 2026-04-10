@@ -4,6 +4,15 @@
 
 ### Patch Changes
 
+- Updated dependencies
+  - @noy-db/hub@0.11.0
+  - @noy-db/in-pinia@1.0.0
+  - @noy-db/in-vue@1.0.0
+
+## 1.0.0
+
+### Patch Changes
+
 - feat(v0.9): sync v2 — conflict policies, partial sync, transactions, CRDT, presence, @noy-db/yjs
 
   ### @noy-db/core
