@@ -126,7 +126,7 @@ describe('augmentNuxtConfig', () => {
     const r = await augmentNuxtConfig({ configPath, adapter: 'browser' })
     expect(r.kind).toBe('proposed-change')
     if (r.kind !== 'proposed-change') throw new Error('wrong kind')
-    expect(r.newCode).toContain('@noy-db/nuxt')
+    expect(r.newCode).toContain('@noy-db/in-nuxt')
     expect(r.newCode).toContain('noydb')
     expect(r.newCode).toContain("adapter: 'browser'")
   })
@@ -138,7 +138,7 @@ describe('augmentNuxtConfig', () => {
     )
     const r = await augmentNuxtConfig({ configPath, adapter: 'file' })
     if (r.kind !== 'proposed-change') throw new Error('wrong kind')
-    expect(r.newCode).toContain('@noy-db/nuxt')
+    expect(r.newCode).toContain('@noy-db/in-nuxt')
     expect(r.newCode).toContain("adapter: 'file'")
     // The existing devtools key should still be present.
     expect(r.newCode).toContain('devtools')
@@ -153,7 +153,7 @@ describe('augmentNuxtConfig', () => {
     if (r.kind !== 'proposed-change') throw new Error('wrong kind')
     // Both modules should be present in the new code.
     expect(r.newCode).toContain('@pinia/nuxt')
-    expect(r.newCode).toContain('@noy-db/nuxt')
+    expect(r.newCode).toContain('@noy-db/in-nuxt')
   })
 
   it('is idempotent — second run returns already-configured', async () => {
@@ -185,7 +185,7 @@ describe('augmentNuxtConfig', () => {
     expect(r.newCode).toContain("adapter: 'file'")
     expect(r.newCode).toContain('pinia: false')
     // But the module IS added (that half is still missing).
-    expect(r.newCode).toContain('@noy-db/nuxt')
+    expect(r.newCode).toContain('@noy-db/in-nuxt')
   })
 
   it('emits a unified diff with add/remove markers', async () => {
@@ -199,7 +199,7 @@ describe('augmentNuxtConfig', () => {
     // @noy-db/nuxt module and the new noydb key).
     const addedLines = r.diff.split('\n').filter((l) => l.startsWith('+') && !l.startsWith('+++'))
     expect(addedLines.length).toBeGreaterThan(0)
-    expect(addedLines.some((l) => l.includes('@noy-db/nuxt'))).toBe(true)
+    expect(addedLines.some((l) => l.includes('@noy-db/in-nuxt'))).toBe(true)
   })
 
   it('dryRun flag is reflected in the result', async () => {
@@ -212,7 +212,7 @@ describe('augmentNuxtConfig', () => {
     expect(r.dryRun).toBe(true)
     // The file on disk is UNCHANGED — dryRun doesn't write.
     const current = await fs.readFile(configPath, 'utf8')
-    expect(current).not.toContain('@noy-db/nuxt')
+    expect(current).not.toContain('@noy-db/in-nuxt')
   })
 
   it('handles a plain object literal export (no defineNuxtConfig wrapper)', async () => {
@@ -222,7 +222,7 @@ describe('augmentNuxtConfig', () => {
     )
     const r = await augmentNuxtConfig({ configPath, adapter: 'browser' })
     if (r.kind !== 'proposed-change') throw new Error('wrong kind')
-    expect(r.newCode).toContain('@noy-db/nuxt')
+    expect(r.newCode).toContain('@noy-db/in-nuxt')
   })
 })
 
@@ -257,7 +257,7 @@ describe('runWizard augment mode — integration', () => {
 
     // Verify the file on disk was updated.
     const updated = await fs.readFile(configPath, 'utf8')
-    expect(updated).toContain('@noy-db/nuxt')
+    expect(updated).toContain('@noy-db/in-nuxt')
     expect(updated).toContain("adapter: 'browser'")
     // Original unrelated keys should still be present.
     expect(updated).toContain('devtools')
@@ -313,7 +313,7 @@ describe('runWizard augment mode — integration', () => {
 
     // File is STILL valid — not duplicated.
     const content = await fs.readFile(configPath, 'utf8')
-    const occurrences = content.split('@noy-db/nuxt').length - 1
+    const occurrences = content.split('@noy-db/in-nuxt').length - 1
     expect(occurrences).toBe(1)
   })
 

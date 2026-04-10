@@ -3,8 +3,8 @@
  *
  * This config is the integration test for the entire adoption story:
  * if this file type-checks and the demo builds successfully, then
- * everything we shipped in v0.3 (@noy-db/nuxt, @noy-db/pinia,
- * @noy-db/vue, @noy-db/core) composes correctly against a real
+ * everything we shipped in v0.3 (@noy-db/in-nuxt, @noy-db/in-pinia,
+ * @noy-db/in-vue, @noy-db/hub) composes correctly against a real
  * Nuxt 4 application.
  *
  * Scope intentionally small: one module, one adapter, two stores,
@@ -17,10 +17,10 @@ export default defineNuxtConfig({
 
   modules: [
     '@pinia/nuxt',
-    '@noy-db/nuxt',
+    '@noy-db/in-nuxt',
   ],
 
-  // Configure @noy-db/nuxt via the typed `noydb:` key. This is the
+  // Configure @noy-db/in-nuxt via the typed `noydb:` key. This is the
   // load-bearing test of the TypeScript module augmentation we added
   // in the module — if it doesn't compile, the augmentation is broken.
   noydb: {
@@ -46,7 +46,7 @@ export default defineNuxtConfig({
   },
 
   // Quiet the ESM interop warnings from the AWS SDK transitive deps
-  // (we only use @noy-db/browser here but the workspace pulls them in).
+  // (we only use @noy-db/to-browser-idb here but the workspace pulls them in).
   nitro: {
     preset: 'node-server',
   },

@@ -1,6 +1,6 @@
-import { createNoydb, formatDiff } from '@noy-db/core'
-import { browserLocalStore } from '@noy-db/store-browser-local'
-import { memory } from '@noy-db/store-memory'
+import { createNoydb, formatDiff } from '@noy-db/hub'
+import { browserLocalStore } from '@noy-db/to-browser-local'
+import { memory } from '@noy-db/to-memory'
 
 // ─── State ─────────────────────────────────────────────────────────────
 

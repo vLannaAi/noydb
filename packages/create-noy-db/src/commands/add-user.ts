@@ -28,8 +28,8 @@
  *   partial-state-on-crash is already handled.
  */
 
-import { createNoydb, type Noydb, type NoydbStore, type Role } from '@noy-db/core'
-import { jsonFile } from '@noy-db/store-file'
+import { createNoydb, type Noydb, type NoydbStore, type Role } from '@noy-db/hub'
+import { jsonFile } from '@noy-db/to-file'
 import type { ReadPassphrase } from './shared.js'
 import { defaultReadPassphrase } from './shared.js'
 

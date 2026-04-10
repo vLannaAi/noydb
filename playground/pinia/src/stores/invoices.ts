@@ -1,4 +1,4 @@
-import { defineNoydbStore } from '@noy-db/pinia'
+import { defineNoydbStore } from '@noy-db/in-pinia'
 
 /**
  * The minimal record shape we'll persist. In a real app this would

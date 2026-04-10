@@ -30,7 +30,7 @@ import {
   type VaultSnapshot,
   ConflictError,
   InvalidKeyError,
-} from '@noy-db/core'
+} from '@noy-db/hub'
 import { rotate } from '../src/commands/rotate.js'
 import { addUser } from '../src/commands/add-user.js'
 import { backup, resolveBackupTarget } from '../src/commands/backup.js'

@@ -2,16 +2,16 @@
 
 A minimal Nuxt 4 application that exercises the full NOYDB stack against a real Vue/Nuxt/Pinia consumer. Serves two purposes:
 
-1. **Integration test.** If this demo builds and runs, every `@noy-db/*` package composes correctly. If it doesn't build, something in `@noy-db/nuxt`, `@noy-db/pinia`, `@noy-db/vue`, or `@noy-db/core` is broken.
+1. **Integration test.** If this demo builds and runs, every `@noy-db/*` package composes correctly. If it doesn't build, something in `@noy-db/in-nuxt`, `@noy-db/in-pinia`, `@noy-db/in-vue`, or `@noy-db/hub` is broken.
 2. **Documentation.** Shows how a real app wires everything together — the module config, the bootstrap plugin, the stores, the pages that use the Pinia API.
 
 ## What it demonstrates
 
-- **`@noy-db/nuxt` module** configured in one block in `nuxt.config.ts`
+- **`@noy-db/in-nuxt` module** configured in one block in `nuxt.config.ts`
 - **Auto-imported composables** — `defineNoydbStore`, `setActiveNoydb`, `useInvoices`, `useClients` are all imported automatically
 - **`defineNoydbStore` stores** for invoices and clients
 - **Reactive query DSL** — the invoices list filter (`status`, `minAmount`) recomputes automatically as the user edits the form
-- **`@noy-db/browser` adapter** — encrypted records land in IndexedDB; open DevTools → Application → IndexedDB to see the ciphertext
+- **`@noy-db/to-browser-idb` adapter** — encrypted records land in IndexedDB; open DevTools → Application → IndexedDB to see the ciphertext
 - **SSR safety** — the bootstrap plugin is `noydb.client.ts` (client-only by naming convention); the Nuxt module's internal plugin is also client-only; the server bundle never touches `crypto.subtle`
 
 ## Run it
@@ -37,7 +37,7 @@ This is the **integration test** — if it builds, everything composes correctly
 
 ```
 playground/nuxt/
-├── nuxt.config.ts            # The one-line @noy-db/nuxt integration
+├── nuxt.config.ts            # The one-line @noy-db/in-nuxt integration
 ├── app/
 │   ├── app.vue               # Root layout (nav + theme)
 │   ├── plugins/
@@ -62,11 +62,11 @@ export const useInvoices = defineNoydbStore<Invoice>('invoices', {
 })
 ```
 
-Everything else — encryption, key derivation, the adapter write-through, reactivity — happens inside `@noy-db/pinia` and the underlying NOYDB layers. The component just imports `useInvoices()` and uses it like any Pinia store.
+Everything else — encryption, key derivation, the adapter write-through, reactivity — happens inside `@noy-db/in-pinia` and the underlying NOYDB layers. The component just imports `useInvoices()` and uses it like any Pinia store.
 
 ## The other important file: `plugins/noydb.client.ts`
 
-This is the **only** file in the demo that imports `@noy-db/core` directly. Every other file goes through the Pinia API. It runs once on client boot and:
+This is the **only** file in the demo that imports `@noy-db/hub` directly. Every other file goes through the Pinia API. It runs once on client boot and:
 
 1. Constructs a Noydb instance with the browser adapter
 2. Binds it globally via `setActiveNoydb()` so every Pinia store created with `defineNoydbStore` can find it

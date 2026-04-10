@@ -9,9 +9,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@noy-db/core": "workspace:*",
-    "@noy-db/store-browser-local": "workspace:*",
-    "@noy-db/store-memory": "workspace:*"
+    "@noy-db/hub": "workspace:*",
+    "@noy-db/to-browser-local": "workspace:*",
+    "@noy-db/to-memory": "workspace:*"
   },
   "devDependencies": {
     "vite": "^6.0.0"

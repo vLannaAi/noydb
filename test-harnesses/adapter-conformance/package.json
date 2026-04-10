@@ -11,7 +11,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "devDependencies": {
-    "@noy-db/core": "workspace:*",
+    "@noy-db/hub": "workspace:*",
     "vitest": "^3.0.0"
   }
 }

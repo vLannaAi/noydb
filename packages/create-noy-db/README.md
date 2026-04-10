@@ -26,7 +26,7 @@ yarn create @noy-db my-app
 bun  create @noy-db my-app
 ```
 
-The wizard asks at most 3 questions (project name, adapter, include sample data) and writes a complete Nuxt 4 + Pinia + `@noy-db/nuxt` starter into `./my-app/`. Nothing is installed automatically — pick your package manager and run it yourself.
+The wizard asks at most 3 questions (project name, adapter, include sample data) and writes a complete Nuxt 4 + Pinia + `@noy-db/in-nuxt` starter into `./my-app/`. Nothing is installed automatically — pick your package manager and run it yourself.
 
 Skip the prompts with `--yes`:
 
@@ -48,7 +48,7 @@ The wizard will:
 1. **Detect** the existing `nuxt.config.ts` via the detection rule above
 2. **Prompt** for the adapter (`browser` / `file` / `memory`)
 3. **Patch** the config in-memory via [magicast](https://github.com/unjs/magicast):
-   - Add `'@noy-db/nuxt'` to the `modules` array (creating the array if missing)
+   - Add `'@noy-db/in-nuxt'` to the `modules` array (creating the array if missing)
    - Add `noydb: { adapter, pinia: true, devtools: true }` (only if not already present)
 4. **Show** a colored unified diff of the proposed changes
 5. **Ask** for confirmation (`y/n`) — your config is only written if you confirm
@@ -177,7 +177,7 @@ For `operator` and `client`, the `--collections` flag is required. Format: `name
 
 ### `noy-db verify`
 
-Runs an end-to-end crypto round-trip against an in-memory adapter. No real data is touched; the command creates a throwaway compartment, writes a record, reads it back, and verifies it decrypts correctly. Useful as a sanity check that `@noy-db/core`, `@noy-db/memory`, and your local Node version all agree on Web Crypto.
+Runs an end-to-end crypto round-trip against an in-memory adapter. No real data is touched; the command creates a throwaway compartment, writes a record, reads it back, and verifies it decrypts correctly. Useful as a sanity check that `@noy-db/hub`, `@noy-db/to-memory`, and your local Node version all agree on Web Crypto.
 
 ```bash
 pnpm exec noy-db verify
@@ -246,7 +246,7 @@ Every command that touches real compartments follows these rules:
 
 ```
 my-app/
-├── nuxt.config.ts          ← @noy-db/nuxt wired up with your chosen adapter
+├── nuxt.config.ts          ← @noy-db/in-nuxt wired up with your chosen adapter
 ├── package.json            ← @noy-db/* deps at ^0.5.0
 ├── tsconfig.json
 ├── README.md

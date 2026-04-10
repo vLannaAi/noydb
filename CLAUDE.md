@@ -33,20 +33,20 @@ The primary spec is `SPEC.md` — read it before any non-trivial work. It is the
 
 ```
 packages/
-  core/                  # @noy-db/core — createNoydb, Vault, Collection, crypto, keyring, sync
-  store-file/            # @noy-db/store-file — JSON file store (USB, local disk)
-  store-aws-dynamo/      # @noy-db/store-aws-dynamo — DynamoDB single-table store
-  store-aws-s3/          # @noy-db/store-aws-s3 — S3 store (uses @aws-sdk/client-s3 directly)
-  store-memory/          # @noy-db/store-memory — in-memory store (testing)
-  store-browser-local/   # @noy-db/store-browser-local — localStorage store
-  store-browser-idb/     # @noy-db/store-browser-idb — IndexedDB store (atomic CAS via single readwrite tx)
-  vue/                   # @noy-db/vue — Vue/Nuxt composables (useNoydb, useCollection, useSync)
-  pinia/                 # @noy-db/pinia
-  nuxt/                  # @noy-db/nuxt
-  yjs/                   # @noy-db/yjs — Yjs interop
+  hub/                   # @noy-db/hub — createNoydb, Vault, Collection, crypto, keyring, sync
+  to-file/               # @noy-db/to-file — JSON file store (USB, local disk)
+  to-aws-dynamo/         # @noy-db/to-aws-dynamo — DynamoDB single-table store
+  to-aws-s3/             # @noy-db/to-aws-s3 — S3 store (uses @aws-sdk/client-s3 directly)
+  to-memory/             # @noy-db/to-memory — in-memory store (testing)
+  to-browser-local/      # @noy-db/to-browser-local — localStorage store
+  to-browser-idb/        # @noy-db/to-browser-idb — IndexedDB store (atomic CAS via single readwrite tx)
+  in-vue/                # @noy-db/in-vue — Vue/Nuxt composables (useNoydb, useCollection, useSync)
+  in-pinia/              # @noy-db/in-pinia
+  in-nuxt/               # @noy-db/in-nuxt
+  in-yjs/                # @noy-db/in-yjs — Yjs interop
   auth-webauthn/         # @noy-db/auth-webauthn
   auth-oidc/             # @noy-db/auth-oidc
-  create/                # create-noy-db (unscoped — npm create noy-db)
+  create-noy-db/         # create-noy-db (unscoped — npm create noy-db)
 ```
 
 Build tooling: Turbo for orchestration, Vitest for tests, ESM primary + CJS secondary output, full `.d.ts` generation.
@@ -89,7 +89,7 @@ All stores implement `NoydbStore` (formerly `NoydbAdapter`) — exactly 6 async 
 Use `createStore()` (formerly `defineAdapter()`) to define custom stores:
 
 ```ts
-import { createStore } from '@noy-db/core'
+import { createStore } from '@noy-db/hub'
 export const myStore = createStore((options: MyOptions) => ({ name: 'my-backend', ...methods }))
 ```
 
@@ -102,7 +102,7 @@ interface StoreCapabilities {
 }
 ```
 
-`casAtomic` per built-in store: `store-memory` true, `store-file` false, `store-browser-local` true, `store-browser-idb` true (single readwrite IDB transaction — #139), `store-aws-dynamo` true (ConditionExpression), `store-aws-s3` false.
+`casAtomic` per built-in store: `to-memory` true, `to-file` false, `to-browser-local` true, `to-browser-idb` true (single readwrite IDB transaction — #139), `to-aws-dynamo` true (ConditionExpression), `to-aws-s3` false.
 
 `StoreCapabilityError` (code `'STORE_CAPABILITY'`) replaces `AdapterCapabilityError`; `runStoreConformanceTests` replaces `runAdapterConformanceTests`.
 
@@ -134,7 +134,7 @@ const live = invoices.query().join(...).live()
 live.subscribe(() => render(live.value)); live.stop()
 
 // Aggregations (#97, #98)
-import { count, sum, avg, min, max } from '@noy-db/core'
+import { count, sum, avg, min, max } from '@noy-db/hub'
 invoices.query().where(...).aggregate({ total: sum('amount'), n: count() }).run()
 invoices.query().groupBy('clientId').aggregate({ total: sum('amount') }).run()
 
@@ -151,20 +151,20 @@ await invoices.scan().join('clientId', { as: 'client' }).aggregate({ n: count() 
 
 ## `.noydb` Container Format (v0.6 #100)
 
-Binary wrapper around `vault.dump()` for safe cloud storage drops. `writeNoydbBundle(vault)` / `readNoydbBundle(bytes)` / `readNoydbBundleHeader(bytes)` primitives in core; `saveBundle(path, vault)` / `loadBundle(path)` helpers in `@noy-db/store-file`. 10-byte fixed prefix (`NDB1` magic + flags + compression + header length uint32 BE) then JSON header (minimum disclosure: `formatVersion`, `handle`, `bodyBytes`, `bodySha256` — every other key rejected at parse time), then compressed body (brotli with gzip fallback via `CompressionStream` feature detection). ULID handles via `vault.getBundleHandle()` persist in a reserved `_meta/handle` envelope that bypasses AES-GCM the same way `_keyring` does.
+Binary wrapper around `vault.dump()` for safe cloud storage drops. `writeNoydbBundle(vault)` / `readNoydbBundle(bytes)` / `readNoydbBundleHeader(bytes)` primitives in core; `saveBundle(path, vault)` / `loadBundle(path)` helpers in `@noy-db/to-file`. 10-byte fixed prefix (`NDB1` magic + flags + compression + header length uint32 BE) then JSON header (minimum disclosure: `formatVersion`, `handle`, `bodyBytes`, `bodySha256` — every other key rejected at parse time), then compressed body (brotli with gzip fallback via `CompressionStream` feature detection). ULID handles via `vault.getBundleHandle()` persist in a reserved `_meta/handle` envelope that bypasses AES-GCM the same way `_keyring` does.
 
 ## Peer-dep convention (v0.6+)
 
-All store and auth packages (`@noy-db/store-file`, `@noy-db/store-memory`, `@noy-db/store-browser-local`, `@noy-db/store-browser-idb`, `@noy-db/store-aws-dynamo`, `@noy-db/store-aws-s3`, `@noy-db/auth-webauthn`, `@noy-db/auth-oidc`, `@noy-db/vue`, `@noy-db/pinia`, `@noy-db/nuxt`, `@noy-db/yjs`) use `"@noy-db/core": "workspace:*"` in `peerDependencies` (NOT `"workspace:^"`). This prevents the changeset-cli pre-1.0 dep-propagation heuristic from computing major bumps on dependent packages when `@noy-db/core` bumps minor. The looser constraint is safe because the monorepo ships all packages in lockstep — consumers always install matching versions. Do not revert to `workspace:^` or the next minor release will trip the same changeset bug. See `docs/v0.6/retrospective.md` for the full diagnosis.
+All store and auth packages (`@noy-db/to-file`, `@noy-db/to-memory`, `@noy-db/to-browser-local`, `@noy-db/to-browser-idb`, `@noy-db/to-aws-dynamo`, `@noy-db/to-aws-s3`, `@noy-db/auth-webauthn`, `@noy-db/auth-oidc`, `@noy-db/in-vue`, `@noy-db/in-pinia`, `@noy-db/in-nuxt`, `@noy-db/in-yjs`) use `"@noy-db/hub": "workspace:*"` in `peerDependencies` (NOT `"workspace:^"`). This prevents the changeset-cli pre-1.0 dep-propagation heuristic from computing major bumps on dependent packages when `@noy-db/hub` bumps minor. The looser constraint is safe because the monorepo ships all packages in lockstep — consumers always install matching versions. Do not revert to `workspace:^` or the next minor release will trip the same changeset bug. See `docs/v0.6/retrospective.md` for the full diagnosis.
 
 ## Testing Strategy
 
-- Unit tests with `@noy-db/store-memory` store (crypto, keyring, permissions)
-- Integration tests with `@noy-db/store-file` on temp directories
+- Unit tests with `@noy-db/to-memory` store (crypto, keyring, permissions)
+- Integration tests with `@noy-db/to-file` on temp directories
 - DynamoDB tests with DynamoDB Local (Docker) in CI
 - Security tests: wrong key rejection, tamper detection, revoked user lockout after rotation
 - Edge cases: empty vaults, concurrent writes, 1MB+ records, Unicode/Thai text, corrupt files
 
 ## First Consumer
 
-An established regional accounting firm platform. Vaults = companies, collections = invoices/payments/disbursements/clients. USB stick workflow via store-file, cloud via store-aws-dynamo. Vue/Nuxt frontend with Pinia stores.
+An established regional accounting firm platform. Vaults = companies, collections = invoices/payments/disbursements/clients. USB stick workflow via `to-file`, cloud via `to-aws-dynamo`. Vue/Nuxt frontend with Pinia stores.

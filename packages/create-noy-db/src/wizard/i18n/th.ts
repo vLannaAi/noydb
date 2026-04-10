@@ -43,7 +43,7 @@ export const th: WizardMessages = {
   augmentModeTitle: 'โหมดเสริมโปรเจกต์เดิม',
   augmentDetectedPrefix: 'พบโปรเจกต์ Nuxt 4 ที่มีอยู่แล้ว:',
   augmentDescription:
-    'ตัวช่วยจะเพิ่ม @noy-db/nuxt เข้าใน modules\n' +
+    'ตัวช่วยจะเพิ่ม @noy-db/in-nuxt เข้าใน modules\n' +
     'และเพิ่มคีย์ noydb: ในไฟล์ config คุณสามารถดู diff\n' +
     'ก่อนที่จะเขียนไฟล์ลงดิสก์ได้',
 

@@ -49,9 +49,9 @@ try {
   process.exit(1)
 }
 
-// ─── 2. Read canonical version from @noy-db/core ──────────────────────
+// ─── 2. Read canonical version from @noy-db/hub ───────────────────────
 
-const corePkgPath = join(ROOT, 'packages', 'core', 'package.json')
+const corePkgPath = join(ROOT, 'packages', 'hub', 'package.json')
 const corePkg = JSON.parse(readFileSync(corePkgPath, 'utf8'))
 const canonicalVersion = corePkg.version
 
@@ -60,7 +60,7 @@ if (!canonicalVersion || !/^\d+\.\d+\.\d+/.test(canonicalVersion)) {
   process.exit(1)
 }
 
-console.log(`\n[release] Canonical version from @noy-db/core: ${canonicalVersion}\n`)
+console.log(`\n[release] Canonical version from @noy-db/hub: ${canonicalVersion}\n`)
 
 // ─── 3. Walk packages/* and normalize versions ─────────────────────────
 

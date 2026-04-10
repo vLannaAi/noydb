@@ -62,11 +62,11 @@
  * for common providers (LINE, Google, Apple).
  */
 
-import { bufferToBase64, base64ToBuffer } from '@noy-db/core'
-import { ValidationError } from '@noy-db/core'
-import type { UnlockedKeyring, Role } from '@noy-db/core'
+import { bufferToBase64, base64ToBuffer } from '@noy-db/hub'
+import { ValidationError } from '@noy-db/hub'
+import type { UnlockedKeyring, Role } from '@noy-db/hub'
 
-export { ValidationError } from '@noy-db/core'
+export { ValidationError } from '@noy-db/hub'
 
 // ─── Error types ──────────────────────────────────────────────────────
 

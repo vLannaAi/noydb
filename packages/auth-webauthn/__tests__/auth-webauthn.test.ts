@@ -17,7 +17,7 @@ import {
   WebAuthnMultiDeviceError,
 } from '../src/index.js'
 import type { WebAuthnEnrollment } from '../src/index.js'
-import type { UnlockedKeyring } from '@noy-db/core'
+import type { UnlockedKeyring } from '@noy-db/hub'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 

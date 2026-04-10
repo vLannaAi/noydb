@@ -8,8 +8,8 @@
     "demo": "node --experimental-vm-modules demo.mjs"
   },
   "dependencies": {
-    "@noy-db/core": "workspace:*",
-    "@noy-db/store-memory": "workspace:*",
-    "@noy-db/store-file": "workspace:*"
+    "@noy-db/hub": "workspace:*",
+    "@noy-db/to-memory": "workspace:*",
+    "@noy-db/to-file": "workspace:*"
   }
 }

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterAll } from 'vitest'
-import type { NoydbStore, EncryptedEnvelope } from '@noy-db/core'
-import { ConflictError } from '@noy-db/core'
+import type { NoydbStore, EncryptedEnvelope } from '@noy-db/hub'
+import { ConflictError } from '@noy-db/hub'
 
 function makeEnvelope(version: number, data = 'test-data'): EncryptedEnvelope {
   return {

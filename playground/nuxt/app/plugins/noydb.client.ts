@@ -3,7 +3,7 @@
  *
  * Client-only by naming convention — the `.client.ts` suffix tells
  * Nuxt 4 to skip this file on the server. That's the same SSR-safety
- * guarantee `@noy-db/nuxt`'s internal plugin has, but here in the
+ * guarantee `@noy-db/in-nuxt`'s internal plugin has, but here in the
  * user's code.
  *
  * The plugin:
@@ -17,9 +17,9 @@
  * in the README so nobody copies this into production.
  */
 
-import { createNoydb } from '@noy-db/core'
-import { browserIdbStore } from '@noy-db/store-browser-idb'
-// setActiveNoydb is auto-imported by the @noy-db/nuxt module. We reference
+import { createNoydb } from '@noy-db/hub'
+import { browserIdbStore } from '@noy-db/to-browser-idb'
+// setActiveNoydb is auto-imported by the @noy-db/in-nuxt module. We reference
 // it here via the global identifier without an explicit import.
 
 export default defineNuxtPlugin({

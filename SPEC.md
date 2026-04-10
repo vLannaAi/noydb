@@ -171,12 +171,12 @@ The library should be learnable in 10 minutes. The core API is: `createNoydb()`,
 │  ┌─ Store Interface ────────▼────────────────────────────┐   │
 │  │  6 methods: get, put, delete, list, loadAll, saveAll   │   │
 │  │                                                        │   │
-│  │  @noy-db/store-file          → JSON files (USB/disk)   │   │
-│  │  @noy-db/store-aws-dynamo    → AWS DynamoDB            │   │
-│  │  @noy-db/store-aws-s3        → AWS S3 (JSON objects)   │   │
-│  │  @noy-db/store-memory        → in-memory (testing)     │   │
-│  │  @noy-db/store-browser-local → localStorage            │   │
-│  │  @noy-db/store-browser-idb   → IndexedDB (atomic CAS)  │   │
+│  │  @noy-db/to-file          → JSON files (USB/disk)   │   │
+│  │  @noy-db/to-aws-dynamo    → AWS DynamoDB            │   │
+│  │  @noy-db/to-aws-s3        → AWS S3 (JSON objects)   │   │
+│  │  @noy-db/to-memory        → in-memory (testing)     │   │
+│  │  @noy-db/to-browser-local → localStorage            │   │
+│  │  @noy-db/to-browser-idb   → IndexedDB (atomic CAS)  │   │
 │  └───────────────────────────────────────────────────────┘   │
 │                                                              │
 │  ┌─ Backup / Restore ───────────────────────────────────┐   │
@@ -196,7 +196,7 @@ The library should be learnable in 10 minutes. The core API is: `createNoydb()`,
 The top-level object returned by `createNoydb()`. Holds the authenticated user context, adapter references, and crypto keys in memory. One instance per authenticated session.
 
 ### Vault
-A logical namespace for isolating tenants, companies, or projects (formerly `Compartment`). Each vault has its own set of collections and its own keyring (access control). Maps to a directory (store-file), a partition key (store-aws-dynamo), or a key prefix (store-aws-s3/store-browser-local). Opened via `openVault()`; listed via `listVaults()`. Backup type is `VaultBackup`; snapshot type is `VaultSnapshot`.
+A logical namespace for isolating tenants, companies, or projects (formerly `Compartment`). Each vault has its own set of collections and its own keyring (access control). Maps to a directory (to-file), a partition key (to-aws-dynamo), or a key prefix (to-aws-s3/to-browser-local). Opened via `openVault()`; listed via `listVaults()`. Backup type is `VaultBackup`; snapshot type is `VaultSnapshot`.
 
 ### Collection
 A typed set of records within a compartment. Each collection has its own Data Encryption Key (DEK). Maps to a subdirectory (file adapter), a sort key prefix (DynamoDB), or a sub-prefix (S3).
@@ -330,7 +330,7 @@ Roles are defaults — the `permissions` field in the keyring can override on a 
 - `Noydb.listAccessibleVaults({ minRole? })` enumerates every vault where the calling principal can unwrap a keyring at the requested minimum role. Existence-leak guarantee: vaults the caller cannot unwrap are silently dropped from the return value.
 - `Noydb.queryAcross(ids, fn, { concurrency? })` runs a per-vault callback against the supplied list and returns results tagged by vault id. Per-vault errors are captured into the result slot and do not abort the fan-out.
 
-These methods require an optional 7th store capability — `NoydbStore.listVaults?(): Promise<string[]>` — to enumerate the vault universe before filtering. The store-memory and store-file stores implement it; cloud stores (store-aws-dynamo, store-aws-s3) and browser stores do not, because cloud enumeration needs a GSI or list-bucket permission configured by the consumer. Calling `listAccessibleVaults()` against a store without the capability throws `StoreCapabilityError` with a clear message naming the missing capability and the calling API.
+These methods require an optional 7th store capability — `NoydbStore.listVaults?(): Promise<string[]>` — to enumerate the vault universe before filtering. The to-memory and to-file stores implement it; cloud stores (to-aws-dynamo, to-aws-s3) and browser stores do not, because cloud enumeration needs a GSI or list-bucket permission configured by the consumer. Calling `listAccessibleVaults()` against a store without the capability throws `StoreCapabilityError` with a clear message naming the missing capability and the calling API.
 
 ### Keyring File Format
 
@@ -586,7 +586,7 @@ interface StoreCapabilities {  // formerly AdapterCapabilities
 }
 ```
 
-### @noy-db/store-file — JSON File Store
+### @noy-db/to-file — JSON File Store
 
 Maps the hierarchy to the filesystem:
 
@@ -615,7 +615,7 @@ jsonFile({
 })
 ```
 
-### @noy-db/store-aws-dynamo — DynamoDB Store
+### @noy-db/to-aws-dynamo — DynamoDB Store
 
 Maps the hierarchy to a single DynamoDB table:
 
@@ -646,7 +646,7 @@ dynamo({
 })
 ```
 
-### @noy-db/store-aws-s3 — S3 Store
+### @noy-db/to-aws-s3 — S3 Store
 
 Maps the hierarchy to S3 object keys:
 
@@ -657,15 +657,15 @@ s3://{bucket}/{vault}/_keyring/{userId}.json
 
 Uses S3 ETags for optimistic concurrency (`If-Match` header). `casAtomic: false` (two separate HTTP calls). Uses `@aws-sdk/client-s3` directly (no `MinimalS3Client` shim).
 
-### @noy-db/store-memory — In-Memory Store (Testing)
+### @noy-db/to-memory — In-Memory Store (Testing)
 
 Stores everything in a `Map`. No persistence. Used for unit tests. `casAtomic: true` (JS single-threaded).
 
-### @noy-db/store-browser-local — localStorage Store
+### @noy-db/to-browser-local — localStorage Store
 
 `localStorage`-backed store. `casAtomic: true` (synchronous localStorage). Used for small datasets in browser apps.
 
-### @noy-db/store-browser-idb — IndexedDB Store
+### @noy-db/to-browser-idb — IndexedDB Store
 
 IndexedDB-backed store. `casAtomic: true` — CAS atomicity implemented via a single `readwrite` IDB transaction (fix #139). Used as a cache layer in browser-based apps for instant hydration on page load.
 
@@ -692,7 +692,7 @@ interface NoydbStore {
 Implement the `NoydbStore` interface (6 required methods). Example skeleton:
 
 ```ts
-import { createStore } from '@noy-db/core'  // formerly defineAdapter
+import { createStore } from '@noy-db/hub'  // formerly defineAdapter
 
 export const myStore = createStore((options: MyOptions) => ({
   name: 'my-backend',
@@ -712,8 +712,8 @@ export const myStore = createStore((options: MyOptions) => ({
 ### Creating an Instance
 
 ```ts
-import { createNoydb } from '@noy-db/core'
-import { jsonFile } from '@noy-db/store-file'
+import { createNoydb } from '@noy-db/hub'
+import { jsonFile } from '@noy-db/to-file'
 
 // Minimal — local only, passphrase auth
 const db = await createNoydb({
@@ -840,7 +840,7 @@ live.stop()
 // Re-run errors stored in live.error (previous value preserved).
 
 // v0.6 #97 — aggregation reducers
-import { count, sum, avg, min, max } from '@noy-db/core'
+import { count, sum, avg, min, max } from '@noy-db/hub'
 const { total, n, mean } = invoices.query()
   .where('status', '==', 'open')
   .aggregate({ total: sum('amount'), n: count(), mean: avg('amount') })
@@ -899,7 +899,7 @@ await statusDict.putAll({
 })
 
 // Use dictKey in collection schema
-import { dictKey } from '@noy-db/core'
+import { dictKey } from '@noy-db/hub'
 const invoices = company.collection<Invoice>('invoices', {
   dictKeyFields: {
     status: dictKey('status', ['draft', 'open', 'paid'] as const),
@@ -950,7 +950,7 @@ const label = await statusDict.resolveLabel('paid', 'th')  // → 'ชำระ�
 Per-record prose fields where each record carries its own value in N languages.
 
 ```ts
-import { i18nText } from '@noy-db/core'
+import { i18nText } from '@noy-db/hub'
 
 const lineItems = company.collection<LineItem>('line-items', {
   i18nFields: {
@@ -1043,7 +1043,7 @@ await items.put('list-1', ['Buy milk', 'Call dentist'])
 // get() returns the resolved array (tombstones filtered)
 // getRaw() returns RgaState: { _crdt: 'rga', items: [{ nid, value, tombstoned }], tombstones: string[] }
 
-// Yjs: delegates Y.Doc merging to the application layer via @noy-db/yjs
+// Yjs: delegates Y.Doc merging to the application layer via @noy-db/in-yjs
 const docs = company.collection<string>('documents', { crdt: 'yjs' })
 ```
 
@@ -1147,10 +1147,10 @@ await db.transaction(company)
 // 2. Filtered push: sync only the transacted records to the remote adapter
 ```
 
-### `@noy-db/yjs` — Yjs interop (v0.9 #136)
+### `@noy-db/in-yjs` — Yjs interop (v0.9 #136)
 
 ```ts
-import { yjsCollection, yText, yMap, yArray } from '@noy-db/yjs'
+import { yjsCollection, yText, yMap, yArray } from '@noy-db/in-yjs'
 import * as Y from 'yjs'
 
 // Create a Yjs-backed collection
@@ -1178,7 +1178,7 @@ const raw = await docs.coll.getRaw('doc-1')
 // → { _crdt: 'yjs', update: '<base64 Yjs state vector>' }
 ```
 
-**Storage model:** `Y.encodeStateAsUpdate(doc)` is base64-encoded and stored as the `crdt: 'yjs'` payload in core's encrypted envelope. The sync engine's conflict resolver for `crdt: 'yjs'` falls back to LWW (higher `_v` wins) — proper `Y.mergeUpdates` merge is the caller's responsibility via `applyUpdate`. `@noy-db/yjs` has peer deps on `@noy-db/core` and `yjs >=13`.
+**Storage model:** `Y.encodeStateAsUpdate(doc)` is base64-encoded and stored as the `crdt: 'yjs'` payload in core's encrypted envelope. The sync engine's conflict resolver for `crdt: 'yjs'` falls back to LWW (higher `_v` wins) — proper `Y.mergeUpdates` merge is the caller's responsibility via `applyUpdate`. `@noy-db/in-yjs` has peer deps on `@noy-db/hub` and `yjs >=13`.
 
 ### Sync Operations
 // Returns: { pushed: number, conflicts: Conflict[], errors: Error[] }
@@ -1264,7 +1264,7 @@ await db.removeBiometric()
 ### Session tokens (v0.7 #109)
 
 ```ts
-import { createSession, resolveSession, revokeSession } from '@noy-db/core'
+import { createSession, resolveSession, revokeSession } from '@noy-db/hub'
 
 // After unlocking, create a session (DEK map encrypted under non-extractable session key)
 const { token, expiresAt } = await createSession(keyring, { ttlMs: 15 * 60_000 })
@@ -1280,7 +1280,7 @@ revokeAllSessions()   // log out everywhere in the tab
 ### Magic-link unlock (v0.7 #113)
 
 ```ts
-import { createMagicLinkToken, deriveMagicLinkKEK, isMagicLinkValid } from '@noy-db/core'
+import { createMagicLinkToken, deriveMagicLinkKEK, isMagicLinkValid } from '@noy-db/hub'
 
 // Server: generate a one-time link token
 const linkToken = createMagicLinkToken(compartmentId, { ttlMs: 24 * 60 * 60_000 })
@@ -1295,7 +1295,7 @@ if (!isMagicLinkValid(linkToken)) throw new Error('Link expired')
 ### Sync credentials (v0.7 #110)
 
 ```ts
-import { putCredential, getCredential, deleteCredential, listCredentials } from '@noy-db/core'
+import { putCredential, getCredential, deleteCredential, listCredentials } from '@noy-db/hub'
 
 // Store / overwrite an OAuth token for an adapter
 await putCredential(adapter, compartment, keyring, {
@@ -1333,7 +1333,7 @@ const db = await createNoydb({
 ### Dev-mode persistent unlock (v0.7 #119)
 
 ```ts
-import { enableDevUnlock, loadDevUnlock, clearDevUnlock } from '@noy-db/core'
+import { enableDevUnlock, loadDevUnlock, clearDevUnlock } from '@noy-db/hub'
 
 // One-time setup (dev only — throws in production and off localhost)
 await enableDevUnlock(keyring, {
@@ -1529,14 +1529,14 @@ import {
   writeNoydbBundle,
   readNoydbBundle,
   readNoydbBundleHeader,
-} from '@noy-db/core'
+} from '@noy-db/hub'
 
 const bytes = await writeNoydbBundle(vault, { compression: 'auto' })
 const header = readNoydbBundleHeader(bytes) // no decompression
 const { header, dumpJson } = await readNoydbBundle(bytes) // full read + verify
 
 // File store helpers
-import { saveBundle, loadBundle } from '@noy-db/store-file'
+import { saveBundle, loadBundle } from '@noy-db/to-file'
 
 const handle = await vault.getBundleHandle()
 await saveBundle(`./bundles/${handle}.noydb`, vault)
@@ -1552,7 +1552,7 @@ const result = await loadBundle(`./bundles/${handle}.noydb`)
 ```
 noydb/
 ├── packages/
-│   ├── core/                          # @noy-db/core — npm main package
+│   ├── core/                          # @noy-db/hub — npm main package
 │   │   ├── src/
 │   │   │   ├── index.ts               # barrel — all public exports
 │   │   │   ├── noydb.ts               # Noydb class + PolicyEnforcer wiring
@@ -1576,63 +1576,63 @@ noydb/
 │   │   └── __tests__/                 # tests (Vitest)
 │   │   └── package.json
 │   │
-│   ├── store-file/                    # @noy-db/store-file (formerly @noy-db/file)
+│   ├── to-file/                       # @noy-db/to-file (formerly @noy-db/store-file)
 │   │   ├── src/
 │   │   │   └── index.ts              # jsonFile() store factory
 │   │   ├── tests/
 │   │   └── package.json
 │   │
-│   ├── store-aws-dynamo/              # @noy-db/store-aws-dynamo (formerly @noy-db/dynamo)
+│   ├── to-aws-dynamo/                 # @noy-db/to-aws-dynamo (formerly @noy-db/store-aws-dynamo)
 │   │   ├── src/
 │   │   │   └── index.ts              # dynamo() store factory
 │   │   ├── tests/
 │   │   └── package.json              # peerDep: @aws-sdk/lib-dynamodb
 │   │
-│   ├── store-aws-s3/                  # @noy-db/store-aws-s3 (formerly @noy-db/s3)
+│   ├── to-aws-s3/                     # @noy-db/to-aws-s3 (formerly @noy-db/store-aws-s3)
 │   │   ├── src/
 │   │   │   └── index.ts              # s3() store factory; uses @aws-sdk/client-s3 directly
 │   │   ├── tests/
 │   │   └── package.json              # peerDep: @aws-sdk/client-s3
 │   │
-│   ├── store-memory/                  # @noy-db/store-memory (formerly @noy-db/memory)
+│   ├── to-memory/                     # @noy-db/to-memory (formerly @noy-db/store-memory)
 │   │   ├── src/
 │   │   │   └── index.ts              # memory() store factory
 │   │   ├── tests/
 │   │   └── package.json
 │   │
-│   ├── store-browser-local/           # @noy-db/store-browser-local (localStorage)
+│   ├── to-browser-local/              # @noy-db/to-browser-local (localStorage)
 │   │   ├── src/
 │   │   │   └── index.ts              # browserLocal() store factory
 │   │   ├── tests/
 │   │   └── package.json
 │   │
-│   ├── store-browser-idb/             # @noy-db/store-browser-idb (IndexedDB, atomic CAS #139)
+│   ├── to-browser-idb/                # @noy-db/to-browser-idb (IndexedDB, atomic CAS #139)
 │   │   ├── src/
 │   │   │   └── index.ts              # browserIdb() store factory
 │   │   ├── tests/
 │   │   └── package.json
 │   │
-│   ├── yjs/                           # @noy-db/yjs (v0.9 #136)
+│   ├── in-yjs/                        # @noy-db/in-yjs (v0.9 #136)
 │   │   ├── src/
 │   │   │   ├── index.ts              # yjsCollection, yText, yMap, yArray
 │   │   │   ├── yjs-collection.ts     # YjsCollection<YF> — getYDoc, putYDoc, applyUpdate
 │   │   │   └── descriptors.ts        # yText(), yMap(), yArray() field descriptors
 │   │   ├── __tests__/                # 11 tests
-│   │   └── package.json              # peerDeps: @noy-db/core workspace:*, yjs >=13
+│   │   └── package.json              # peerDeps: @noy-db/hub workspace:*, yjs >=13
 │   │
 │   ├── auth-webauthn/                 # @noy-db/auth-webauthn (v0.7 #111)
 │   │   ├── src/
 │   │   │   └── index.ts              # enrollWebAuthn, unlockWebAuthn (PRF + rawId-HKDF)
 │   │   ├── __tests__/                # 18 tests (happy-dom + navigator.credentials stub)
-│   │   └── package.json              # peerDep: @noy-db/core workspace:*
+│   │   └── package.json              # peerDep: @noy-db/hub workspace:*
 │   │
 │   ├── auth-oidc/                     # @noy-db/auth-oidc (v0.7 #112)
 │   │   ├── src/
 │   │   │   └── index.ts              # enrollOidc, unlockOidc, knownProviders
 │   │   ├── __tests__/                # 21 tests (happy-dom + fetch mock)
-│   │   └── package.json              # peerDep: @noy-db/core workspace:*
+│   │   └── package.json              # peerDep: @noy-db/hub workspace:*
 │   │
-│   ├── vue/                           # @noy-db/vue
+│   ├── in-vue/                        # @noy-db/in-vue
 │   │   ├── src/
 │   │   │   ├── index.ts
 │   │   │   ├── plugin.ts             # Nuxt plugin / Vue plugin
@@ -1640,7 +1640,7 @@ noydb/
 │   │   │   ├── useCollection.ts      # Composable: reactive collection
 │   │   │   └── useSync.ts            # Composable: sync status and controls
 │   │   ├── tests/
-│   │   └── package.json              # peerDep: vue, @noy-db/core workspace:*
+│   │   └── package.json              # peerDep: vue, @noy-db/hub workspace:*
 │   │
 │   └── create/                        # create-noy-db (unscoped — npm create noy-db)
 │
@@ -1662,25 +1662,25 @@ noydb/
 
 ```bash
 # Local-only app (USB stick, no cloud)
-npm install @noy-db/core @noy-db/store-file
+npm install @noy-db/hub @noy-db/to-file
 
 # Cloud-only app (DynamoDB)
-npm install @noy-db/core @noy-db/store-aws-dynamo
+npm install @noy-db/hub @noy-db/to-aws-dynamo
 
 # Offline-first with cloud sync
-npm install @noy-db/core @noy-db/store-file @noy-db/store-aws-dynamo
+npm install @noy-db/hub @noy-db/to-file @noy-db/to-aws-dynamo
 
 # Browser app (localStorage)
-npm install @noy-db/core @noy-db/store-browser-local
+npm install @noy-db/hub @noy-db/to-browser-local
 
 # Browser app (IndexedDB, atomic CAS)
-npm install @noy-db/core @noy-db/store-browser-idb
+npm install @noy-db/hub @noy-db/to-browser-idb
 
 # Vue/Nuxt integration
-npm install @noy-db/core @noy-db/store-file @noy-db/vue
+npm install @noy-db/hub @noy-db/to-file @noy-db/in-vue
 
 # Development/testing
-npm install @noy-db/core @noy-db/store-memory
+npm install @noy-db/hub @noy-db/to-memory
 
 # Scaffold a new project
 npm create noy-db
@@ -1869,8 +1869,8 @@ noy-db was designed for an established accounting firm's platform but is generic
 | Junior staff | Role: `operator` (with per-collection permissions) |
 | External auditor | Role: `viewer` |
 | Client company (views own invoices) | Role: `client` |
-| USB stick workflow | `@noy-db/store-file` store, dir: `/Volumes/USB/firm-data` |
-| Cloud access | `@noy-db/store-aws-dynamo` store, table: `firm-prod` |
+| USB stick workflow | `@noy-db/to-file` store, dir: `/Volumes/USB/firm-data` |
+| Cloud access | `@noy-db/to-aws-dynamo` store, table: `firm-prod` |
 | Monthly backup | `company.dump()` → encrypted JSON file |
 
 ### Example Configuration

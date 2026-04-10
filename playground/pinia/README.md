@@ -1,6 +1,6 @@
 # NOYDB + Pinia playground
 
-A minimal Vue 3 + Vite + Pinia app demonstrating `@noy-db/pinia`'s `defineNoydbStore`.
+A minimal Vue 3 + Vite + Pinia app demonstrating `@noy-db/in-pinia`'s `defineNoydbStore`.
 
 ## What it shows
 
@@ -55,13 +55,13 @@ const db = await createNoydb({
 setActiveNoydb(db)
 ```
 
-In a real app you would prompt for the passphrase at unlock time and never hard-code it. The `@noy-db/nuxt` module wires this up automatically for Nuxt apps.
+In a real app you would prompt for the passphrase at unlock time and never hard-code it. The `@noy-db/in-nuxt` module wires this up automatically for Nuxt apps.
 
 ## What's NOT in this playground (yet)
 
 - Multi-user keyrings — the demo runs as a single owner
 - Sync against a remote adapter — purely local
-- The schema-validation path through `@noy-db/pinia` (would require adding `zod` as a dep)
+- The schema-validation path through `@noy-db/in-pinia` (would require adding `zod` as a dep)
 - The `nuxi noydb` extension — that's the Nuxt module's territory, see #9
 
 These will appear in a follow-up Nuxt 4 reference demo (#16).

@@ -21,8 +21,8 @@
  *     in v0.4. For now `noy-db verify` is the dependency-graph smoke test.
  */
 
-import { createNoydb } from '@noy-db/core'
-import { memory } from '@noy-db/store-memory'
+import { createNoydb } from '@noy-db/hub'
+import { memory } from '@noy-db/to-memory'
 
 export interface VerifyResult {
   /** `true` if the round-trip succeeded; `false` if anything diverged. */

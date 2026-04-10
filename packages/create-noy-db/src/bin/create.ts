@@ -39,7 +39,7 @@ The wizard auto-detects whether cwd is an existing Nuxt 4 project:
     for confirmation before writing.
 
   - Otherwise it enters FRESH mode — creates a new project
-    directory with a full Nuxt 4 + Pinia + @noy-db/nuxt starter.
+    directory with a full Nuxt 4 + Pinia + @noy-db/in-nuxt starter.
 
 Options:
   -y, --yes               Skip prompts; use defaults for missing values

@@ -6,8 +6,8 @@ A Nuxt 4 + Pinia + [noy-db](https://github.com/vLannaAi/noy-db) starter, scaffol
 
 - **Nuxt 4** — fullstack Vue framework
 - **Pinia** — reactive state management
-- **@noy-db/nuxt** — Nuxt module for noy-db (auto-imports, SSR-safe runtime, devtools tab)
-- **@noy-db/pinia** — `defineNoydbStore` — drop-in `defineStore` replacement that wires a Pinia store to an encrypted compartment + collection
+- **@noy-db/in-nuxt** — Nuxt module for noy-db (auto-imports, SSR-safe runtime, devtools tab)
+- **@noy-db/in-pinia** — `defineNoydbStore` — drop-in `defineStore` replacement that wires a Pinia store to an encrypted compartment + collection
 - **@noy-db/{{ADAPTER}}** — storage adapter
 
 Everything stored is encrypted with AES-256-GCM before it touches the adapter. The adapter only ever sees ciphertext.

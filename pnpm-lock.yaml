@@ -38,39 +38,30 @@ importers:
 
   packages/auth-oidc:
     devDependencies:
-      '@noy-db/core':
+      '@noy-db/hub':
         specifier: workspace:*
-        version: link:../core
+        version: link:../hub
 
   packages/auth-webauthn:
     devDependencies:
-      '@noy-db/core':
+      '@noy-db/hub':
         specifier: workspace:*
-        version: link:../core
-
-  packages/core:
-    devDependencies:
-      '@types/node':
-        specifier: ^22.0.0
-        version: 22.19.17
-      zod:
-        specifier: ^3.23.0
-        version: 3.25.76
+        version: link:../hub
 
   packages/create-noy-db:
     dependencies:
       '@clack/prompts':
         specifier: ^0.9.1
         version: 0.9.1
-      '@noy-db/core':
+      '@noy-db/hub':
         specifier: workspace:*
-        version: link:../core
-      '@noy-db/store-file':
+        version: link:../hub
+      '@noy-db/to-file':
         specifier: workspace:*
-        version: link:../store-file
-      '@noy-db/store-memory':
+        version: link:../to-file
+      '@noy-db/to-memory':
         specifier: workspace:*
-        version: link:../store-memory
+        version: link:../to-memory
       diff:
         specifier: ^7.0.0
         version: 7.0.0
@@ -88,17 +79,26 @@ importers:
         specifier: ^22.0.0
         version: 22.19.17
 
-  packages/nuxt:
+  packages/hub:
     devDependencies:
-      '@noy-db/core':
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.17
+      zod:
+        specifier: ^3.23.0
+        version: 3.25.76
+
+  packages/in-nuxt:
+    devDependencies:
+      '@noy-db/hub':
         specifier: workspace:*
-        version: link:../core
-      '@noy-db/pinia':
+        version: link:../hub
+      '@noy-db/in-pinia':
         specifier: workspace:*
-        version: link:../pinia
-      '@noy-db/vue':
+        version: link:../in-pinia
+      '@noy-db/in-vue':
         specifier: workspace:*
-        version: link:../vue
+        version: link:../in-vue
       '@nuxt/kit':
         specifier: ^4.4.2
         version: 4.4.2(magicast@0.5.2)
@@ -107,13 +107,13 @@ importers:
         version: 4.4.2
       nuxt:
         specifier: ^4.4.2
-        version: 4.4.2(@babel/core@7.29.0)(@babel/plugin-syntax-jsx@7.28.6(@babel/core@7.29.0))(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)(@parcel/watcher@2.5.6)(@types/node@22.19.17)(@vue/compiler-sfc@3.5.32)(cac@6.7.14)(db0@0.3.4)(eslint@9.39.4(jiti@2.6.1))(ioredis@5.10.1)(magicast@0.5.2)(optionator@0.9.4)(pinia@3.0.4(typescript@5.9.3)(vue@3.5.32(typescript@5.9.3)))(rollup-plugin-visualizer@5.14.0(rollup@4.60.1))(rollup@4.60.1)(srvx@0.11.15)(terser@5.46.1)(typescript@5.9.3)(vite@7.3.2(@types/node@22.19.17)(jiti@2.6.1)(terser@5.46.1)(yaml@2.8.3))(vue-tsc@2.2.12(typescript@5.9.3))(yaml@2.8.3)
+        version: 4.4.2(@babel/core@7.29.0)(@babel/plugin-syntax-jsx@7.28.6(@babel/core@7.29.0))(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)(@parcel/watcher@2.5.6)(@types/node@22.19.17)(@vue/compiler-sfc@3.5.32)(cac@6.7.14)(db0@0.3.4)(eslint@9.39.4(jiti@2.6.1))(ioredis@5.10.1)(magicast@0.5.2)(optionator@0.9.4)(pinia@3.0.4(typescript@5.9.3)(vue@3.5.32(typescript@5.9.3)))(rollup-plugin-visualizer@5.14.0(rollup@4.60.1))(rollup@4.60.1)(terser@5.46.1)(typescript@5.9.3)(vite@7.3.2(@types/node@22.19.17)(jiti@2.6.1)(terser@5.46.1)(yaml@2.8.3))(vue-tsc@2.2.12(typescript@5.9.3))(yaml@2.8.3)
 
-  packages/pinia:
+  packages/in-pinia:
     devDependencies:
-      '@noy-db/core':
+      '@noy-db/hub':
         specifier: workspace:*
-        version: link:../core
+        version: link:../hub
       '@vue/test-utils':
         specifier: ^2.4.6
         version: 2.4.6
@@ -127,7 +127,25 @@ importers:
         specifier: ^3.5.32
         version: 3.5.32(typescript@5.9.3)
 
-  packages/store-aws-dynamo:
+  packages/in-vue:
+    devDependencies:
+      '@noy-db/hub':
+        specifier: workspace:*
+        version: link:../hub
+      vue:
+        specifier: ^3.5.32
+        version: 3.5.32(typescript@5.9.3)
+
+  packages/in-yjs:
+    devDependencies:
+      '@noy-db/hub':
+        specifier: workspace:*
+        version: link:../hub
+      yjs:
+        specifier: ^13.6.27
+        version: 13.6.30
+
+  packages/to-aws-dynamo:
     devDependencies:
       '@aws-sdk/client-dynamodb':
         specifier: ^3.0.0
@@ -135,24 +153,24 @@ importers:
       '@aws-sdk/lib-dynamodb':
         specifier: ^3.0.0
         version: 3.1024.0(@aws-sdk/client-dynamodb@3.1024.0)
-      '@noy-db/core':
+      '@noy-db/hub':
         specifier: workspace:*
-        version: link:../core
+        version: link:../hub
 
-  packages/store-aws-s3:
+  packages/to-aws-s3:
     devDependencies:
       '@aws-sdk/client-s3':
         specifier: ^3.0.0
         version: 3.1024.0
-      '@noy-db/core':
+      '@noy-db/hub':
         specifier: workspace:*
-        version: link:../core
+        version: link:../hub
 
-  packages/store-browser-idb:
+  packages/to-browser-idb:
     devDependencies:
-      '@noy-db/core':
+      '@noy-db/hub':
         specifier: workspace:*
-        version: link:../core
+        version: link:../hub
       '@noy-db/test-adapter-conformance':
         specifier: workspace:*
         version: link:../../test-harnesses/adapter-conformance
@@ -163,11 +181,11 @@ importers:
         specifier: ^18.0.0
         version: 18.0.1
 
-  packages/store-browser-local:
+  packages/to-browser-local:
     devDependencies:
-      '@noy-db/core':
+      '@noy-db/hub':
         specifier: workspace:*
-        version: link:../core
+        version: link:../hub
       '@noy-db/test-adapter-conformance':
         specifier: workspace:*
         version: link:../../test-harnesses/adapter-conformance
@@ -175,11 +193,11 @@ importers:
         specifier: ^18.0.0
         version: 18.0.1
 
-  packages/store-file:
+  packages/to-file:
     devDependencies:
-      '@noy-db/core':
+      '@noy-db/hub':
         specifier: workspace:*
-        version: link:../core
+        version: link:../hub
       '@noy-db/test-adapter-conformance':
         specifier: workspace:*
         version: link:../../test-harnesses/adapter-conformance
@@ -187,56 +205,38 @@ importers:
         specifier: ^22.0.0
         version: 22.19.17
 
-  packages/store-memory:
+  packages/to-memory:
     devDependencies:
-      '@noy-db/core':
+      '@noy-db/hub':
         specifier: workspace:*
-        version: link:../core
+        version: link:../hub
       '@noy-db/test-adapter-conformance':
         specifier: workspace:*
         version: link:../../test-harnesses/adapter-conformance
 
-  packages/vue:
-    devDependencies:
-      '@noy-db/core':
-        specifier: workspace:*
-        version: link:../core
-      vue:
-        specifier: ^3.5.32
-        version: 3.5.32(typescript@5.9.3)
-
-  packages/yjs:
-    devDependencies:
-      '@noy-db/core':
-        specifier: workspace:*
-        version: link:../core
-      yjs:
-        specifier: ^13.6.27
-        version: 13.6.30
-
   playground:
     dependencies:
-      '@noy-db/core':
+      '@noy-db/hub':
         specifier: workspace:*
-        version: link:../packages/core
-      '@noy-db/store-file':
+        version: link:../packages/hub
+      '@noy-db/to-file':
         specifier: workspace:*
-        version: link:../packages/store-file
-      '@noy-db/store-memory':
+        version: link:../packages/to-file
+      '@noy-db/to-memory':
         specifier: workspace:*
-        version: link:../packages/store-memory
+        version: link:../packages/to-memory
 
   playground/browser:
     dependencies:
-      '@noy-db/core':
+      '@noy-db/hub':
         specifier: workspace:*
-        version: link:../../packages/core
-      '@noy-db/store-browser-local':
+        version: link:../../packages/hub
+      '@noy-db/to-browser-local':
         specifier: workspace:*
-        version: link:../../packages/store-browser-local
-      '@noy-db/store-memory':
+        version: link:../../packages/to-browser-local
+      '@noy-db/to-memory':
         specifier: workspace:*
-        version: link:../../packages/store-memory
+        version: link:../../packages/to-memory
     devDependencies:
       vite:
         specifier: ^6.0.0
@@ -244,27 +244,27 @@ importers:
 
   playground/nuxt:
     dependencies:
-      '@noy-db/core':
+      '@noy-db/hub':
         specifier: workspace:*
-        version: link:../../packages/core
-      '@noy-db/nuxt':
+        version: link:../../packages/hub
+      '@noy-db/in-nuxt':
         specifier: workspace:*
-        version: link:../../packages/nuxt
-      '@noy-db/pinia':
+        version: link:../../packages/in-nuxt
+      '@noy-db/in-pinia':
         specifier: workspace:*
-        version: link:../../packages/pinia
-      '@noy-db/store-browser-idb':
+        version: link:../../packages/in-pinia
+      '@noy-db/in-vue':
         specifier: workspace:*
-        version: link:../../packages/store-browser-idb
-      '@noy-db/vue':
+        version: link:../../packages/in-vue
+      '@noy-db/to-browser-idb':
         specifier: workspace:*
-        version: link:../../packages/vue
+        version: link:../../packages/to-browser-idb
       '@pinia/nuxt':
         specifier: ^0.11.0
         version: 0.11.3(magicast@0.5.2)(pinia@3.0.4(typescript@5.9.3)(vue@3.5.32(typescript@5.9.3)))
       nuxt:
         specifier: ^4.4.2
-        version: 4.4.2(@babel/core@7.29.0)(@babel/plugin-syntax-jsx@7.28.6(@babel/core@7.29.0))(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)(@parcel/watcher@2.5.6)(@types/node@22.19.17)(@vue/compiler-sfc@3.5.32)(cac@6.7.14)(db0@0.3.4)(eslint@9.39.4(jiti@2.6.1))(ioredis@5.10.1)(magicast@0.5.2)(optionator@0.9.4)(pinia@3.0.4(typescript@5.9.3)(vue@3.5.32(typescript@5.9.3)))(rollup-plugin-visualizer@5.14.0(rollup@4.60.1))(rollup@4.60.1)(terser@5.46.1)(typescript@5.9.3)(vite@7.3.2(@types/node@22.19.17)(jiti@2.6.1)(terser@5.46.1)(yaml@2.8.3))(vue-tsc@2.2.12(typescript@5.9.3))(yaml@2.8.3)
+        version: 4.4.2(@babel/core@7.29.0)(@babel/plugin-syntax-jsx@7.28.6(@babel/core@7.29.0))(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)(@parcel/watcher@2.5.6)(@types/node@22.19.17)(@vue/compiler-sfc@3.5.32)(cac@6.7.14)(db0@0.3.4)(eslint@9.39.4(jiti@2.6.1))(ioredis@5.10.1)(magicast@0.5.2)(optionator@0.9.4)(pinia@3.0.4(typescript@5.9.3)(vue@3.5.32(typescript@5.9.3)))(rollup-plugin-visualizer@5.14.0(rollup@4.60.1))(rollup@4.60.1)(srvx@0.11.15)(terser@5.46.1)(typescript@5.9.3)(vite@7.3.2(@types/node@22.19.17)(jiti@2.6.1)(terser@5.46.1)(yaml@2.8.3))(vue-tsc@2.2.12(typescript@5.9.3))(yaml@2.8.3)
       pinia:
         specifier: ^3.0.1
         version: 3.0.4(typescript@5.9.3)(vue@3.5.32(typescript@5.9.3))
@@ -277,15 +277,15 @@ importers:
 
   playground/pinia:
     dependencies:
-      '@noy-db/core':
+      '@noy-db/hub':
         specifier: workspace:*
-        version: link:../../packages/core
-      '@noy-db/pinia':
+        version: link:../../packages/hub
+      '@noy-db/in-pinia':
         specifier: workspace:*
-        version: link:../../packages/pinia
-      '@noy-db/store-browser-idb':
+        version: link:../../packages/in-pinia
+      '@noy-db/to-browser-idb':
         specifier: workspace:*
-        version: link:../../packages/store-browser-idb
+        version: link:../../packages/to-browser-idb
       pinia:
         specifier: ^3.0.1
         version: 3.0.4(typescript@5.9.3)(vue@3.5.32(typescript@5.9.3))
@@ -305,48 +305,48 @@ importers:
 
   test-harnesses/adapter-conformance:
     devDependencies:
-      '@noy-db/core':
+      '@noy-db/hub':
         specifier: workspace:*
-        version: link:../../packages/core
+        version: link:../../packages/hub
       vitest:
         specifier: ^3.0.0
         version: 3.2.4(@types/node@22.19.17)(happy-dom@18.0.1)(jiti@2.6.1)(terser@5.46.1)(yaml@2.8.3)
 
   test-harnesses/benchmarks:
     devDependencies:
-      '@noy-db/core':
+      '@noy-db/hub':
         specifier: workspace:*
-        version: link:../../packages/core
+        version: link:../../packages/hub
 
   test-harnesses/simulation-concurrent:
     devDependencies:
-      '@noy-db/core':
+      '@noy-db/hub':
         specifier: workspace:*
-        version: link:../../packages/core
+        version: link:../../packages/hub
 
   test-harnesses/simulation-filesystem:
     devDependencies:
-      '@noy-db/core':
+      '@noy-db/hub':
         specifier: workspace:*
-        version: link:../../packages/core
+        version: link:../../packages/hub
 
   test-harnesses/simulation-multiuser:
     devDependencies:
-      '@noy-db/core':
+      '@noy-db/hub':
         specifier: workspace:*
-        version: link:../../packages/core
+        version: link:../../packages/hub
 
   test-harnesses/simulation-offline-online:
     devDependencies:
-      '@noy-db/core':
+      '@noy-db/hub':
         specifier: workspace:*
-        version: link:../../packages/core
+        version: link:../../packages/hub
 
   test-harnesses/simulation-sync:
     devDependencies:
-      '@noy-db/core':
+      '@noy-db/hub':
         specifier: workspace:*
-        version: link:../../packages/core
+        version: link:../../packages/hub
 
 packages:
 

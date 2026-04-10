@@ -33,7 +33,7 @@ export const en: WizardMessages = {
   augmentModeTitle: 'Augment mode',
   augmentDetectedPrefix: 'Detected existing Nuxt 4 project:',
   augmentDescription:
-    'The wizard will add @noy-db/nuxt to your modules array\n' +
+    'The wizard will add @noy-db/in-nuxt to your modules array\n' +
     'and a noydb: config key. You can review the diff before\n' +
     'anything is written to disk.',
 

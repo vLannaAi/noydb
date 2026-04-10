@@ -5,7 +5,7 @@
  * This file is the v0.4 acceptance-criterion evidence for #42: the
  * reference demo uses a Standard Schema v1 validator, and every
  * mutation / read is validated at the encrypt/decrypt boundary inside
- * @noy-db/core.
+ * @noy-db/hub.
  *
  * It's also the v0.3 evidence: "Reference Vue/Nuxt accounting demo
  * uses ONLY the Pinia API — no direct Vault/Collection calls
@@ -15,7 +15,7 @@
 
 import { z } from 'zod'
 
-// defineNoydbStore is auto-imported by @noy-db/nuxt
+// defineNoydbStore is auto-imported by @noy-db/in-nuxt
 
 export const InvoiceSchema = z.object({
   id: z.string().min(1),

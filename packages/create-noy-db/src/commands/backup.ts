@@ -38,8 +38,8 @@
 
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
-import { createNoydb, type Noydb, type NoydbStore } from '@noy-db/core'
-import { jsonFile } from '@noy-db/store-file'
+import { createNoydb, type Noydb, type NoydbStore } from '@noy-db/hub'
+import { jsonFile } from '@noy-db/to-file'
 import type { ReadPassphrase } from './shared.js'
 import { defaultReadPassphrase } from './shared.js'
 

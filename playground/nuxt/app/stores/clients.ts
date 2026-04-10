@@ -3,7 +3,7 @@
  * within the same vault.
  */
 
-// defineNoydbStore is auto-imported by @noy-db/nuxt
+// defineNoydbStore is auto-imported by @noy-db/in-nuxt
 
 export interface Client {
   id: string

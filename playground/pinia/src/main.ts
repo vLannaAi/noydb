@@ -1,8 +1,8 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
-import { createNoydb } from '@noy-db/core'
-import { browserIdbStore } from '@noy-db/store-browser-idb'
-import { setActiveNoydb } from '@noy-db/pinia'
+import { createNoydb } from '@noy-db/hub'
+import { browserIdbStore } from '@noy-db/to-browser-idb'
+import { setActiveNoydb } from '@noy-db/in-pinia'
 import App from './App.vue'
 
 // Bootstrap NOYDB before creating the Vue app so the active instance is

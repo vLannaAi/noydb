@@ -1,6 +1,6 @@
 /**
  * `noy-db add <collection>` — scaffold a new collection inside an existing
- * Nuxt 4 project that already has `@noy-db/nuxt` configured.
+ * Nuxt 4 project that already has `@noy-db/in-nuxt` configured.
  *
  * The command writes two files:
  *
@@ -118,7 +118,7 @@ function renderStore(
 // Edit the ${PascalName} interface to match your domain, then call
 // \`${useFnName}()\` from any component.
 //
-// defineNoydbStore is auto-imported by @noy-db/nuxt. The vault
+// defineNoydbStore is auto-imported by @noy-db/in-nuxt. The vault
 // id is the tenant/company namespace — change it if you have multiple.
 
 export interface ${PascalName} {

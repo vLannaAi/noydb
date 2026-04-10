@@ -99,7 +99,7 @@ export function validateProjectName(name: string): string | null {
  *     starter template. Returns a `WizardFreshResult`.
  *
  *   - **Augment mode** (new in v0.5, #37): patches the existing
- *     `nuxt.config.ts` via magicast to add `@noy-db/nuxt` to the
+ *     `nuxt.config.ts` via magicast to add `@noy-db/in-nuxt` to the
  *     modules array and a `noydb:` config key. Shows a unified
  *     diff and asks for confirmation before writing. Supports
  *     `--dry-run`. Returns a `WizardAugmentResult`.
@@ -345,7 +345,7 @@ async function runAugmentMode(
         [
           pc.dim(msg.augmentInstallIntro),
           '',
-          `${pc.bold('pnpm add')} @noy-db/nuxt @noy-db/pinia @noy-db/core @noy-db/browser @pinia/nuxt pinia`,
+          `${pc.bold('pnpm add')} @noy-db/in-nuxt @noy-db/in-pinia @noy-db/hub @noy-db/to-browser-idb @pinia/nuxt pinia`,
           pc.dim(msg.augmentInstallPmHint),
         ].join('\n'),
         msg.augmentNextStepTitle,

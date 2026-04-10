@@ -28,7 +28,7 @@
  */
 
 import { password, isCancel, cancel } from '@clack/prompts'
-import type { Role } from '@noy-db/core'
+import type { Role } from '@noy-db/hub'
 
 const VALID_ROLES = ['owner', 'admin', 'operator', 'viewer', 'client'] as const
 

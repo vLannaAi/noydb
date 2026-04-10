@@ -1,11 +1,11 @@
 /**
- * Augment an existing Nuxt 4 project with `@noy-db/nuxt`.
+ * Augment an existing Nuxt 4 project with `@noy-db/in-nuxt`.
  *
  * The entry point is `augmentNuxtConfig()`, which reads a
  * `nuxt.config.ts` (or `.js` / `.mjs`) via magicast, mutates the
  * AST to:
  *
- *   1. Add `'@noy-db/nuxt'` to the `modules` array (creating the
+ *   1. Add `'@noy-db/in-nuxt'` to the `modules` array (creating the
  *      array if it doesn't exist)
  *   2. Add the `noydb: { adapter, pinia: true, devtools: true }`
  *      config key (creating it if it doesn't exist)
@@ -34,7 +34,7 @@
  *   to chase the variable.
  * - `modules` declared as an object instead of an array — rare
  *   but possible in some Nuxt tooling. We bail.
- * - `modules` already contains `'@noy-db/nuxt'` — idempotent skip.
+ * - `modules` already contains `'@noy-db/in-nuxt'` — idempotent skip.
  * - `noydb` key already present — we preserve the existing value
  *   UNLESS `force: true` is passed (not yet surfaced in the CLI;
  *   reserved for a future `--overwrite-config` flag).
@@ -157,17 +157,17 @@ export async function augmentNuxtConfig(
     }
   }
 
-  // Push '@noy-db/nuxt' if it's not already listed. We compare by
+  // Push '@noy-db/in-nuxt' if it's not already listed. We compare by
   // stringification because magicast's proxy yields primitive
   // strings for literal entries.
   const modules = config.modules as string[]
-  const alreadyHasModule = Array.from(modules).some((m) => String(m) === '@noy-db/nuxt')
+  const alreadyHasModule = Array.from(modules).some((m) => String(m) === '@noy-db/in-nuxt')
   if (alreadyHasModule) {
-    skipReasons.push('`@noy-db/nuxt` already in modules')
+    skipReasons.push('`@noy-db/in-nuxt` already in modules')
   } else {
-    // Insert as a literal string so magicast writes `'@noy-db/nuxt'`
+    // Insert as a literal string so magicast writes `'@noy-db/in-nuxt'`
     // rather than an object wrapper.
-    modules.push('@noy-db/nuxt')
+    modules.push('@noy-db/in-nuxt')
   }
 
   // --- `noydb` config key --------------------------------------------

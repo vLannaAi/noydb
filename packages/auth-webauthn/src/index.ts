@@ -54,12 +54,12 @@
  *    re-hydrate the session via `createSession()`.
  */
 
-import { bufferToBase64, base64ToBuffer } from '@noy-db/core'
-import { ValidationError } from '@noy-db/core'
-import type { UnlockedKeyring, Role } from '@noy-db/core'
+import { bufferToBase64, base64ToBuffer } from '@noy-db/hub'
+import { ValidationError } from '@noy-db/hub'
+import type { UnlockedKeyring, Role } from '@noy-db/hub'
 
 // Re-export from core for convenience
-export { ValidationError } from '@noy-db/core'
+export { ValidationError } from '@noy-db/hub'
 
 // ─── Error types ──────────────────────────────────────────────────────
 
