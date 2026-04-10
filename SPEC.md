@@ -687,6 +687,63 @@ interface NoydbStore {
 }
 ```
 
+### Store Routing (v0.12)
+
+`routeStore()` multiplexes operations across multiple backends based on collection type, record size, record age, collection name, or vault name. Returns a standard `NoydbStore` — transparent to the rest of the API.
+
+```ts
+import { routeStore } from '@noy-db/hub'
+
+const db = await createNoydb({
+  store: routeStore({
+    default: dynamo({ table: 'myapp' }),        // records, keyrings, metadata
+    blobs: s3Store({ bucket: 'myapp-blobs' }),   // blob chunks → S3
+    age: { cold: s3Store({ bucket: 'archive' }), coldAfterDays: 90 },
+    routes: { invoices: postgres({ ... }) },     // per-collection routing
+    vaultRoutes: { 'EU-': dynamo({ region: 'eu-west-1' }) },
+  }),
+})
+```
+
+**Routing dimensions (resolution order):**
+
+1. Runtime override/suspend (`store.override()` / `store.suspend()`)
+2. Vault-based geographic routing (`vaultRoutes`)
+3. Per-collection routing (`routes`)
+4. Blob chunk routing (`blobs` — simple prefix or size-tiered)
+5. Quota-aware overflow (`overflow`)
+6. Default store
+
+**Runtime ephemeral routing:** `store.override('default', memory())` switches to in-memory for shared devices. `store.suspend('blobs')` pauses I/O to unreachable stores with optional write-behind queue (`{ queue: true }`).
+
+### NoydbBundleStore (v0.12)
+
+Second store shape for backends that operate on whole-vault bundles (Drive, WebDAV, iCloud). Implements `readBundle` / `writeBundle` with optimistic concurrency via version tokens instead of the 6-method KV contract. `wrapBundleStore()` converts to a standard `NoydbStore`.
+
+### Encrypted Binary Blob Store (v0.12)
+
+`collection.blob(id)` returns a `BlobSet` for binary attachments:
+
+- **Content-addressed** — `eTag = HMAC-SHA-256(blobDEK, plaintext)` (opaque to store)
+- **Deduplicated** — identical bytes share chunks across records via `refCount`
+- **Chunked** — AES-256-GCM per chunk with AAD binding (`eTag:index:count`)
+- **Versioned** — `publish(slot, label)` creates named snapshots (amendment workflow)
+- **MIME-detected** — 55 magic-byte rules, auto-skips gzip for pre-compressed formats
+- **HTTP-ready** — `response(slot)` returns a native `Response` with full headers
+
+### Store Middleware (v0.12)
+
+`wrapStore(store, ...middlewares)` composes interceptors around any store:
+
+```ts
+const resilient = wrapStore(dynamo({ ... }),
+  withRetry({ maxRetries: 3, backoffMs: 500 }),
+  withCircuitBreaker({ failureThreshold: 5 }),
+  withCache({ maxEntries: 500, ttlMs: 60_000 }),
+  withHealthCheck({ checkIntervalMs: 30_000 }),
+)
+```
+
 ### Custom Stores
 
 Implement the `NoydbStore` interface (6 required methods). Example skeleton:
