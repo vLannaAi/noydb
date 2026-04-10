@@ -357,4 +357,156 @@ describe('routeStore', () => {
       expect(routed.name).toBe('route(dynamo+s3)')
     })
   })
+
+  // ─── Runtime override / suspend (v0.12 #163) ─────────────────────
+
+  describe('override — shared device / ephemeral session', () => {
+    it('override("default") redirects all record I/O to the override store', async () => {
+      const idbStore = makeStore('idb')
+      const memStore = makeStore('memory')
+      const routed = routeStore({ default: idbStore })
+
+      // Normal: writes go to IDB
+      await routed.put(VAULT, 'invoices', 'inv-1', envelope(1))
+      expect(await idbStore.get(VAULT, 'invoices', 'inv-1')).not.toBeNull()
+
+      // Override: switch to memory (shared device mode)
+      routed.override('default', memStore)
+
+      await routed.put(VAULT, 'invoices', 'inv-2', envelope(1))
+      // New write goes to memory, NOT to IDB
+      expect(await memStore.get(VAULT, 'invoices', 'inv-2')).not.toBeNull()
+      expect(idbStore._data.get(VAULT)?.get('invoices')?.has('inv-2')).toBeFalsy()
+
+      // Reads also come from memory
+      const result = await routed.get(VAULT, 'invoices', 'inv-2')
+      expect(result).not.toBeNull()
+
+      // Old data in IDB is not visible through the override
+      const oldResult = await routed.get(VAULT, 'invoices', 'inv-1')
+      expect(oldResult).toBeNull() // memory store doesn't have it
+    })
+
+    it('clearOverride reverts to the original store', async () => {
+      const idbStore = makeStore('idb')
+      const memStore = makeStore('memory')
+      const routed = routeStore({ default: idbStore })
+
+      routed.override('default', memStore)
+      await routed.put(VAULT, 'col', 'id1', envelope(1))
+      expect(await memStore.get(VAULT, 'col', 'id1')).not.toBeNull()
+
+      routed.clearOverride('default')
+      await routed.put(VAULT, 'col', 'id2', envelope(1))
+      // After clearing, writes go back to IDB
+      expect(await idbStore.get(VAULT, 'col', 'id2')).not.toBeNull()
+      expect(memStore._data.get(VAULT)?.get('col')?.has('id2')).toBeFalsy()
+    })
+
+    it('override("blobs") redirects blob chunks to the override store', async () => {
+      const dynStore = makeStore('dynamo')
+      const s3Store = makeStore('s3')
+      const tempStore = makeStore('temp-local')
+      const routed = routeStore({ default: dynStore, blobs: s3Store })
+
+      // Normal: blob chunks go to S3
+      await routed.put(VAULT, '_blob_chunks', 'abc_0', envelope(1))
+      expect(await s3Store.get(VAULT, '_blob_chunks', 'abc_0')).not.toBeNull()
+
+      // Override: redirect blobs to temp local store
+      routed.override('blobs', tempStore)
+      await routed.put(VAULT, '_blob_chunks', 'def_0', envelope(1))
+      expect(await tempStore.get(VAULT, '_blob_chunks', 'def_0')).not.toBeNull()
+      expect(s3Store._data.get(VAULT)?.get('_blob_chunks')?.has('def_0')).toBeFalsy()
+    })
+  })
+
+  describe('suspend / resume — restricted network', () => {
+    it('suspend makes all operations no-ops', async () => {
+      const dynStore = makeStore('dynamo')
+      const s3Store = makeStore('s3')
+      const routed = routeStore({ default: dynStore, blobs: s3Store })
+
+      routed.suspend('blobs')
+
+      // Puts to suspended route are silently dropped
+      await routed.put(VAULT, '_blob_chunks', 'abc_0', envelope(1))
+      expect(await s3Store.get(VAULT, '_blob_chunks', 'abc_0')).toBeNull()
+
+      // Gets return null
+      const result = await routed.get(VAULT, '_blob_chunks', 'abc_0')
+      expect(result).toBeNull()
+
+      // Lists return empty
+      const ids = await routed.list(VAULT, '_blob_chunks')
+      expect(ids).toHaveLength(0)
+
+      // Non-suspended routes still work
+      await routed.put(VAULT, 'invoices', 'inv-1', envelope(1))
+      expect(await dynStore.get(VAULT, 'invoices', 'inv-1')).not.toBeNull()
+    })
+
+    it('resume restores normal operation', async () => {
+      const dynStore = makeStore('dynamo')
+      const s3Store = makeStore('s3')
+      const routed = routeStore({ default: dynStore, blobs: s3Store })
+
+      routed.suspend('blobs')
+      await routed.put(VAULT, '_blob_chunks', 'abc_0', envelope(1))
+      expect(await s3Store.get(VAULT, '_blob_chunks', 'abc_0')).toBeNull()
+
+      routed.resume('blobs')
+      await routed.put(VAULT, '_blob_chunks', 'def_0', envelope(1))
+      expect(await s3Store.get(VAULT, '_blob_chunks', 'def_0')).not.toBeNull()
+    })
+
+    it('suspend takes precedence over override', async () => {
+      const dynStore = makeStore('dynamo')
+      const memStore = makeStore('memory')
+      const routed = routeStore({ default: dynStore })
+
+      routed.override('default', memStore)
+      routed.suspend('default')
+
+      // Suspended: even with override, operations are no-ops
+      await routed.put(VAULT, 'col', 'id1', envelope(1))
+      expect(await memStore.get(VAULT, 'col', 'id1')).toBeNull()
+
+      // Resume: override becomes active
+      routed.resume('default')
+      await routed.put(VAULT, 'col', 'id2', envelope(1))
+      expect(await memStore.get(VAULT, 'col', 'id2')).not.toBeNull()
+    })
+  })
+
+  describe('routeStatus', () => {
+    it('reports current overrides and suspended routes', () => {
+      const dynStore = makeStore('dynamo')
+      const memStore = makeStore('memory')
+      const routed = routeStore({ default: dynStore })
+
+      routed.override('default', memStore)
+      routed.suspend('blobs')
+
+      const status = routed.routeStatus()
+      expect(status.overrides).toEqual({ default: 'memory' })
+      expect(status.suspended).toEqual(['blobs'])
+    })
+
+    it('reflects cleared overrides and resumed routes', () => {
+      const dynStore = makeStore('dynamo')
+      const memStore = makeStore('memory')
+      const routed = routeStore({ default: dynStore })
+
+      routed.override('default', memStore)
+      routed.suspend('blobs')
+
+      routed.clearOverride('default')
+      routed.resume('blobs')
+
+      const status = routed.routeStatus()
+      expect(status.overrides).toEqual({})
+      expect(status.suspended).toEqual([])
+    })
+  })
 })

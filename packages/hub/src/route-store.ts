@@ -82,6 +82,20 @@ export interface RouteStoreOptions {
 
 // ─── Types ───────────────────────────────────────────────────────────────
 
+/** Target identifier for runtime override/suspend. */
+export type OverrideTarget =
+  | 'default'
+  | 'blobs'
+  | 'cold'
+  | (string & {})  // named collection route, vault route, or sync target label
+
+export interface RouteStatus {
+  /** Active overrides: route name → override store name. */
+  readonly overrides: Record<string, string>
+  /** Currently suspended routes. */
+  readonly suspended: string[]
+}
+
 export interface RoutedNoydbStore extends NoydbStore {
   /**
    * Migrate records older than the age cutoff from the hot store to the
@@ -89,6 +103,37 @@ export interface RoutedNoydbStore extends NoydbStore {
    * of records migrated.
    */
   compact(vault: string): Promise<number>
+
+  /**
+   * Override a named route at runtime (v0.12 #163).
+   *
+   * The override persists until `clearOverride()` is called or the
+   * instance is closed. Does NOT migrate data — the new store starts
+   * empty unless pre-populated by the caller. In-flight operations
+   * complete on the original store; new operations use the override.
+   *
+   * Use cases:
+   * - Shared device: `store.override('default', memory())`
+   * - Restricted network: `store.override('blobs', localFile(...))`
+   */
+  override(route: OverrideTarget, store: NoydbStore): void
+
+  /** Clear a runtime override, reverting to the original store. */
+  clearOverride(route: OverrideTarget): void
+
+  /**
+   * Suspend a route entirely. Operations to suspended stores are
+   * silently dropped (puts become no-ops, gets return null, lists
+   * return []). Dirty tracking in the sync engine continues — when
+   * the route is resumed, pending writes can be flushed.
+   */
+  suspend(route: OverrideTarget): void
+
+  /** Resume a previously suspended route. */
+  resume(route: OverrideTarget): void
+
+  /** Snapshot the current override/suspend state for diagnostics. */
+  routeStatus(): RouteStatus
 }
 
 // ─── Implementation ──────────────────────────────────────────────────────
@@ -111,6 +156,53 @@ export function routeStore(opts: RouteStoreOptions): RoutedNoydbStore {
   if (opts.routes) for (const s of Object.values(opts.routes)) allStores.add(s)
   if (opts.vaultRoutes) for (const s of Object.values(opts.vaultRoutes)) allStores.add(s)
 
+  // ── Runtime override / suspend state (v0.12 #163) ──────────────────
+
+  const overrides = new Map<string, NoydbStore>()
+  const suspended = new Set<string>()
+
+  /** Null store: silently absorbs all operations when a route is suspended. */
+  const NULL_STORE: NoydbStore = {
+    name: 'suspended',
+    async get() { return null },
+    async put() {},
+    async delete() {},
+    async list() { return [] },
+    async loadAll() { return {} },
+    async saveAll() {},
+  }
+
+  /**
+   * Map a resolved route to its canonical name for override/suspend lookup.
+   * Vault routes use the prefix, collection routes use the collection name,
+   * blob route is 'blobs', cold route is 'cold', everything else is 'default'.
+   */
+  function routeNameFor(vault: string, collection: string): string {
+    if (opts.vaultRoutes) {
+      for (const prefix of Object.keys(opts.vaultRoutes)) {
+        if (vault.startsWith(prefix)) return prefix
+      }
+    }
+    if (opts.routes && !collection.startsWith('_') && opts.routes[collection]) {
+      return collection
+    }
+    if (isBlobChunks(collection) && (simpleBlobStore || tieredBlobs)) return 'blobs'
+    if (opts.routeBlobMeta && isBlobMeta(collection) && (simpleBlobStore || tieredBlobs)) return 'blobs'
+    if (opts.age && !collection.startsWith('_')) {
+      // We don't name age 'cold' here — cold is a fallback, not a primary route
+    }
+    return 'default'
+  }
+
+  /**
+   * Apply override/suspend on top of a resolved store.
+   * Returns the effective store (override, null, or original).
+   */
+  function applyOverrides(routeName: string, original: NoydbStore): NoydbStore {
+    if (suspended.has(routeName)) return NULL_STORE
+    return overrides.get(routeName) ?? original
+  }
+
   // ── Routing logic ──────────────────────────────────────────────────
 
   function isBlobChunks(collection: string): boolean {
@@ -129,9 +221,15 @@ export function routeStore(opts: RouteStoreOptions): RoutedNoydbStore {
 
   /**
    * Resolve the store for a given vault + collection.
-   * Resolution order: vaultRoutes → routes → blobs → default
+   * Resolution order: overrides/suspend → vaultRoutes → routes → blobs → default
    */
   function storeFor(vault: string, collection: string): NoydbStore {
+    const rName = routeNameFor(vault, collection)
+
+    // 0. Runtime override / suspend check (v0.12 #163)
+    if (suspended.has(rName)) return NULL_STORE
+    if (overrides.has(rName)) return overrides.get(rName)!
+
     // 1. Vault-based geographic routing
     if (opts.vaultRoutes) {
       for (const [prefix, store] of Object.entries(opts.vaultRoutes)) {
@@ -301,6 +399,30 @@ export function routeStore(opts: RouteStoreOptions): RoutedNoydbStore {
       }
 
       return migrated
+    },
+
+    // ── Runtime override / suspend (v0.12 #163) ──────────────────────
+
+    override(route: OverrideTarget, overrideStore: NoydbStore): void {
+      overrides.set(route, overrideStore)
+    },
+
+    clearOverride(route: OverrideTarget): void {
+      overrides.delete(route)
+    },
+
+    suspend(route: OverrideTarget): void {
+      suspended.add(route)
+    },
+
+    resume(route: OverrideTarget): void {
+      suspended.delete(route)
+    },
+
+    routeStatus(): RouteStatus {
+      const ov: Record<string, string> = {}
+      for (const [k, v] of overrides) ov[k] = v.name ?? 'unnamed'
+      return { overrides: ov, suspended: [...suspended] }
     },
   }
 

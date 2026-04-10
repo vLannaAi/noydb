@@ -93,7 +93,7 @@ export type { SyncTarget, SyncTargetRole } from './types.js'
 
 // Store routing (v0.12 #162)
 export { routeStore } from './route-store.js'
-export type { RouteStoreOptions, RoutedNoydbStore, BlobStoreRoute, AgeRoute } from './route-store.js'
+export type { RouteStoreOptions, RoutedNoydbStore, BlobStoreRoute, AgeRoute, OverrideTarget, RouteStatus } from './route-store.js'
 
 // Errors
 export {
