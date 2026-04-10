@@ -732,6 +732,94 @@ export class BlobSet {
     return result?.blob ?? null
   }
 
+  // ─── Presigned URL (E5) ────────────────────────────────────────────
+
+  /**
+   * Generate a presigned URL for direct client download of the blob's
+   * ciphertext. Only works when the blob store supports `presignUrl`.
+   *
+   * **Important:** The URL returns encrypted data. The caller must
+   * decrypt client-side using `decryptResponse()` or a service worker.
+   *
+   * Returns `null` if the slot doesn't exist or the store doesn't support presigning.
+   */
+  async presignedUrl(slotName: string, expiresInSeconds = 3600): Promise<string | null> {
+    const { slots } = await this.loadSlots()
+    const slot = slots[slotName]
+    if (!slot) return null
+
+    const result = await this.loadBlobObject(slot.eTag)
+    if (!result) return null
+
+    // Only works for single-chunk blobs where the store supports presigning
+    if (result.blob.chunkCount !== 1) return null
+    if (!this.store.presignUrl) return null
+
+    const chunkId = `${slot.eTag}_0`
+    return this.store.presignUrl(this.vault, '_blob_chunks', chunkId, expiresInSeconds)
+  }
+
+  /**
+   * Decrypt a ciphertext Response (e.g. from a presigned URL fetch)
+   * back into a plaintext Response with correct headers.
+   *
+   * Usage with service worker or client-side fetch:
+   * ```ts
+   * const url = await blobs.presignedUrl('invoice.pdf')
+   * const cipherResponse = await fetch(url)
+   * const plainResponse = await blobs.decryptResponse('invoice.pdf', cipherResponse)
+   * ```
+   */
+  async decryptResponse(slotName: string, cipherResponse: Response): Promise<Response | null> {
+    const { slots } = await this.loadSlots()
+    const slot = slots[slotName]
+    if (!slot) return null
+
+    const result = await this.loadBlobObject(slot.eTag)
+    if (!result) return null
+
+    // Parse the envelope from the ciphertext response
+    const text = await cipherResponse.text()
+    const envelope = JSON.parse(text) as { _iv: string; _data: string }
+
+    const blobDEK = this.encrypted ? await this.getDEK('_blob') : null
+    if (!blobDEK) {
+      // Unencrypted mode: just base64 decode
+      const { base64ToBuffer } = await import('./crypto.js')
+      const bytes = base64ToBuffer(envelope._data)
+      const decompressed = result.blob.compression === 'gzip'
+        ? await decompressBytes(bytes)
+        : bytes
+      return this.buildResponse(slot, result.blob, { inline: true })
+    }
+
+    // Decrypt the single chunk
+    const aad = chunkAAD(slot.eTag, 0, result.blob.chunkCount)
+    const { decryptBytesWithAAD: decryptAAD } = await import('./crypto.js')
+    const decrypted = await decryptAAD(envelope._iv, envelope._data, blobDEK, aad)
+    const plaintext = result.blob.compression === 'gzip'
+      ? await decompressBytes(decrypted)
+      : decrypted
+
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(plaintext)
+        controller.close()
+      },
+    })
+
+    const filename = slot.filename
+    return new Response(body, {
+      headers: {
+        'Content-Type': slot.mimeType ?? 'application/octet-stream',
+        'Content-Length': String(slot.size),
+        'ETag': `"${slot.eTag}"`,
+        'Content-Disposition': `inline; filename="${filename}"`,
+        'Last-Modified': new Date(slot.uploadedAt).toUTCString(),
+      },
+    })
+  }
+
   // ─── Internal: build Response from slot + blob ────────────────────
 
   private async buildResponse(

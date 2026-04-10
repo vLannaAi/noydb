@@ -93,7 +93,17 @@ export type { SyncTarget, SyncTargetRole } from './types.js'
 
 // Store routing (v0.12 #162)
 export { routeStore } from './route-store.js'
-export type { RouteStoreOptions, RoutedNoydbStore, BlobStoreRoute, AgeRoute, OverrideTarget, RouteStatus } from './route-store.js'
+export type {
+  RouteStoreOptions, RoutedNoydbStore, BlobStoreRoute, AgeRoute,
+  BlobLifecyclePolicy, OverrideTarget, OverrideOptions, SuspendOptions, RouteStatus,
+} from './route-store.js'
+
+// Store middleware (v0.12 #164 E4)
+export { wrapStore, withRetry, withLogging, withMetrics, withCircuitBreaker, withCache, withHealthCheck } from './store-middleware.js'
+export type {
+  StoreMiddleware, RetryOptions, LoggingOptions, LogLevel,
+  MetricsOptions, StoreOperation, CircuitBreakerOptions, CacheOptions, HealthCheckOptions,
+} from './store-middleware.js'
 
 // Errors
 export {

@@ -177,6 +177,21 @@ export interface NoydbStore {
    * extension discovered via `'listVaults' in store`.
    */
   listVaults?(): Promise<string[]>
+
+  /**
+   * Optional: generate a presigned URL for direct client download (v0.12 #164 E5).
+   * Only meaningful for object stores (S3, GCS) that support URL signing.
+   * Returns a time-limited URL that fetches the encrypted envelope directly.
+   * The caller must decrypt client-side (the URL returns ciphertext).
+   */
+  presignUrl?(vault: string, collection: string, id: string, expiresInSeconds?: number): Promise<string>
+
+  /**
+   * Optional: estimate current storage usage (v0.12 #164 E8).
+   * Returns `{ usedBytes, quotaBytes }` or null if the store cannot estimate.
+   * Used by quota-aware routing to detect overflow conditions.
+   */
+  estimateUsage?(): Promise<{ usedBytes: number; quotaBytes: number } | null>
 }
 
 // ─── Store Factory Helper ──────────────────────────────────────────────
