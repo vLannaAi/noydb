@@ -3,7 +3,7 @@
 > **Purpose:** context for the next Claude Code session. Read this first —
 > it will save you 10 minutes of re-discovery.
 >
-> **Updated:** 2026-04-09 — v0.9.0 released and post-release cleanup complete.
+> **Updated:** 2026-04-09 — v0.10.0 released and post-release cleanup complete.
 
 ---
 
@@ -20,19 +20,37 @@ the actual name before any commit or publish that touches user-facing copy.
 
 ---
 
-## Current state: v0.9.0 released — repo clean
+## Current state: v0.10.0 released — repo clean
 
 ```
-main  35226e1  docs: v0.9.0 post-release cleanup — HANDOVER
+main  669326d  docs: v0.10.0 complete — update CLAUDE.md SPEC.md ROADMAP.md HANDOVER.md
 ```
 
-Working tree clean. All 13 `@noy-db/*` packages at **0.9.0** on npm.
-GitHub release: https://github.com/vLannaAi/noy-db/releases/tag/v0.9.0
+Working tree clean. **15 packages** at **0.10.0** on npm — `@noy-db/core`, `@noy-db/store-file`, `@noy-db/store-memory`, `@noy-db/store-browser-local`, `@noy-db/store-browser-idb`, `@noy-db/store-aws-dynamo`, `@noy-db/store-aws-s3`, `@noy-db/yjs`, `@noy-db/auth-webauthn`, `@noy-db/auth-oidc`, `@noy-db/pinia`, `@noy-db/vue`, `@noy-db/nuxt`, `create-noy-db`.
 
-**1132 tests passing** — 772 core + 11 yjs + 18 auth-webauthn + 21 auth-oidc + 310 other packages.
+**1065 tests passing** across all packages.
 
-No open PRs. No open v0.9 issues. Milestone v0.9.0 closed.
-Open milestones: v0.10.0, v0.11.0.
+No open PRs. No open v0.10 issues. Milestone v0.10.0 closed.
+Open milestones: v0.11.0, v0.12.0.
+
+**Post-publish checklist (do before starting v0.11 work):**
+- Deprecate old npm package names on the registry: `@noy-db/file`, `@noy-db/memory`, `@noy-db/browser`, `@noy-db/dynamo`, `@noy-db/s3`, `@noy-db/create`
+- Add deprecation notices pointing consumers to the new names
+
+---
+
+## What v0.10 added (already shipped — do not re-implement)
+
+| # | What | Details |
+|---|------|---------|
+| — | API renames | `NoydbAdapter` → `NoydbStore`, `defineAdapter()` → `createStore()`, `NoydbOptions.adapter` → `.store`, `AdapterCapabilityError` → `StoreCapabilityError` (code `'STORE_CAPABILITY'`), `AdapterCapabilities` → `StoreCapabilities`, `runAdapterConformanceTests` → `runStoreConformanceTests` |
+| — | Vault rename | `class Compartment` → `class Vault`, `openCompartment()` → `openVault()`, `listCompartments()` → `listVaults()`, `CompartmentSnapshot` → `VaultSnapshot`, `CompartmentBackup` → `VaultBackup` |
+| — | Package renames | `@noy-db/file` → `@noy-db/store-file`, `@noy-db/memory` → `@noy-db/store-memory`, `@noy-db/browser` → split (`store-browser-local` + `store-browser-idb`), `@noy-db/dynamo` → `@noy-db/store-aws-dynamo`, `@noy-db/s3` → `@noy-db/store-aws-s3`, `@noy-db/create` → `create-noy-db` |
+| — | StoreCapabilities | Added `casAtomic: boolean` and `auth: StoreAuth` fields |
+| #139 | IDB CAS fix | `store-browser-idb` uses single `readwrite` IDB transaction for atomic check-and-set |
+| — | S3 SDK cleanup | `store-aws-s3` uses `@aws-sdk/client-s3` directly — dropped `MinimalS3Client` shim |
+
+**casAtomic per store:** store-memory true, store-file false (TOCTOU), store-browser-local true (sync), store-browser-idb true (single readwrite tx), store-aws-dynamo true (ConditionExpression), store-aws-s3 false (two HTTP calls).
 
 ---
 
@@ -75,17 +93,18 @@ Open milestones: v0.10.0, v0.11.0.
 
 ---
 
-## Next: v0.10 planning
+## Next: v0.11 planning
 
-No issues filed yet for v0.10. See `ROADMAP.md` for planned scope:
+No issues filed yet for v0.11 beyond #146 (store-probe). See `ROADMAP.md` for planned scope:
 - `noydb` CLI (`init`, `open`, `dump`, `load`, `codegen`, `migrate`, `verify`)
-- Browser DevTools panel
+- Browser DevTools panel (vaults, collections, decrypted records, ledger, sync, query playground)
 - VSCode extension
 - Importers (`@noy-db/import-postgres`, `import-sqlite`, `import-csv`, `import-firebase`, `import-mongo`)
 - Type generation (`noydb codegen`)
 - Test utilities (`@noy-db/testing`: `createTestDb()`, `seed()`, `snapshot()`, time-travel mocks)
+- Store probe (#146): `@noy-db/store-probe` — runtime capability detection and health-check
 
-**Partition-awareness seams (#87)** are dormant in the query layer — every `JoinLeg` carries `partitionScope: 'all'` and every reducer factory accepts `{ seed }`. Do not remove either — load-bearing for v0.10.
+**Partition-awareness seams (#87)** are dormant in the query layer — every `JoinLeg` carries `partitionScope: 'all'` and every reducer factory accepts `{ seed }`. Do not remove either — load-bearing for v0.11.
 
 ---
 
@@ -98,7 +117,7 @@ canonical version, preventing changeset's pre-1.0 heuristic from
 computing stray `1.0.0` bumps. This has burned us twice.
 
 ### 2. Peer deps must be `workspace:*` not `workspace:^`
-All adapter and auth packages use `"@noy-db/core": "workspace:*"` in
+All store and auth packages use `"@noy-db/core": "workspace:*"` in
 `peerDependencies`. `workspace:^` triggers the changeset major-bump
 heuristic. Do not revert.
 

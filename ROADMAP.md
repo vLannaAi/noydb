@@ -1,6 +1,6 @@
 # Roadmap
 
-> **Current:** v0.9.0 on npm — all 13 `@noy-db/*` packages on the 0.9.0 version line. Everything from v0.8 plus the full sync v2 layer: CRDT mode, pluggable conflict policies, presence, partial sync, sync transactions, and the new `@noy-db/yjs` Yjs interop package. **Next:** v0.10 — developer experience.
+> **Current:** v0.10.0 on npm — 15 packages on the 0.10.0 version line. Everything from v0.9 plus the full store rename (NoydbAdapter → NoydbStore, defineAdapter → createStore), Vault rename (Compartment → Vault), browser store split (store-browser-local + store-browser-idb), AWS store renames, and IndexedDB CAS atomicity fix (#139). **Next:** v0.11 — adapter expansion.
 >
 > Related docs:
 > - [Architecture](./docs/architecture.md) — data flow, key hierarchy, threat model
@@ -17,7 +17,7 @@
 
 ## Status
 
-v0.9.0 is on npm (released 2026-04-09). All 13 `@noy-db/*` packages are on the **0.9.0** version line — `core`, `yjs`, `auth-webauthn`, `auth-oidc`, `pinia`, `memory`, `file`, `dynamo`, `s3`, `browser`, `vue`, `nuxt`, `create`. **1132 tests** passing across all packages (772 core + 11 yjs + 18 auth-webauthn + 21 auth-oidc + 310 other). Full v0.5 surface (zero-knowledge AES-256-GCM, five-role ACL, hash-chained ledger, `ref()` foreign keys, Standard Schema v1, verifiable backups, sync, Vue/Nuxt/Pinia) plus v0.6 query-DSL completion (joins, aggregations, streaming scan, `.noydb` container) plus v0.7 identity & sessions (session tokens, OIDC bridge, magic-link unlock, hardware-key keyrings via WebAuthn, session policies, dev-mode unlock, `_sync_credentials` reserved collection) plus v0.8 i18n & dictionaries (`dictKey` + `DictionaryHandle`, `i18nText`, `plaintextTranslator`, export snapshot, query DSL dictKey integration) plus v0.9 sync v2 (CRDT mode, pluggable conflict policies, presence, partial sync, sync transactions, `@noy-db/yjs`). **Next:** v0.10 — developer experience.
+v0.10.0 is on npm (released 2026-04-09). **15 packages** on the **0.10.0** version line — `core`, `store-file`, `store-memory`, `store-browser-local`, `store-browser-idb`, `store-aws-dynamo`, `store-aws-s3`, `yjs`, `auth-webauthn`, `auth-oidc`, `pinia`, `vue`, `nuxt`, `create-noy-db` (unscoped). **1065 tests** passing. Full v0.5–v0.9 surface plus v0.10 store rename (NoydbAdapter → NoydbStore, defineAdapter → createStore, NoydbOptions.adapter → .store), Vault rename (Compartment → Vault, openCompartment → openVault, listCompartments → listVaults, CompartmentSnapshot → VaultSnapshot, CompartmentBackup → VaultBackup), browser store split (store-browser-local + store-browser-idb), AWS store renames, StoreCapabilities with casAtomic + auth, StoreCapabilityError (code: 'STORE_CAPABILITY'), runStoreConformanceTests, and IndexedDB CAS atomicity fix (#139). **Next:** v0.11 — adapter expansion.
 
 ---
 
@@ -30,8 +30,9 @@ v0.9.0 is on npm (released 2026-04-09). All 13 `@noy-db/*` packages are on the *
 | 0.7     | ✅ shipped  | Identity & sessions                | Session tokens, OIDC bridge, magic links, hardware-key keyrings           |
 | 0.8     | ✅ shipped  | i18n & localization                | `dictKey` + `i18nText` schema primitives, `plaintextTranslator` hook, per-locale read resolution, dictionary admin operations, export integration |
 | 0.9     | ✅ shipped  | Sync v2                            | CRDT mode, pluggable conflict policies, presence, partial sync, sync transactions, `@noy-db/yjs` |
-| **0.10** | 🚧 **next** | **Developer experience**           | `noydb` CLI, devtools panel, schema codegen, importers                   |
-| 0.11    | 📋 planned  | Adapter expansion                  | R2, D1, Supabase, IPFS, Git, WebDAV, encrypted SQLite, Turso              |
+| **0.10** | ✅ **shipped** | **Store rename + browser split** | NoydbStore, createStore, Vault, openVault, browser store split, AWS store renames, casAtomic, StoreCapabilityError, IDB CAS fix (#139) |
+| **0.11** | 🚧 **next** | **Developer experience**           | `noydb` CLI, devtools panel, schema codegen, importers, store-probe (#146) |
+| 0.12    | 📋 planned  | Store expansion                    | R2, D1, Supabase, IPFS, Git, WebDAV, encrypted SQLite, Turso              |
 | 0.12    | 📋 planned  | Other framework integrations       | React, Svelte, Solid, Qwik, TanStack Query/Table, Zustand                 |
 | 1.0     | 📋 planned  | Stability + LTS release            | API freeze, third-party audit, perf benchmarks, migration tooling         |
 | 1.x     | 🔭 vision   | Edge & realtime                    | Edge worker adapter, WebRTC peer sync, encrypted BroadcastChannel         |
@@ -48,11 +49,12 @@ gantt
     v0.7 identity & sessions         :done,    v07, 2026-04, 1d
     v0.8 i18n & localization         :done,    v08, 2026-04, 1d
     v0.9 sync v2                     :done,    v09, 2026-04, 1d
+    v0.10 store rename + browser split :done,  v010, 2026-04, 1d
     section Next
-    v0.10 developer experience       :active,  v010, after v09, 45d
+    v0.11 developer experience       :active,  v011, after v010, 45d
     section Planned
-    v0.11 adapter expansion          :         v011, after v010, 45d
-    v0.12 other frameworks           :         v012, after v011, 45d
+    v0.12 store expansion            :         v012, after v011, 45d
+    v0.13 other frameworks           :         v013, after v012, 45d
     v1.0 stability + LTS             :crit,    v10, after v012, 60d
 ```
 
@@ -65,7 +67,7 @@ Every future release respects these:
 1. **Zero-knowledge stays zero-knowledge.** Adapters never see plaintext.
 2. **Memory-first is the default.** Streaming, pagination, and lazy hydration are opt-in.
 3. **Zero runtime crypto deps.** Web Crypto API only.
-4. **Six-method adapter contract is sacred.** New capabilities go in core or in optional adapter extension interfaces.
+4. **Six-method store contract is sacred.** New capabilities go in core or in optional store extension interfaces.
 5. **Pinia/Vue ergonomics are first-class.** If a feature makes Vue/Nuxt/Pinia adoption harder, it gets redesigned.
 6. **Every feature ships with a `playground/` example** before it's documented as stable.
 
@@ -96,7 +98,7 @@ Every future release respects these:
 
 ### Container format (#100)
 
-- **`.noydb` container format (spawned from discussion #92)** — wraps `compartment.dump()` with a 4-byte `NDB1` magic header, an opaque-handle-only metadata header (ULID + format version + body size/sha256, no business metadata), and a brotli-compressed body (gzip fallback). Ships the `writeNoydbBundle` / `readNoydbBundle` / `readNoydbBundleHeader` primitives in core and `saveBundle` / `loadBundle` helpers in `@noy-db/file`. Foundation for the v0.10 reader (#102) and the v0.11 bundle adapters (#103, #104).
+- **`.noydb` container format (spawned from discussion #92)** — wraps `vault.dump()` with a 4-byte `NDB1` magic header, an opaque-handle-only metadata header (ULID + format version + body size/sha256, no business metadata), and a brotli-compressed body (gzip fallback). Ships the `writeNoydbBundle` / `readNoydbBundle` / `readNoydbBundleHeader` primitives in core and `saveBundle` / `loadBundle` helpers in `@noy-db/store-file`. Foundation for the v0.11 reader (#102) and the v0.12 bundle stores (#103, #104).
 
 ---
 
@@ -256,39 +258,57 @@ The hook is named **`plaintextTranslator`** (not `translator`) deliberately — 
 
 ---
 
-## v0.10 — Developer experience 🎯 next
+## v0.10 — Store rename + browser store split ✅ shipped 2026-04-09
+
+**Status:** Released 2026-04-09. Commit: `669326d`. 15 packages, 1065 tests passing.
+
+**Goal (achieved):** Unify the pluggable backend vocabulary (`NoydbStore`, `createStore`), rename `Compartment` → `Vault` throughout, split the browser adapter into two purpose-built stores (localStorage vs IndexedDB), align AWS store package names, and fix the IndexedDB CAS atomicity bug (#139).
+
+### What shipped
+
+- **API renames.** `NoydbAdapter` → `NoydbStore`, `defineAdapter()` → `createStore()`, `NoydbOptions.adapter` → `NoydbOptions.store`, `AdapterCapabilityError` → `StoreCapabilityError` (code: `'STORE_CAPABILITY'`), `AdapterCapabilities` → `StoreCapabilities`, `runAdapterConformanceTests` → `runStoreConformanceTests`.
+- **Vault rename.** `class Compartment` → `class Vault`, `openCompartment()` → `openVault()`, `listCompartments()` → `listVaults()`, `CompartmentSnapshot` → `VaultSnapshot`, `CompartmentBackup` → `VaultBackup`.
+- **Package renames (15 total).** `@noy-db/file` → `@noy-db/store-file`, `@noy-db/memory` → `@noy-db/store-memory`, `@noy-db/browser` → split into `@noy-db/store-browser-local` + `@noy-db/store-browser-idb`, `@noy-db/dynamo` → `@noy-db/store-aws-dynamo`, `@noy-db/s3` → `@noy-db/store-aws-s3`, `@noy-db/create` → `create-noy-db` (unscoped, `npm create noy-db`). Unchanged: `@noy-db/core`, `@noy-db/vue`, `@noy-db/pinia`, `@noy-db/nuxt`, `@noy-db/yjs`, `@noy-db/auth-webauthn`, `@noy-db/auth-oidc`.
+- **`StoreCapabilities` additions.** `casAtomic: boolean` (true = atomic CAS at the storage layer) and `auth: StoreAuth`. Per-store values: store-memory true, store-file false, store-browser-local true, store-browser-idb true, store-aws-dynamo true, store-aws-s3 false.
+- **IndexedDB CAS atomicity fix (#139).** `store-browser-idb` now performs the check-and-set in a single `readwrite` IDB transaction, eliminating the TOCTOU race that existed in `@noy-db/browser`.
+- **`@noy-db/store-aws-s3` SDK cleanup.** Dropped `MinimalS3Client` shim — uses `@aws-sdk/client-s3` directly.
+
+---
+
+## v0.11 — Developer experience 🎯 next
 
 **Goal:** Make NOYDB easy to use, easy to debug, easy to import existing data into.
 
 - **`noydb` CLI.** `init`, `open` (REPL), `dump`, `load`, `codegen`, `migrate`, `verify`, `import`.
-- **Browser DevTools panel.** Compartments, collections, decrypted records (only with active session), ledger, sync status, query playground.
+- **Browser DevTools panel.** Vaults, collections, decrypted records (only with active session), ledger, sync status, query playground.
 - **VSCode extension.** Schema-aware autocomplete for `where()` field names, hover-preview, run queries from the editor.
 - **Importers.** `@noy-db/import-postgres`, `@noy-db/import-sqlite`, `@noy-db/import-csv`, `@noy-db/import-firebase`, `@noy-db/import-mongo`.
 - **Type generation.** `noydb codegen` → fully typed `db.ts`.
 - **Test utilities (`@noy-db/testing`).** `createTestDb()`, `seed()`, `snapshot()`, time-travel mocks, conflict simulators.
+- **Store probe (#146).** `@noy-db/store-probe` — runtime capability detection and health-check for any `NoydbStore`.
 
 ---
 
-## v0.11 — Adapter expansion
+## v0.12 — Store expansion
 
-| Adapter                       | Why                                                                  |
-|-------------------------------|----------------------------------------------------------------------|
-| `@noy-db/cloudflare-r2`       | Cheap S3-compatible, no egress fees                                  |
-| `@noy-db/cloudflare-d1`       | SQLite at the edge, free tier                                        |
-| `@noy-db/supabase`            | One-click Postgres + storage                                         |
-| `@noy-db/ipfs`                | Content-addressed; fits the hash-chain ledger naturally              |
-| `@noy-db/git`                 | Compartment = git repo, history = commits, sync = push/pull          |
-| `@noy-db/webdav`              | Nextcloud, ownCloud, any WebDAV server                               |
-| `@noy-db/sqlite-encrypted`    | Single-file backend (better than JSON for >10K records)              |
-| `@noy-db/turso`               | Edge SQLite with replication                                         |
-| `@noy-db/firestore`           | Firebase teams                                                       |
-| `@noy-db/postgres`            | Postgres `jsonb` column, single-table pattern                        |
+| Store                           | Why                                                                  |
+|---------------------------------|----------------------------------------------------------------------|
+| `@noy-db/store-cloudflare-r2`   | Cheap S3-compatible, no egress fees                                  |
+| `@noy-db/store-cloudflare-d1`   | SQLite at the edge, free tier                                        |
+| `@noy-db/store-supabase`        | One-click Postgres + storage                                         |
+| `@noy-db/store-ipfs`            | Content-addressed; fits the hash-chain ledger naturally              |
+| `@noy-db/store-git`             | Vault = git repo, history = commits, sync = push/pull                |
+| `@noy-db/store-webdav`          | Nextcloud, ownCloud, any WebDAV server                               |
+| `@noy-db/store-sqlite`          | Single-file backend (better than JSON for >10K records)              |
+| `@noy-db/store-turso`           | Edge SQLite with replication                                         |
+| `@noy-db/store-firestore`       | Firebase teams                                                       |
+| `@noy-db/store-postgres`        | Postgres `jsonb` column, single-table pattern                        |
 
 ---
 
-## v0.12 — Other framework integrations
+## v0.13 — Other framework integrations
 
-Pinia/Vue already ship in `@noy-db/vue`, `@noy-db/pinia`, and `@noy-db/nuxt`. v0.12 brings the same first-class story to other ecosystems.
+Pinia/Vue already ship in `@noy-db/vue`, `@noy-db/pinia`, and `@noy-db/nuxt`. v0.13 brings the same first-class story to other ecosystems.
 
 | Package                     | Provides                                                       |
 |-----------------------------|----------------------------------------------------------------|
@@ -406,6 +426,7 @@ This position is documented here so consumers stop asking. If you arrived at thi
 | Passphrase unlock awkward for client portals         | v0.7                                  |
 | i18n hand-rolled per consumer; labels drift; multi-lang fields lose translations | v0.8 |
 | Sync conflict resolution model unclear               | v0.9 ✅                               |
+| Adapter/store naming inconsistency; browser store not split | v0.10 ✅               |
 | Plaintext export formats beyond JSON                 | post-v0.5 `@noy-db/decrypt-*` family  |
 
 ---
@@ -427,4 +448,4 @@ Open a discussion before opening a PR that touches anything past v0.7 — the fu
 
 ---
 
-*Roadmap last updated: noy-db v0.9.0 — 2026-04-09*
+*Roadmap last updated: noy-db v0.10.0 — 2026-04-09*

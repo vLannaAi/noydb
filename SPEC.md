@@ -168,14 +168,15 @@ The library should be learnable in 10 minutes. The core API is: `createNoydb()`,
 │  │  Operates on encrypted blobs — no key needed           │   │
 │  └──────────────────────────┬────────────────────────────┘   │
 │                              │                                │
-│  ┌─ Adapter Interface ──────▼────────────────────────────┐   │
+│  ┌─ Store Interface ────────▼────────────────────────────┐   │
 │  │  6 methods: get, put, delete, list, loadAll, saveAll   │   │
 │  │                                                        │   │
-│  │  @noydb/file      → JSON files (USB, local disk)       │   │
-│  │  @noydb/dynamo    → AWS DynamoDB (single-table)        │   │
-│  │  @noydb/s3        → AWS S3 (JSON objects)              │   │
-│  │  @noydb/memory    → in-memory (testing)                │   │
-│  │  @noydb/browser   → localStorage / IndexedDB           │   │
+│  │  @noy-db/store-file          → JSON files (USB/disk)   │   │
+│  │  @noy-db/store-aws-dynamo    → AWS DynamoDB            │   │
+│  │  @noy-db/store-aws-s3        → AWS S3 (JSON objects)   │   │
+│  │  @noy-db/store-memory        → in-memory (testing)     │   │
+│  │  @noy-db/store-browser-local → localStorage            │   │
+│  │  @noy-db/store-browser-idb   → IndexedDB (atomic CAS)  │   │
 │  └───────────────────────────────────────────────────────┘   │
 │                                                              │
 │  ┌─ Backup / Restore ───────────────────────────────────┐   │
@@ -194,8 +195,8 @@ The library should be learnable in 10 minutes. The core API is: `createNoydb()`,
 ### Noydb Instance
 The top-level object returned by `createNoydb()`. Holds the authenticated user context, adapter references, and crypto keys in memory. One instance per authenticated session.
 
-### Compartment
-A logical namespace for isolating tenants, companies, or projects. Each compartment has its own set of collections and its own keyring (access control). Maps to a directory (file adapter), a partition key (DynamoDB), or a key prefix (S3/localStorage).
+### Vault
+A logical namespace for isolating tenants, companies, or projects (formerly `Compartment`). Each vault has its own set of collections and its own keyring (access control). Maps to a directory (store-file), a partition key (store-aws-dynamo), or a key prefix (store-aws-s3/store-browser-local). Opened via `openVault()`; listed via `listVaults()`. Backup type is `VaultBackup`; snapshot type is `VaultSnapshot`.
 
 ### Collection
 A typed set of records within a compartment. Each collection has its own Data Encryption Key (DEK). Maps to a subdirectory (file adapter), a sort key prefix (DynamoDB), or a sub-prefix (S3).
@@ -324,12 +325,12 @@ Roles are defaults — the `permissions` field in the keyring can override on a 
 
 **Plaintext export is ACL-scoped.** Every role that can read collections can export what they can read via `Compartment.exportStream()` / `Compartment.exportJSON()`. Operators and clients see only their explicitly-permitted collections; viewers and admins see everything.
 
-**Cross-compartment role-scoped queries.** Two top-level Noydb methods enable consolidated views across the compartments a single principal can unwrap:
+**Cross-vault role-scoped queries.** Two top-level Noydb methods enable consolidated views across the vaults a single principal can unwrap:
 
-- `Noydb.listAccessibleCompartments({ minRole? })` enumerates every compartment where the calling principal can unwrap a keyring at the requested minimum role. Existence-leak guarantee: compartments the caller cannot unwrap are silently dropped from the return value, so a downstream observer of `listAccessibleCompartments()` only sees the filtered list.
-- `Noydb.queryAcross(ids, fn, { concurrency? })` runs a per-compartment callback against the supplied list and returns results tagged by compartment id. Per-compartment errors are captured into the result slot and do not abort the fan-out.
+- `Noydb.listAccessibleVaults({ minRole? })` enumerates every vault where the calling principal can unwrap a keyring at the requested minimum role. Existence-leak guarantee: vaults the caller cannot unwrap are silently dropped from the return value.
+- `Noydb.queryAcross(ids, fn, { concurrency? })` runs a per-vault callback against the supplied list and returns results tagged by vault id. Per-vault errors are captured into the result slot and do not abort the fan-out.
 
-These methods require an optional 7th adapter capability — `NoydbAdapter.listCompartments?(): Promise<string[]>` — to enumerate the compartment universe before filtering. The memory and file adapters implement it; cloud adapters (dynamo, s3) and browser do not, because cloud enumeration needs a GSI or list-bucket permission configured by the consumer. Calling `listAccessibleCompartments()` against an adapter without the capability throws `AdapterCapabilityError` with a clear message naming the missing capability and the calling API.
+These methods require an optional 7th store capability — `NoydbStore.listVaults?(): Promise<string[]>` — to enumerate the vault universe before filtering. The store-memory and store-file stores implement it; cloud stores (store-aws-dynamo, store-aws-s3) and browser stores do not, because cloud enumeration needs a GSI or list-bucket permission configured by the consumer. Calling `listAccessibleVaults()` against a store without the capability throws `StoreCapabilityError` with a clear message naming the missing capability and the calling API.
 
 ### Keyring File Format
 
@@ -532,24 +533,24 @@ setInterval(() => {
 
 ---
 
-## Adapters
+## Stores
 
 ### Interface
 
 ```ts
-interface NoydbAdapter {
+interface NoydbStore {  // formerly NoydbAdapter
   /**
-   * Get a single record by compartment/collection/id.
+   * Get a single record by vault/collection/id.
    * Returns the encrypted envelope or null if not found.
    */
-  get(compartment: string, collection: string, id: string): Promise<EncryptedEnvelope | null>
+  get(vault: string, collection: string, id: string): Promise<EncryptedEnvelope | null>
 
   /**
    * Put a record. If expectedVersion is provided and doesn't match
    * the current version, throw a ConflictError (409).
    */
   put(
-    compartment: string,
+    vault: string,
     collection: string,
     id: string,
     envelope: EncryptedEnvelope,
@@ -557,36 +558,41 @@ interface NoydbAdapter {
   ): Promise<void>
 
   /**
-   * Delete a record by compartment/collection/id.
+   * Delete a record by vault/collection/id.
    */
-  delete(compartment: string, collection: string, id: string): Promise<void>
+  delete(vault: string, collection: string, id: string): Promise<void>
 
   /**
    * List all record IDs in a collection.
    */
-  list(compartment: string, collection: string): Promise<string[]>
+  list(vault: string, collection: string): Promise<string[]>
 
   /**
-   * Load all records across all collections for a compartment.
+   * Load all records across all collections for a vault.
    * Used for initial hydration on open.
    */
-  loadAll(compartment: string): Promise<CompartmentSnapshot>
+  loadAll(vault: string): Promise<VaultSnapshot>
 
   /**
-   * Save all records for a compartment (bulk write).
+   * Save all records for a vault (bulk write).
    * Used for restore and key rotation.
    */
-  saveAll(compartment: string, data: CompartmentSnapshot): Promise<void>
+  saveAll(vault: string, data: VaultSnapshot): Promise<void>
+}
+
+interface StoreCapabilities {  // formerly AdapterCapabilities
+  casAtomic: boolean   // true = atomic CAS at the storage layer
+  auth: StoreAuth      // authentication kind/flow metadata
 }
 ```
 
-### @noydb/file — JSON File Adapter
+### @noy-db/store-file — JSON File Store
 
 Maps the hierarchy to the filesystem:
 
 ```
 {baseDir}/
-  {compartment}/
+  {vault}/
     _keyring/
       {userId}.json
     _sync/
@@ -598,7 +604,7 @@ Maps the hierarchy to the filesystem:
 
 - One JSON file per record
 - Directories created on first write
-- Optimistic concurrency: read `_v` from file, compare, write
+- Optimistic concurrency: read `_v` from file, compare, write (TOCTOU race — `casAtomic: false`)
 - Works on any mounted filesystem: local disk, USB stick, network drive, SD card
 
 **Configuration:**
@@ -609,7 +615,7 @@ jsonFile({
 })
 ```
 
-### @noydb/dynamo — DynamoDB Adapter
+### @noy-db/store-aws-dynamo — DynamoDB Store
 
 Maps the hierarchy to a single DynamoDB table:
 
@@ -626,7 +632,7 @@ Special items:
 - Keyrings: `sk = _keyring#{userId}`
 - Sync metadata: `sk = _sync#meta`
 
-**Optimistic concurrency** via `ConditionExpression`:
+**Optimistic concurrency** via `ConditionExpression` (`casAtomic: true`):
 ```
 PutItem ... ConditionExpression: '#v = :expected OR attribute_not_exists(pk)'
 ```
@@ -640,58 +646,62 @@ dynamo({
 })
 ```
 
-### @noydb/s3 — S3 Adapter
+### @noy-db/store-aws-s3 — S3 Store
 
 Maps the hierarchy to S3 object keys:
 
 ```
-s3://{bucket}/{compartment}/{collection}/{recordId}.json
-s3://{bucket}/{compartment}/_keyring/{userId}.json
+s3://{bucket}/{vault}/{collection}/{recordId}.json
+s3://{bucket}/{vault}/_keyring/{userId}.json
 ```
 
-Uses S3 ETags for optimistic concurrency (`If-Match` header).
+Uses S3 ETags for optimistic concurrency (`If-Match` header). `casAtomic: false` (two separate HTTP calls). Uses `@aws-sdk/client-s3` directly (no `MinimalS3Client` shim).
 
-### @noydb/memory — In-Memory Adapter (Testing)
+### @noy-db/store-memory — In-Memory Store (Testing)
 
-Stores everything in a `Map`. No persistence. Used for unit tests.
+Stores everything in a `Map`. No persistence. Used for unit tests. `casAtomic: true` (JS single-threaded).
 
-### @noydb/browser — Browser Storage Adapter
+### @noy-db/store-browser-local — localStorage Store
 
-Uses `localStorage` (< 5 MB) or `IndexedDB` (> 5 MB, via a thin wrapper). Used as a cache layer in browser-based apps for instant hydration on page load.
+`localStorage`-backed store. `casAtomic: true` (synchronous localStorage). Used for small datasets in browser apps.
 
-### Optional adapter extensions (v0.9)
+### @noy-db/store-browser-idb — IndexedDB Store
+
+IndexedDB-backed store. `casAtomic: true` — CAS atomicity implemented via a single `readwrite` IDB transaction (fix #139). Used as a cache layer in browser-based apps for instant hydration on page load.
+
+### Optional store extensions (v0.9)
 
 ```ts
-interface NoydbAdapter {
+interface NoydbStore {
   // ... 6 core methods above ...
 
   // v0.9 #133 — partial sync: server-side timestamp filter (optional)
-  listSince?(compartment: string, collection: string, since: Date): Promise<string[]>
+  listSince?(vault: string, collection: string, since: Date): Promise<string[]>
 
   // v0.9 #134 — presence pub/sub transport (optional; storage-poll fallback used if absent)
   presencePublish?(channel: string, payload: string): Promise<void>
   presenceSubscribe?(channel: string, callback: (payload: string) => void): () => void
 
-  // v0.5 #63 — compartment enumeration (optional; used by listAccessibleCompartments)
-  listCompartments?(): Promise<string[]>
+  // v0.5 #63 — vault enumeration (optional; used by listVaults / listAccessibleVaults)
+  listVaults?(): Promise<string[]>
 }
 ```
 
-### Custom Adapters
+### Custom Stores
 
-Implement the `NoydbAdapter` interface (6 required methods). Example skeleton:
+Implement the `NoydbStore` interface (6 required methods). Example skeleton:
 
 ```ts
-import { defineAdapter } from '@noydb/core'
+import { createStore } from '@noy-db/core'  // formerly defineAdapter
 
-export const myAdapter = defineAdapter((options: MyOptions) => ({
+export const myStore = createStore((options: MyOptions) => ({
   name: 'my-backend',
-  async get(compartment, collection, id) { /* ... */ },
-  async put(compartment, collection, id, envelope, expectedVersion) { /* ... */ },
-  async delete(compartment, collection, id) { /* ... */ },
-  async list(compartment, collection) { /* ... */ },
-  async loadAll(compartment) { /* ... */ },
-  async saveAll(compartment, data) { /* ... */ },
+  async get(vault, collection, id) { /* ... */ },
+  async put(vault, collection, id, envelope, expectedVersion) { /* ... */ },
+  async delete(vault, collection, id) { /* ... */ },
+  async list(vault, collection) { /* ... */ },
+  async loadAll(vault) { /* ... */ },
+  async saveAll(vault, data) { /* ... */ },
 }))
 ```
 
@@ -702,56 +712,56 @@ export const myAdapter = defineAdapter((options: MyOptions) => ({
 ### Creating an Instance
 
 ```ts
-import { createNoydb } from '@noydb/core'
-import { jsonFile } from '@noydb/file'
+import { createNoydb } from '@noy-db/core'
+import { jsonFile } from '@noy-db/store-file'
 
 // Minimal — local only, passphrase auth
 const db = await createNoydb({
-  adapter: jsonFile({ dir: './data' }),
+  store: jsonFile({ dir: './data' }),   // formerly 'adapter'
   user: 'owner-01',
   secret: 'my-passphrase',
 })
 
 // With sync — offline-first with cloud backup
 const db = await createNoydb({
-  adapter: jsonFile({ dir: './data' }),       // primary (local)
-  sync: dynamo({ table: 'myapp' }),            // secondary (cloud)
+  store: jsonFile({ dir: './data' }),        // primary (local)
+  sync: dynamo({ table: 'myapp' }),          // secondary (cloud)
   user: 'owner-01',
   secret: 'my-passphrase',
-  conflict: 'version',                         // or 'local-wins', 'remote-wins', custom fn
-  autoSync: true,                              // sync on online/offline events
-  syncInterval: 30_000,                        // periodic sync (ms)
+  conflict: 'version',                       // or 'local-wins', 'remote-wins', custom fn
+  autoSync: true,                            // sync on online/offline events
+  syncInterval: 30_000,                      // periodic sync (ms)
 })
 
 // Biometric auth (browser only)
 const db = await createNoydb({
-  adapter: jsonFile({ dir: './data' }),
+  store: jsonFile({ dir: './data' }),
   user: 'owner-01',
-  auth: 'biometric',                           // triggers Touch ID / Face ID
+  auth: 'biometric',                         // triggers Touch ID / Face ID
 })
 
 // Unencrypted mode (development/testing)
 const db = await createNoydb({
-  adapter: memory(),
+  store: memory(),
   user: 'dev',
-  encrypt: false,                              // plaintext — NEVER use in production
+  encrypt: false,                            // plaintext — NEVER use in production
 })
 ```
 
-### Compartments and Collections
+### Vaults and Collections
 
 ```ts
-// Open a compartment
-const company = db.compartment('C101')
+// Open a vault (formerly compartment)
+const company = db.openVault('C101')
 
 // Open a typed collection
 const invoices = company.collection<Invoice>('invoices')
 const payments = company.collection<Payment>('payments')
 
-// List available compartments
-const compartments: string[] = await db.compartments()
+// List available vaults
+const vaults: string[] = await db.listVaults()
 
-// List collections in a compartment
+// List collections in a vault
 const collections: string[] = await company.collections()
 ```
 
@@ -969,7 +979,7 @@ const raw = await lineItems.get('li-1', { locale: 'raw' })
 
 ```ts
 const db = await createNoydb({
-  adapter: ...,
+  store: ...,
   user: 'alice',
   secret: '...',
   plaintextTranslator: async ({ text, from, to, field, collection }) => {
@@ -1307,7 +1317,7 @@ const { exists, expired } = await credentialStatus(adapter, compartment, keyring
 
 ```ts
 const db = await createNoydb({
-  adapter: ...,
+  store: ...,
   user: 'alice',
   secret: '...',
   sessionPolicy: {
@@ -1453,9 +1463,9 @@ The backup is encrypted — each record's `_data` is ciphertext. Only users whos
 
 ### `.noydb` Container Format (v0.6 #100)
 
-Binary container wrapping `compartment.dump()` with a minimum-disclosure
+Binary container wrapping `vault.dump()` with a minimum-disclosure
 header for safe drops into cloud storage (Drive, Dropbox, iCloud). The
-dump's plaintext JSON still contains `_compartment`, `_exported_by`,
+dump's plaintext JSON still contains `_vault`, `_exported_by`,
 `_exported_at` — so the wrap's purpose is to hide that metadata from the
 cloud provider's indexing API, not from someone who has already
 downloaded the bytes.
@@ -1521,19 +1531,19 @@ import {
   readNoydbBundleHeader,
 } from '@noy-db/core'
 
-const bytes = await writeNoydbBundle(compartment, { compression: 'auto' })
+const bytes = await writeNoydbBundle(vault, { compression: 'auto' })
 const header = readNoydbBundleHeader(bytes) // no decompression
 const { header, dumpJson } = await readNoydbBundle(bytes) // full read + verify
 
-// File adapter helpers
-import { saveBundle, loadBundle } from '@noy-db/file'
+// File store helpers
+import { saveBundle, loadBundle } from '@noy-db/store-file'
 
-const handle = await compartment.getBundleHandle()
-await saveBundle(`./bundles/${handle}.noydb`, compartment)
+const handle = await vault.getBundleHandle()
+await saveBundle(`./bundles/${handle}.noydb`, vault)
 const result = await loadBundle(`./bundles/${handle}.noydb`)
 ```
 
-**Why split read from load:** `readNoydbBundle()` returns the unwrapped dump JSON string, NOT a restored Compartment. Restoring requires a separate `compartment.load(dumpJson, passphrase)` call. The split keeps the bundle module purely a format layer with zero crypto concerns, and lets the same code feed format inspectors that never decrypt anything.
+**Why split read from load:** `readNoydbBundle()` returns the unwrapped dump JSON string, NOT a restored Vault. Restoring requires a separate `vault.load(dumpJson, passphrase)` call. The split keeps the bundle module purely a format layer with zero crypto concerns, and lets the same code feed format inspectors that never decrypt anything.
 
 ---
 
@@ -1546,7 +1556,7 @@ noydb/
 │   │   ├── src/
 │   │   │   ├── index.ts               # barrel — all public exports
 │   │   │   ├── noydb.ts               # Noydb class + PolicyEnforcer wiring
-│   │   │   ├── compartment.ts         # Compartment class
+│   │   │   ├── vault.ts               # Vault class (formerly compartment.ts)
 │   │   │   ├── collection.ts          # Collection<T> class
 │   │   │   ├── crypto.ts              # encrypt, decrypt, deriveKey, bufferToBase64, base64ToBuffer
 │   │   │   ├── keyring.ts             # Keyring management (load, grant, revoke, rotate)
@@ -1563,42 +1573,42 @@ noydb/
 │   │   │   ├── errors.ts              # NoydbError subtypes
 │   │   │   └── types.ts               # All TypeScript interfaces
 │   │   │
-│   │   └── __tests__/                 # 772 tests (Vitest)
-│   │   ├── tests/
-│   │   │   ├── crypto.test.ts
-│   │   │   ├── collection.test.ts
-│   │   │   ├── keyring.test.ts
-│   │   │   ├── sync.test.ts
-│   │   │   └── access-control.test.ts
+│   │   └── __tests__/                 # tests (Vitest)
 │   │   └── package.json
 │   │
-│   ├── adapter-file/                  # @noydb/file
+│   ├── store-file/                    # @noy-db/store-file (formerly @noy-db/file)
 │   │   ├── src/
-│   │   │   └── index.ts              # jsonFile() adapter factory
+│   │   │   └── index.ts              # jsonFile() store factory
 │   │   ├── tests/
 │   │   └── package.json
 │   │
-│   ├── adapter-dynamo/                # @noydb/dynamo
+│   ├── store-aws-dynamo/              # @noy-db/store-aws-dynamo (formerly @noy-db/dynamo)
 │   │   ├── src/
-│   │   │   └── index.ts              # dynamo() adapter factory
+│   │   │   └── index.ts              # dynamo() store factory
 │   │   ├── tests/
 │   │   └── package.json              # peerDep: @aws-sdk/lib-dynamodb
 │   │
-│   ├── adapter-s3/                    # @noydb/s3
+│   ├── store-aws-s3/                  # @noy-db/store-aws-s3 (formerly @noy-db/s3)
 │   │   ├── src/
-│   │   │   └── index.ts              # s3() adapter factory
+│   │   │   └── index.ts              # s3() store factory; uses @aws-sdk/client-s3 directly
 │   │   ├── tests/
 │   │   └── package.json              # peerDep: @aws-sdk/client-s3
 │   │
-│   ├── adapter-memory/                # @noydb/memory
+│   ├── store-memory/                  # @noy-db/store-memory (formerly @noy-db/memory)
 │   │   ├── src/
-│   │   │   └── index.ts              # memory() adapter factory
+│   │   │   └── index.ts              # memory() store factory
 │   │   ├── tests/
 │   │   └── package.json
 │   │
-│   ├── adapter-browser/               # @noydb/browser
+│   ├── store-browser-local/           # @noy-db/store-browser-local (localStorage)
 │   │   ├── src/
-│   │   │   └── index.ts              # browser() adapter (localStorage/IndexedDB)
+│   │   │   └── index.ts              # browserLocal() store factory
+│   │   ├── tests/
+│   │   └── package.json
+│   │
+│   ├── store-browser-idb/             # @noy-db/store-browser-idb (IndexedDB, atomic CAS #139)
+│   │   ├── src/
+│   │   │   └── index.ts              # browserIdb() store factory
 │   │   ├── tests/
 │   │   └── package.json
 │   │
@@ -1622,15 +1632,17 @@ noydb/
 │   │   ├── __tests__/                # 21 tests (happy-dom + fetch mock)
 │   │   └── package.json              # peerDep: @noy-db/core workspace:*
 │   │
-│   └── vue/                           # @noy-db/vue
-│       ├── src/
-│       │   ├── index.ts
-│       │   ├── plugin.ts             # Nuxt plugin / Vue plugin
-│       │   ├── useNoydb.ts           # Composable: db instance access
-│       │   ├── useCollection.ts      # Composable: reactive collection
-│       │   └── useSync.ts            # Composable: sync status and controls
-│       ├── tests/
-│       └── package.json              # peerDep: vue, @noy-db/core workspace:*
+│   ├── vue/                           # @noy-db/vue
+│   │   ├── src/
+│   │   │   ├── index.ts
+│   │   │   ├── plugin.ts             # Nuxt plugin / Vue plugin
+│   │   │   ├── useNoydb.ts           # Composable: db instance access
+│   │   │   ├── useCollection.ts      # Composable: reactive collection
+│   │   │   └── useSync.ts            # Composable: sync status and controls
+│   │   ├── tests/
+│   │   └── package.json              # peerDep: vue, @noy-db/core workspace:*
+│   │
+│   └── create/                        # create-noy-db (unscoped — npm create noy-db)
 │
 ├── scripts/
 │   └── release.mjs                    # Version normalizer — always use pnpm release:version
@@ -1650,22 +1662,28 @@ noydb/
 
 ```bash
 # Local-only app (USB stick, no cloud)
-npm install @noydb/core @noydb/file
+npm install @noy-db/core @noy-db/store-file
 
 # Cloud-only app (DynamoDB)
-npm install @noydb/core @noydb/dynamo
+npm install @noy-db/core @noy-db/store-aws-dynamo
 
 # Offline-first with cloud sync
-npm install @noydb/core @noydb/file @noydb/dynamo
+npm install @noy-db/core @noy-db/store-file @noy-db/store-aws-dynamo
 
-# Browser app with local cache
-npm install @noydb/core @noydb/browser
+# Browser app (localStorage)
+npm install @noy-db/core @noy-db/store-browser-local
+
+# Browser app (IndexedDB, atomic CAS)
+npm install @noy-db/core @noy-db/store-browser-idb
 
 # Vue/Nuxt integration
-npm install @noydb/core @noydb/file @noydb/vue
+npm install @noy-db/core @noy-db/store-file @noy-db/vue
 
 # Development/testing
-npm install @noydb/core @noydb/memory
+npm install @noy-db/core @noy-db/store-memory
+
+# Scaffold a new project
+npm create noy-db
 ```
 
 ### Build Targets
@@ -1793,9 +1811,9 @@ class BundleIntegrityError extends NoydbError {
   code = 'BUNDLE_INTEGRITY'
 }
 
-// Adapter capability errors (v0.5 #63)
-class AdapterCapabilityError extends NoydbError {
-  code = 'ADAPTER_CAPABILITY'
+// Store capability errors (v0.5 #63; renamed in v0.10)
+class StoreCapabilityError extends NoydbError {
+  code = 'STORE_CAPABILITY'
   capability: string
 }
 
@@ -1851,15 +1869,15 @@ noy-db was designed for an established accounting firm's platform but is generic
 | Junior staff | Role: `operator` (with per-collection permissions) |
 | External auditor | Role: `viewer` |
 | Client company (views own invoices) | Role: `client` |
-| USB stick workflow | `@noy-db/file` adapter, dir: `/Volumes/USB/firm-data` |
-| Cloud access | `@noy-db/dynamo` adapter, table: `firm-prod` |
+| USB stick workflow | `@noy-db/store-file` store, dir: `/Volumes/USB/firm-data` |
+| Cloud access | `@noy-db/store-aws-dynamo` store, table: `firm-prod` |
 | Monthly backup | `company.dump()` → encrypted JSON file |
 
 ### Example Configuration
 
 ```ts
 const db = await createNoydb({
-  adapter: jsonFile({ dir: process.env.FIRM_DATA_DIR || './data' }),
+  store: jsonFile({ dir: process.env.FIRM_DATA_DIR || './data' }),
   sync: process.env.STORAGE_BACKEND === 'dynamodb'
     ? dynamo({ table: 'firm-prod', region: 'ap-southeast-1' })
     : undefined,
@@ -1870,7 +1888,7 @@ const db = await createNoydb({
 })
 
 // Open company C101
-const c101 = db.compartment('C101')
+const c101 = db.openVault('C101')
 const invoices = c101.collection<Invoice>('invoices')
 const disbursements = c101.collection<Disbursement>('disbursements')
 const payments = c101.collection<Payment>('payments')
